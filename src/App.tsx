@@ -5,7 +5,7 @@ const ACCESS_TOKEN_KEY = 'lab_access_token'
 const REFRESH_TOKEN_KEY = 'lab_refresh_token'
 
 type UserRole = 'SUPER_ADMIN' | 'LAB_USER'
-type ViewKey = 'dashboard' | 'templates' | 'patients' | 'orders' | 'history'
+type ViewKey = 'dashboard' | 'templates' | 'patients' | 'orders' | 'history' | 'approvals'
 type FieldType = 'text' | 'number' | 'checkbox' | 'date' | 'select'
 
 type UserProfile = { id: number; name: string; email: string; role: UserRole }
@@ -46,6 +46,7 @@ type Patient = {
   emergencyContactPhone: string | null
 }
 type Order = { id: number; status: string; patient?: Patient; template?: TestTemplate; createdAt?: string }
+type OrderResult = { order: Order; results: HistoryResult[] }
 type HistoryResult = { fieldName: string; fieldType: FieldType; value: string | number | boolean; unit?: string }
 type HistoryItem = {
   orderId: number
@@ -105,6 +106,7 @@ function App() {
   const [orderForm, setOrderForm] = useState({ patientId: '', templateId: '' })
   const [selectedOrderId, setSelectedOrderId] = useState('')
   const [selectedOrderForm, setSelectedOrderForm] = useState<{ order: Order; fields: TestTemplateField[] } | null>(null)
+  const [selectedOrderReport, setSelectedOrderReport] = useState<OrderResult | null>(null)
   const [resultValues, setResultValues] = useState<Record<number, string | boolean>>({})
   const [highlightCol, setHighlightCol] = useState<number | null>(null)
 
@@ -112,6 +114,7 @@ function App() {
     if (profile?.role === 'SUPER_ADMIN') {
       return [
         { key: 'dashboard' as ViewKey, label: 'Executive Dashboard' },
+        { key: 'approvals' as ViewKey, label: 'Approval Review' },
         { key: 'templates' as ViewKey, label: 'Test Catalogue' },
       ]
     }
@@ -162,11 +165,28 @@ function App() {
     return data as UserProfile
   }, [authFetch])
 
-  const loadTemplates = useCallback(async () => {
-    const data = await readResponse(await authFetch(`${API_URL}/tests/templates`))
-    setTemplates(data)
-  }, [authFetch])
+ const loadTemplates = useCallback(async () => {
+  try {
+    const response = await authFetch(
+      `${API_URL}/tests/templates`
+    )
 
+    const data = await readResponse(response)
+
+    console.log('Templates API:', data)
+
+    if (Array.isArray(data)) {
+      setTemplates(data)
+    } else if (Array.isArray(data.templates)) {
+      setTemplates(data.templates)
+    } else {
+      setTemplates([])
+    }
+  } catch (error) {
+    console.error('Templates load failed:', error)
+    setTemplates([])
+  }
+}, [authFetch])
   const loadPatients = useCallback(async () => {
     if (profile?.role !== 'LAB_USER') return
     const data = await readResponse(await authFetch(`${API_URL}/patients`))
@@ -174,10 +194,27 @@ function App() {
   }, [authFetch, profile?.role])
 
   const loadOrders = useCallback(async () => {
-    if (profile?.role !== 'LAB_USER') return
-    const data = await readResponse(await authFetch(`${API_URL}/orders`))
-    setOrders(data)
-  }, [authFetch, profile?.role])
+  try {
+    const response = await authFetch(
+      `${API_URL}/orders`
+    )
+
+    const data = await readResponse(response)
+
+    console.log('Orders API:', data)
+
+    if (Array.isArray(data)) {
+      setOrders(data)
+    } else if (Array.isArray(data.orders)) {
+      setOrders(data.orders)
+    } else {
+      setOrders([])
+    }
+  } catch (error) {
+    console.error('Orders load failed:', error)
+    setOrders([])
+  }
+}, [authFetch, profile?.role])
 
   const loadDashboardSummary = useCallback(async () => {
     const data = await readResponse(await authFetch(`${API_URL}/dashboard/summary`))
@@ -214,20 +251,33 @@ function App() {
 
   useEffect(() => {
     if (!profile) return
-    if (profile.role !== 'SUPER_ADMIN' && activeView === 'templates') {
+    if (profile.role !== 'SUPER_ADMIN' && (activeView === 'templates' || activeView === 'approvals')) {
       setActiveView('dashboard')
     }
   }, [profile, activeView])
 
   const labDashboard = useMemo(
-    () => ({
-      templates: templates.length,
-      patients: patients.length,
-      orders: orders.length,
-      completedOrders: orders.filter((item) => item.status === 'COMPLETED').length,
-    }),
-    [templates, patients, orders],
-  )
+  () => ({
+    templates: Array.isArray(templates)
+      ? templates.length
+      : 0,
+
+    patients: Array.isArray(patients)
+      ? patients.length
+      : 0,
+
+    orders: Array.isArray(orders)
+      ? orders.length
+      : 0,
+
+    completedOrders: Array.isArray(orders)
+      ? orders.filter(
+          (item) => item.status === 'COMPLETED'
+        ).length
+      : 0,
+  }),
+  [templates, patients, orders],
+)
 
   const login = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -367,6 +417,7 @@ function App() {
     try {
       const data = await readResponse(await authFetch(`${API_URL}/orders/${selectedOrderId}/form`))
       setSelectedOrderForm(data)
+      setSelectedOrderReport(null)
       setResultValues({})
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load order form')
@@ -392,10 +443,74 @@ function App() {
         }),
       }))
       await loadOrders()
-      setMessage('Results submitted successfully')
+      setMessage('Results submitted and sent for approval')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit results')
     }
+  }
+
+  const loadOrderResults = async (orderId: number) => {
+    setError('')
+    try {
+      const data = await readResponse(await authFetch(`${API_URL}/orders/${orderId}/results`))
+      setSelectedOrderReport(data)
+      setSelectedOrderForm(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load order results')
+    }
+  }
+
+  const approveOrder = async (orderId: number) => {
+    setError('')
+    try {
+      await readResponse(await authFetch(`${API_URL}/orders/${orderId}/approve`, { method: 'POST' }))
+      await loadOrders()
+      setMessage(`Order #${orderId} approved successfully`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to approve order')
+    }
+  }
+
+  const rejectOrder = async (orderId: number) => {
+    setError('')
+    try {
+      await readResponse(await authFetch(`${API_URL}/orders/${orderId}/reject`, { method: 'POST' }))
+      await loadOrders()
+      setMessage(`Order #${orderId} has been rejected`) 
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reject order')
+    }
+  }
+
+  const downloadOrderReport = () => {
+    if (!selectedOrderReport) return
+    const reportHtml = `
+      <html><head><title>Order ${selectedOrderReport.order.id} Report</title><style>
+      body{font-family:Arial,sans-serif;padding:24px;color:#111} h1{margin:0 0 10px} .meta{margin-bottom:20px} .badge{display:inline-block;padding:6px 12px;border-radius:999px;background:#e7f5ff;color:#1d4ed8;font-weight:700;margin-top:8px}
+      table{width:100%;border-collapse:collapse;margin-top:16px} th,td{border:1px solid #d1d5db;padding:12px;text-align:left} th{background:#f8fafc}
+      </style></head><body>
+      <h1>Order #{selectedOrderReport.order.id} Report</h1>
+      <div class="meta">
+        <p><strong>Patient:</strong> ${selectedOrderReport.order.patient?.fullName ?? '-'}</p>
+        <p><strong>Test:</strong> ${selectedOrderReport.order.template?.name ?? '-'}</p>
+        <p><strong>Status:</strong> ${selectedOrderReport.order.status}</p>
+      </div>
+      <table>
+        <thead><tr><th>Field</th><th>Value</th><th>Unit</th></tr></thead>
+        <tbody>
+          ${selectedOrderReport.results.map((result) => `
+            <tr><td>${result.fieldName}</td><td>${String(result.value)}</td><td>${result.unit ?? '-'}</td></tr>
+          `).join('')}
+        </tbody>
+      </table>
+      </body></html>
+    `
+    const win = window.open('', '_blank')
+    if (!win) return
+    win.document.write(reportHtml)
+    win.document.close()
+    win.focus()
+    win.print()
   }
 
   const loadPatientHistory = async () => {
@@ -457,6 +572,21 @@ function App() {
         value={String(value ?? '')}
         onChange={(e) => setResultValues((prev) => ({ ...prev, [field.id]: e.target.value }))}
       />
+    )
+  }
+
+  const renderStatusBadge = (status: string) => {
+    const badgeStyles: Record<string, string> = {
+      PENDING: 'bg-slate-100 text-slate-600',
+      AWAITING_APPROVAL: 'bg-amber-100 text-amber-700',
+      APPROVED: 'bg-emerald-100 text-emerald-700',
+      REJECTED: 'bg-rose-100 text-rose-700',
+      IN_PROGRESS: 'bg-blue-100 text-blue-700',
+    }
+    return (
+      <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${badgeStyles[status] ?? 'bg-slate-100 text-slate-600'}`}>
+        {status.replaceAll('_', ' ')}
+      </span>
     )
   }
 
@@ -883,7 +1013,7 @@ function App() {
               <div className={`${cardClass} xl:col-span-2`}>
                 <h3 className="mb-3 text-lg font-semibold">Catalogue</h3>
                 <div className="space-y-3">
-                  {templates.map((template) => (
+                  {Array.isArray(templates) &&  templates.map((template) => (
                     <div key={template.id} className="group rounded-2xl border border-slate-200 bg-white p-4 transition-all duration-300 hover:-translate-y-1 hover:border-indigo-300 hover:shadow-xl">
                       <div className="flex items-start justify-between">
                         <div>
@@ -1347,6 +1477,14 @@ function App() {
       {selectedOrderForm && (
         <form onSubmit={submitResults} className="space-y-5">
 
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">Order #{selectedOrderForm.order.id}</p>
+              <p className="text-sm text-slate-500">{selectedOrderForm.order.template?.name ?? 'Template not available'}</p>
+            </div>
+            {renderStatusBadge(selectedOrderForm.order.status)}
+          </div>
+
           {selectedOrderForm.fields.map((field) => (
             <div key={field.id}>
 
@@ -1360,24 +1498,46 @@ function App() {
             </div>
           ))}
 
-          <button
-            type="submit"
-            className="
-              w-full rounded-xl
-              bg-gradient-to-r from-emerald-500 to-emerald-600
-              px-4 py-3.5 text-sm font-semibold text-white
-              shadow-lg shadow-emerald-200
-              transition-all duration-300
+          {selectedOrderForm.order.status === 'APPROVED' ? (
+            <button
+              type="button"
+              onClick={() => loadOrderResults(selectedOrderForm.order.id)}
+              className="
+                w-full rounded-xl
+                bg-gradient-to-r from-slate-700 to-slate-800
+                px-4 py-3.5 text-sm font-semibold text-white
+                shadow-lg shadow-slate-200
+                transition-all duration-300
 
-              hover:-translate-y-1
-              hover:from-emerald-600 hover:to-emerald-700
-              hover:shadow-2xl hover:shadow-emerald-300
+                hover:-translate-y-1
+                hover:from-slate-800 hover:to-slate-900
+                hover:shadow-2xl hover:shadow-slate-300
 
-              active:scale-[0.98]
-            "
-          >
-            Submit Results
-          </button>
+                active:scale-[0.98]
+              "
+            >
+              View Approved Report
+            </button>
+          ) : (
+            <button
+              type="submit"
+              className="
+                w-full rounded-xl
+                bg-gradient-to-r from-emerald-500 to-emerald-600
+                px-4 py-3.5 text-sm font-semibold text-white
+                shadow-lg shadow-emerald-200
+                transition-all duration-300
+
+                hover:-translate-y-1
+                hover:from-emerald-600 hover:to-emerald-700
+                hover:shadow-2xl hover:shadow-emerald-300
+
+                active:scale-[0.98]
+              "
+            >
+              Submit for Approval
+            </button>
+          )}
 
         </form>
       )}
@@ -1421,7 +1581,8 @@ function App() {
       {/* Orders Grid */}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
 
-        {orders.map((order) => (
+        {Array.isArray(orders) &&
+         orders.map((order) => (
           <div
             key={order.id}
             className="
@@ -1448,21 +1609,105 @@ function App() {
               {order.template?.name ?? '-'}
             </p>
 
-            <span
-              className="
-                mt-3 inline-block rounded-full
-                bg-slate-100 px-3 py-1
-                text-xs font-semibold text-slate-600
-              "
-            >
-              {order.status}
-            </span>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {renderStatusBadge(order.status)}
+              {profile.role === 'LAB_USER' && order.status === 'APPROVED' && (
+                <button
+                  type="button"
+                  onClick={() => loadOrderResults(order.id)}
+                  className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-700"
+                >
+                  Download Report
+                </button>
+              )}
+            </div>
+
+            {profile.role === 'SUPER_ADMIN' && order.status === 'AWAITING_APPROVAL' && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => approveOrder(order.id)}
+                  className="rounded-xl bg-emerald-500 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-600"
+                >
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  onClick={() => rejectOrder(order.id)}
+                  className="rounded-xl bg-rose-500 px-3 py-2 text-xs font-semibold text-white hover:bg-rose-600"
+                >
+                  Reject
+                </button>
+              </div>
+            )}
 
           </div>
         ))}
 
       </div>
 
+      {selectedOrderReport && (
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-xl font-semibold text-slate-900">Order #{selectedOrderReport.order.id} Report</h3>
+              <p className="text-sm text-slate-500">{selectedOrderReport.order.template?.name ?? ''}</p>
+            </div>
+            <button
+              type="button"
+              onClick={downloadOrderReport}
+              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+            >
+              Download / Print Report
+            </button>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {selectedOrderReport.results.map((result, idx) => (
+              <div key={idx} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm text-slate-500">{result.fieldName}</p>
+                <p className="mt-2 text-lg font-semibold text-slate-900">{String(result.value)} {result.unit ?? ''}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+    </div>
+
+  </div>
+)}
+
+          {activeView === 'approvals' && profile.role === 'SUPER_ADMIN' && (
+  <div className="space-y-6">
+
+    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="mb-5 flex items-start justify-between">
+        <div>
+          <h3 className="text-2xl font-bold text-slate-800">Approval Review</h3>
+          <p className="mt-2 text-sm text-slate-500">Review test submissions and publish reports for lab users.</p>
+        </div>
+        <div className="rounded-full bg-indigo-50 px-4 py-1.5 text-xs font-semibold text-indigo-700">Approval Queue</div>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {orders.filter((order) => order.status === 'AWAITING_APPROVAL').map((order) => (
+          <div key={order.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:-translate-y-1 hover:border-indigo-300 hover:bg-white hover:shadow-xl">
+            <p className="text-sm font-semibold text-slate-900">Order #{order.id}</p>
+            <p className="mt-2 text-sm text-slate-600">{order.patient?.fullName ?? '-'}</p>
+            <p className="mt-1 text-sm text-slate-500">{order.template?.name ?? '-'}</p>
+            <div className="mt-3">{renderStatusBadge(order.status)}</div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button type="button" onClick={() => approveOrder(order.id)} className="rounded-xl bg-emerald-500 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-600">Approve</button>
+              <button type="button" onClick={() => rejectOrder(order.id)} className="rounded-xl bg-rose-500 px-3 py-2 text-xs font-semibold text-white hover:bg-rose-600">Reject</button>
+            </div>
+          </div>
+        ))}
+
+        {orders.filter((order) => order.status !== 'AWAITING_APPROVAL').length === orders.length && (
+          <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-sm text-slate-500">
+            No approval requests are pending.
+          </div>
+        )}
+      </div>
     </div>
 
   </div>
