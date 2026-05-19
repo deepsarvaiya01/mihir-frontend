@@ -1,0 +1,60 @@
+import { api } from '../lib/api'
+import type { Order, OrderFormData, OrderResult } from '../types'
+
+export interface SubmitResultsDto {
+  values: {
+    fieldId: number
+    textValue?: string
+    numberValue?: number
+    booleanValue?: boolean
+    dateValue?: string
+  }[]
+}
+
+export const orderService = {
+  getAll: async (): Promise<Order[]> => {
+    const { data } = await api.get('/orders')
+    if (Array.isArray(data)) return data
+    if (Array.isArray(data.orders)) return data.orders
+    return []
+  },
+
+  create: async (payload: { patientId: number; templateId: number }): Promise<Order> => {
+    const { data } = await api.post('/orders', payload)
+    return data
+  },
+
+  getForm: async (orderId: number): Promise<OrderFormData> => {
+    const { data } = await api.get(`/orders/${orderId}/form`)
+    return data
+  },
+
+  getResults: async (orderId: number): Promise<OrderResult> => {
+    const { data } = await api.get(`/orders/${orderId}/results`)
+    return data
+  },
+
+  submitResults: async (orderId: number, payload: SubmitResultsDto): Promise<Order> => {
+    const { data } = await api.post(`/orders/${orderId}/results`, payload)
+    return data
+  },
+
+  approve: async (orderId: number): Promise<Order> => {
+    const { data } = await api.post(`/orders/${orderId}/approve`)
+    return data
+  },
+
+  reject: async (orderId: number): Promise<Order> => {
+    const { data } = await api.post(`/orders/${orderId}/reject`)
+    return data
+  },
+
+  reopen: async (orderId: number): Promise<Order> => {
+    const { data } = await api.patch(`/orders/${orderId}/reopen`)
+    return data
+  },
+
+  delete: async (orderId: number): Promise<void> => {
+    await api.delete(`/orders/${orderId}`)
+  },
+}
