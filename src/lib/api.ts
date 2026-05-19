@@ -1,6 +1,9 @@
 import axios from 'axios'
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+// VITE_API_URL must be set at build time on Cloudflare Pages (Environment variables).
+const BASE_URL =
+  import.meta.env.VITE_API_URL ??
+  (import.meta.env.DEV ? 'http://localhost:3000' : '')
 
 export const api = axios.create({
   baseURL: BASE_URL,
