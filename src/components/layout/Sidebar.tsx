@@ -12,6 +12,7 @@ import {
   UserCog,
   Settings,
 } from 'lucide-react'
+import { X } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 import { toast } from 'sonner'
 
@@ -33,7 +34,12 @@ const navItems: NavItem[] = [
   { to: '/settings', label: 'Settings', icon: <Settings className="h-5 w-5" />, roles: ['SUPER_ADMIN', 'LAB_USER'] },
 ]
 
-export function Sidebar() {
+interface SidebarProps {
+  mobileOpen?: boolean
+  onClose?: () => void
+}
+
+export function Sidebar({ mobileOpen = false, onClose }: SidebarProps) {
   const { user, clearAuth } = useAuthStore()
   const navigate = useNavigate()
 
@@ -46,7 +52,28 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex h-screen w-72 flex-col bg-slate-950 text-white">
+    <>
+      {/* backdrop for mobile */}
+      <div
+  onClick={onClose}
+  className={`fixed inset-0 z-40 bg-black/40 transition-all duration-300 lg:hidden ${
+    mobileOpen
+      ? 'visible opacity-100'
+      : 'invisible opacity-0'
+  }`}
+/>
+      {/* sidebar: hidden on small screens unless mobileOpen is true */}
+      <aside
+  className={`fixed inset-y-0 left-0 z-50 flex h-screen w-[280px] flex-col bg-slate-950 text-white transition-transform duration-300
+  ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
+  lg:translate-x-0`}
+>
+      {/* mobile close button (moved outside logo for visibility) */}
+      <div className="md:hidden absolute right-3 top-3 z-50">
+        <button onClick={onClose} className="inline-flex items-center justify-center rounded-full p-2 bg-white/6 text-white hover:bg-white/12 ring-1 ring-white/5" aria-label="Close sidebar">
+          <X className="h-5 w-5" />
+        </button>
+      </div>
       {/* Logo */}
       <div className="flex items-center gap-3 border-b border-white/10 px-6 py-5">
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600">
@@ -109,5 +136,6 @@ export function Sidebar() {
         </button>
       </div>
     </aside>
+    </>
   )
 }

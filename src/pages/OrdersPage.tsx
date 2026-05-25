@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, ClipboardList, Search, FileText, Printer, ChevronDown, Trash2, RotateCcw, Calculator } from 'lucide-react'
+import { Plus, ClipboardList, Search, FileText, Printer, ChevronDown, Trash2, RotateCcw, Calculator, MoreVertical } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
 import { Input, Select } from '../components/ui/Input'
@@ -55,6 +55,7 @@ export default function OrdersPage() {
   const [selectedOrderForm, setSelectedOrderForm] = useState<OrderFormData | null>(null)
   const [selectedReport, setSelectedReport] = useState<OrderResult | null>(null)
   const [resultValues, setResultValues] = useState<Record<number, string | boolean>>({})
+  const [activeMenuOrderId, setActiveMenuOrderId] = useState<number | null>(null)
 
   const { data: orders = [], isLoading } = useQuery({ queryKey: ['orders'], queryFn: orderService.getAll })
   const { data: patients = [] } = useQuery({ queryKey: ['patients'], queryFn: () => patientService.getAll() })
@@ -278,86 +279,122 @@ export default function OrdersPage() {
         ) : filtered.length === 0 ? (
           <EmptyState icon={<Search className="h-10 w-10" />} title="No orders found" description="Try adjusting your search or filter" />
         ) : (
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <table className="min-w-[720px] w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Order</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Patient</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Test</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Status</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Date</th>
-                  <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">Actions</th>
+                  <th className="px-3 sm:px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Order</th>
+                  <th className="px-3 sm:px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Patient</th>
+                  <th className="px-3 sm:px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Test</th>
+                  <th className="px-3 sm:px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Status</th>
+                  <th className="px-3 sm:px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Date</th>
+                  <th className="px-3 sm:px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {filtered.map(order => (
                   <tr key={order.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-5 py-4 font-bold text-slate-700">#{order.id}</td>
-                    <td className="px-5 py-4">
+                    <td className="px-3 sm:px-5 py-4 align-middle font-bold text-slate-700">#{order.id}</td>
+                    <td className="px-3 sm:px-5 py-4 align-middle">
                       <p className="font-medium text-slate-800">{order.patient?.fullName ?? '—'}</p>
                       <p className="text-xs text-slate-400">{order.patient?.patientCode ?? ''}</p>
                     </td>
-                    <td className="px-5 py-4 text-slate-600">{order.template?.name ?? '—'}</td>
-                    <td className="px-5 py-4"><OrderStatusBadge status={order.status} /></td>
-                    <td className="px-5 py-4 text-xs text-slate-400">
+                    <td className="px-3 sm:px-5 py-4 align-middle text-slate-600">{order.template?.name ?? '—'}</td>
+                    <td className="px-3 sm:px-5 py-4 align-middle">
+                      <OrderStatusBadge status={order.status} />
+                    </td>
+                    <td className="px-3 sm:px-5 py-4 align-middle text-xs text-slate-400">
                       {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : '—'}
                     </td>
-                    <td className="px-5 py-4">
-                      <div className="flex justify-end gap-2">
-                        {(order.status === 'PENDING' || order.status === 'IN_PROGRESS') && (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            icon={<FileText className="h-3.5 w-3.5" />}
-                            loading={loadOrderForm.isPending && loadOrderForm.variables === order.id}
-                            onClick={() => loadOrderForm.mutate(order.id)}
-                          >
-                            Enter Results
-                          </Button>
-                        )}
-                        {order.status === 'APPROVED' && (
-                          <Button
-                            size="sm"
-                            variant="success"
-                            icon={<Printer className="h-3.5 w-3.5" />}
-                            loading={loadOrderResults.isPending && loadOrderResults.variables === order.id}
-                            onClick={() => loadOrderResults.mutate(order.id)}
-                          >
-                            View Report
-                          </Button>
-                        )}
-                        {order.status === 'AWAITING_APPROVAL' && (
+                    <td className="px-3 sm:px-5 py-4 align-middle">
+                      <div className="relative flex justify-end">
+                        <div
+                          className="relative inline-flex"
+                          tabIndex={0}
+                          onBlur={e => {
+                            if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                              setActiveMenuOrderId(null)
+                            }
+                          }}
+                        >
                           <Button
                             size="sm"
                             variant="ghost"
-                            icon={<FileText className="h-3.5 w-3.5" />}
-                            onClick={() => loadOrderResults.mutate(order.id)}
-                          >
-                            View Submitted
-                          </Button>
-                        )}
-                        {order.status === 'REJECTED' && (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            icon={<RotateCcw className="h-3.5 w-3.5" />}
-                            onClick={() => setReopenOrder(order)}
-                          >
-                            Re-open
-                          </Button>
-                        )}
-                        {(order.status === 'PENDING' || order.status === 'REJECTED') && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            icon={<Trash2 className="h-3.5 w-3.5 text-rose-500" />}
-                            className="text-rose-500 hover:bg-rose-50"
-                            onClick={() => setDeleteOrder(order)}
-                          >
-                            Delete
-                          </Button>
-                        )}
+                            icon={<MoreVertical className="h-5 w-5" />}
+                            onClick={() => setActiveMenuOrderId(prev => prev === order.id ? null : order.id)}
+                            aria-label="Open actions menu"
+                          />
+
+                          {activeMenuOrderId === order.id && (
+                            <div className="absolute right-0 top-full z-50 mt-2 min-w-[180px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+                              {(order.status === 'PENDING' || order.status === 'IN_PROGRESS') && (
+                                <button
+                                  type="button"
+                                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                                  onClick={() => {
+                                    setActiveMenuOrderId(null)
+                                    loadOrderForm.mutate(order.id)
+                                  }}
+                                >
+                                  <FileText className="h-4 w-4 text-slate-400" />
+                                  Enter Results
+                                </button>
+                              )}
+                              {order.status === 'APPROVED' && (
+                                <button
+                                  type="button"
+                                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                                  onClick={() => {
+                                    setActiveMenuOrderId(null)
+                                    loadOrderResults.mutate(order.id)
+                                  }}
+                                >
+                                  <Printer className="h-4 w-4 text-slate-400" />
+                                  View Report
+                                </button>
+                              )}
+                              {order.status === 'AWAITING_APPROVAL' && (
+                                <button
+                                  type="button"
+                                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                                  onClick={() => {
+                                    setActiveMenuOrderId(null)
+                                    loadOrderResults.mutate(order.id)
+                                  }}
+                                >
+                                  <FileText className="h-4 w-4 text-slate-400" />
+                                  View Submitted
+                                </button>
+                              )}
+                              {order.status === 'REJECTED' && (
+                                <button
+                                  type="button"
+                                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                                  onClick={() => {
+                                    setActiveMenuOrderId(null)
+                                    setReopenOrder(order)
+                                  }}
+                                >
+                                  <RotateCcw className="h-4 w-4 text-slate-400" />
+                                  Re-open
+                                </button>
+                              )}
+                              {(order.status === 'PENDING' || order.status === 'REJECTED') && (
+                                <button
+                                  type="button"
+                                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-rose-600 hover:bg-rose-50"
+                                  onClick={() => {
+                                    setActiveMenuOrderId(null)
+                                    setDeleteOrder(order)
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                  Delete
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>

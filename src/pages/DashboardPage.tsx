@@ -82,14 +82,21 @@ export default function DashboardPage() {
   ).slice(0, 5)
 
   return (
-    <div>
-      <Header
-        title="Dashboard"
-        subtitle={isAdmin ? 'Executive overview of laboratory operations' : 'Your lab operations at a glance'}
-      />
-      <div className="p-6 space-y-6">
+    <div className="w-full overflow-x-hidden">
+     
+         <Header
+    title="Dashboard"
+    subtitle={
+      isAdmin
+        ? 'Executive overview of laboratory operations'
+        : 'Your lab operations at a glance'
+    }
+  />
+      
+      
+      <div className="space-y-6 p-4 sm:p-6">
         {/* Stats grid */}
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {isAdmin ? (
             <>
               <StatCard title="Test Templates" value={summary?.templates ?? 0} subtitle={`${summary?.activeTemplates ?? 0} active`} icon={<FlaskConical className="h-5 w-5 text-indigo-600" />} iconBg="bg-indigo-100" />
@@ -108,7 +115,7 @@ export default function DashboardPage() {
         </div>
 
         {isAdmin && summary && (
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <StatCard title="Super Admins" value={summary.superAdmins} icon={<UserCog className="h-5 w-5 text-rose-600" />} iconBg="bg-rose-100" />
             <StatCard title="Lab Users" value={summary.labUsers} icon={<Activity className="h-5 w-5 text-blue-600" />} iconBg="bg-blue-100" />
             <StatCard title="Pending Orders" value={summary.pendingOrders} icon={<Clock className="h-5 w-5 text-amber-600" />} iconBg="bg-amber-100" />
@@ -116,12 +123,12 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           {/* Bar chart */}
-          <Card className="lg:col-span-2">
+          <Card className="overflow-hidden lg:col-span-2">
             <CardHeader title="Orders by Status" subtitle="Distribution of all diagnostic orders" />
             {barData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={260}>
+              <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={barData} barSize={36}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} />
@@ -146,9 +153,17 @@ export default function DashboardPage() {
           <Card>
             <CardHeader title="Tests by Template" subtitle="Order distribution" />
             {pieData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={260}>
+              <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
-                  <Pie data={pieData} cx="50%" cy="45%" innerRadius={55} outerRadius={90} paddingAngle={3} dataKey="value">
+                  <Pie
+  data={pieData}
+  cx="50%"
+  cy="45%"
+  innerRadius={40}
+  outerRadius={70}
+  paddingAngle={3}
+  dataKey="value"
+>
                     {pieData.map((entry, i) => (
                       <Cell key={i} fill={entry.color} />
                     ))}
@@ -167,8 +182,8 @@ export default function DashboardPage() {
         <Card>
           <CardHeader title="Recent Orders" subtitle="Latest diagnostic orders" badge={<span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{orders.length} total</span>} />
           {recentOrders.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            <div className="w-full overflow-x-auto">
+              <table className="min-w-[700px] w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-100">
                     <th className="pb-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Order</th>
@@ -181,11 +196,23 @@ export default function DashboardPage() {
                 <tbody className="divide-y divide-slate-50">
                   {recentOrders.map(order => (
                     <tr key={order.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="py-3 font-semibold text-slate-700">#{order.id}</td>
-                      <td className="py-3 text-slate-600">{order.patient?.fullName ?? '—'}</td>
-                      <td className="py-3 text-slate-500">{order.template?.name ?? '—'}</td>
-                      <td className="py-3"><OrderStatusBadge status={order.status} /></td>
-                      <td className="py-3 text-slate-400 text-xs">{order.createdAt ? new Date(order.createdAt).toLocaleDateString() : '—'}</td>
+                      <td className="whitespace-nowrap py-3 align-middle font-semibold text-slate-700">
+  #{order.id}
+</td>
+                      <td className="whitespace-nowrap py-3 align-middle text-slate-600">
+  {order.patient?.fullName ?? '—'}
+</td>
+                      <td className="whitespace-nowrap py-3 align-middle text-slate-500">
+  {order.template?.name ?? '—'}
+</td>
+                      <td className="py-3 align-middle">
+                        <OrderStatusBadge status={order.status} />
+                      </td>
+                      <td className="whitespace-nowrap py-3 align-middle text-xs text-slate-400">
+  {order.createdAt
+    ? new Date(order.createdAt).toLocaleDateString()
+    : '—'}
+</td>
                     </tr>
                   ))}
                 </tbody>
@@ -199,7 +226,7 @@ export default function DashboardPage() {
         {/* Awaiting approval callout for admins */}
         {isAdmin && orders.filter(o => o.status === 'AWAITING_APPROVAL').length > 0 && (
           <Card className="border-amber-200 bg-amber-50">
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100">
                 <Clock className="h-5 w-5 text-amber-600" />
               </div>
@@ -209,7 +236,10 @@ export default function DashboardPage() {
                 </p>
                 <p className="text-sm text-amber-700">Review and approve submitted test results in the Approvals section.</p>
               </div>
-              <a href="/approvals" className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 transition-colors">
+              <a
+  href="/approvals"
+  className="w-full rounded-xl bg-amber-600 px-4 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-amber-700 sm:w-auto"
+>
                 Review Now
               </a>
             </div>
@@ -219,7 +249,7 @@ export default function DashboardPage() {
         {/* Rejected orders info */}
         {orders.filter(o => o.status === 'REJECTED').length > 0 && (
           <Card className="border-rose-200 bg-rose-50">
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-100">
                 <XCircle className="h-5 w-5 text-rose-600" />
               </div>

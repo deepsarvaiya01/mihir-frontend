@@ -203,329 +203,277 @@ export default function TemplatesPage() {
   }
 
   return (
-    <div>
-      <Header
-        title="Test Catalogue"
-        subtitle="Manage dynamic test templates and their fields"
-        action={
-          <div className="flex gap-2">
-            <Button icon={<Plus className="h-4 w-4" />} onClick={() => setFieldModalOpen(true)} variant="secondary">
-              Add Field
-            </Button>
-            <Button icon={<Plus className="h-4 w-4" />} onClick={() => setCreateModalOpen(true)}>
-              New Template
-            </Button>
-          </div>
-        }
-      />
+  <div className="w-full overflow-x-hidden">
+    <Header
+      title="Test Catalogue"
+      subtitle="Manage dynamic test templates and their fields"
+      action={
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button
+            icon={<Plus className="h-4 w-4" />}
+            onClick={() => setFieldModalOpen(true)}
+            variant="secondary"
+            className="w-full sm:w-auto"
+          >
+            Add Field
+          </Button>
 
-      <div className="p-6 space-y-4">
-        {isLoading ? (
-          <PageLoader />
-        ) : templates.length === 0 ? (
-          <EmptyState
-            icon={<FlaskConical className="h-12 w-12" />}
-            title="No templates yet"
-            description="Create your first test template to get started"
-            action={<Button icon={<Plus className="h-4 w-4" />} onClick={() => setCreateModalOpen(true)}>Create Template</Button>}
-          />
-        ) : (
-          templates.map(template => (
-            <Card key={template.id} hover>
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-4">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50">
-                    <FlaskConical className="h-5 w-5 text-indigo-600" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-bold text-slate-800">{template.name}</h3>
-                      <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-mono text-slate-500">{template.code}</span>
-                      <Badge variant={template.active ? 'success' : 'default'} dot>
-                        {template.active ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </div>
-                    <p className="mt-0.5 text-sm text-slate-500">
-                      {template.fields?.length ?? 0} field{(template.fields?.length ?? 0) !== 1 ? 's' : ''} configured
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => toggleActive.mutate({ id: template.id, active: !template.active })}
-                    className="text-slate-400 hover:text-indigo-600 transition-colors"
-                    title={template.active ? 'Deactivate' : 'Activate'}
-                  >
-                    {template.active ? <ToggleRight className="h-6 w-6 text-indigo-600" /> : <ToggleLeft className="h-6 w-6" />}
-                  </button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon={expandedId === template.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                    onClick={() => setExpandedId(expandedId === template.id ? null : template.id)}
-                  >
-                    {expandedId === template.id ? 'Collapse' : 'View Fields'}
-                  </Button>
-                  <button
-                    onClick={() => setDeleteTemplate(template)}
-                    className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
-                    title="Delete template"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
+          <Button
+            icon={<Plus className="h-4 w-4" />}
+            onClick={() => setCreateModalOpen(true)}
+            className="w-full sm:w-auto"
+          >
+            New Template
+          </Button>
+        </div>
+      }
+    />
 
-              {expandedId === template.id && (
-                <div className="mt-4 border-t border-slate-100 pt-4">
-                  {template.fields && template.fields.length > 0 ? (
-                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                      {template.fields.map(field => (
-                        <div key={field.id} className="group flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 hover:border-indigo-200 hover:bg-indigo-50/30 transition-colors">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              {field.fieldType === 'calculated' && <Calculator className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
-                              <p className="truncate font-medium text-sm text-slate-700">{field.fieldName}</p>
-                            </div>
-                            {field.unit && <p className="text-xs text-slate-400">Unit: {field.unit}</p>}
-                          </div>
-                          <div className="flex shrink-0 items-center gap-1.5 ml-2">
-                            <Badge variant={fieldTypeBadgeVariants[field.fieldType]}>{fieldTypeLabels[field.fieldType]}</Badge>
-                            {field.required && <Badge variant="danger">Required</Badge>}
-                            <button
-                              onClick={() => setDeleteField({ template, field })}
-                              className="ml-1 rounded p-0.5 text-slate-300 hover:bg-rose-100 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100"
-                              title="Remove field"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border-2 border-dashed border-slate-200 p-6 text-center">
-                      <Tag className="mx-auto h-8 w-8 text-slate-300 mb-2" />
-                      <p className="text-sm text-slate-400">No fields configured yet.</p>
-                      <button
-                        className="mt-2 text-sm text-indigo-600 hover:underline"
-                        onClick={() => {
-                          setFieldForm(f => ({ ...f, templateId: String(template.id) }))
-                          setFieldModalOpen(true)
-                        }}
-                      >
-                        Add the first field
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </Card>
-          ))
-        )}
-      </div>
-
-      {/* Create Template Modal */}
-      <Modal
-        open={createModalOpen}
-        onClose={() => setCreateModalOpen(false)}
-        title="Create Test Template"
-        subtitle="Define a new laboratory test template"
-        size="sm"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setCreateModalOpen(false)}>Cancel</Button>
-            <Button loading={createTemplate.isPending} onClick={() => createTemplate.mutate(templateForm)}>
+    <div className="space-y-4 p-3 sm:p-5 lg:p-6">
+      {isLoading ? (
+        <PageLoader />
+      ) : templates.length === 0 ? (
+        <EmptyState
+          icon={<FlaskConical className="h-12 w-12" />}
+          title="No templates yet"
+          description="Create your first test template to get started"
+          action={
+            <Button
+              icon={<Plus className="h-4 w-4" />}
+              onClick={() => setCreateModalOpen(true)}
+            >
               Create Template
             </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <Input
-            label="Template Name"
-            placeholder="e.g. Complete Blood Count"
-            value={templateForm.name}
-            onChange={e => setTemplateForm(p => ({ ...p, name: e.target.value }))}
-            required
-          />
-          <Input
-            label="Template Code"
-            placeholder="e.g. CBC"
-            value={templateForm.code}
-            onChange={e => setTemplateForm(p => ({ ...p, code: e.target.value.toUpperCase() }))}
-            hint="Unique short identifier for this template"
-            required
-          />
-        </div>
-      </Modal>
-
-      {/* Add Field Modal */}
-      <Modal
-        open={fieldModalOpen}
-        onClose={() => setFieldModalOpen(false)}
-        title="Add Field"
-        subtitle="Configure a new field for a test template"
-        size="lg"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setFieldModalOpen(false)}>Cancel</Button>
-            <Button loading={addField.isPending} onClick={handleAddField}>Add Field</Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <Select
-            label="Template"
-            value={fieldForm.templateId}
-            onChange={e => setFieldForm(p => ({ ...p, templateId: e.target.value, formulaFirstFieldId: '', formulaPairs: [] }))}
-            required
-          >
-            <option value="">Select a template</option>
-            {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </Select>
-
-          <Input
-            label="Field Name"
-            placeholder="e.g. Hemoglobin"
-            value={fieldForm.fieldName}
-            onChange={e => setFieldForm(p => ({ ...p, fieldName: e.target.value }))}
-            required
-          />
-
-          <Select
-            label="Field Type"
-            value={fieldForm.fieldType}
-            onChange={e => setFieldForm(p => ({ ...p, fieldType: e.target.value as FieldType, formulaFirstFieldId: '', formulaPairs: [] }))}
-          >
-            {(Object.entries(fieldTypeLabels) as [FieldType, string][]).map(([v, l]) => (
-              <option key={v} value={v}>{l}</option>
-            ))}
-          </Select>
-
-          {/* Calculated — Formula Builder */}
-          {fieldForm.fieldType === 'calculated' && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4">
-              <div className="mb-3 flex items-center gap-2">
-                <Calculator className="h-4 w-4 text-amber-600" />
-                <span className="text-sm font-semibold text-amber-800">Formula Builder</span>
-                <span className="text-xs text-amber-600">(numeric fields only)</span>
-              </div>
-
-              {numericFields.length === 0 ? (
-                <div className="rounded-lg border border-amber-200 bg-white p-3 text-center text-sm text-slate-500">
-                  No numeric fields in this template yet. Add numeric fields first.
+          }
+        />
+      ) : (
+        templates.map(template => (
+          <Card key={template.id} hover>
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              {/* LEFT */}
+              <div className="flex items-start gap-4 min-w-0">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50">
+                  <FlaskConical className="h-5 w-5 text-indigo-600" />
                 </div>
-              ) : (
-                <>
+
+                <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    {/* First field */}
-                    <select
-                      value={fieldForm.formulaFirstFieldId}
-                      onChange={e => setFieldForm(p => ({ ...p, formulaFirstFieldId: e.target.value }))}
-                      className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm text-slate-700 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
-                    >
-                      <option value="">Select field</option>
-                      {numericFields.map(f => <option key={f.id} value={f.id}>{f.fieldName}</option>)}
-                    </select>
+                    <h3 className="break-words font-bold text-slate-800">
+                      {template.name}
+                    </h3>
 
-                    {/* Operation pairs */}
-                    {fieldForm.formulaPairs.map((pair, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <select
-                          value={pair.op}
-                          onChange={e => updatePair(i, { op: e.target.value as FormulaPair['op'] })}
-                          className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm text-slate-700 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
-                        >
-                          {Object.entries(OP_LABELS).map(([v, l]) => (
-                            <option key={v} value={v}>{l}</option>
-                          ))}
-                        </select>
-                        <select
-                          value={pair.fieldId}
-                          onChange={e => updatePair(i, { fieldId: e.target.value })}
-                          className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm text-slate-700 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200"
-                        >
-                          <option value="">Select field</option>
-                          {numericFields.map(f => <option key={f.id} value={f.id}>{f.fieldName}</option>)}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => removePair(i)}
-                          className="rounded-lg p-1 text-amber-600 hover:bg-amber-100 transition-colors"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ))}
+                    <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-mono text-slate-500">
+                      {template.code}
+                    </span>
 
-                    {/* Add pair button */}
-                    <button
-                      type="button"
-                      onClick={addPair}
-                      className="rounded-lg border border-dashed border-amber-400 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100 transition-colors"
+                    <Badge
+                      variant={template.active ? 'success' : 'default'}
+                      dot
                     >
-                      + Add Step
-                    </button>
+                      {template.active ? 'Active' : 'Inactive'}
+                    </Badge>
                   </div>
 
-                  {/* Preview */}
-                  {fieldForm.formulaFirstFieldId && (
-                    <div className="mt-3 rounded-lg bg-white px-3 py-2 border border-amber-200">
-                      <span className="text-xs text-amber-600 font-medium">Preview: </span>
-                      <span className="text-sm font-mono text-slate-700">
-                        {previewFormulaText(fieldForm.formulaFirstFieldId, fieldForm.formulaPairs, numericFields)}
-                      </span>
-                    </div>
+                  <p className="mt-0.5 text-sm text-slate-500">
+                    {template.fields?.length ?? 0} field
+                    {(template.fields?.length ?? 0) !== 1 ? 's' : ''}{' '}
+                    configured
+                  </p>
+                </div>
+              </div>
+
+              {/* RIGHT */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() =>
+                    toggleActive.mutate({
+                      id: template.id,
+                      active: !template.active,
+                    })
+                  }
+                  className="text-slate-400 transition-colors hover:text-indigo-600"
+                  title={template.active ? 'Deactivate' : 'Activate'}
+                >
+                  {template.active ? (
+                    <ToggleRight className="h-6 w-6 text-indigo-600" />
+                  ) : (
+                    <ToggleLeft className="h-6 w-6" />
                   )}
-                </>
-              )}
+                </button>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={
+                    expandedId === template.id ? (
+                      <ChevronUp className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )
+                  }
+                  onClick={() =>
+                    setExpandedId(
+                      expandedId === template.id ? null : template.id
+                    )
+                  }
+                >
+                  {expandedId === template.id
+                    ? 'Collapse'
+                    : 'View Fields'}
+                </Button>
+
+                <button
+                  onClick={() => setDeleteTemplate(template)}
+                  className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
+                  title="Delete template"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             </div>
-          )}
 
-          {/* Select options */}
-          {fieldForm.fieldType === 'select' && (
-            <Input
-              label="Dropdown Options"
-              placeholder="Option 1, Option 2, Option 3"
-              value={fieldForm.options}
-              onChange={e => setFieldForm(p => ({ ...p, options: e.target.value }))}
-              hint="Comma-separated list of options"
-            />
-          )}
+            {expandedId === template.id && (
+              <div className="mt-4 border-t border-slate-100 pt-4">
+                {template.fields && template.fields.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {template.fields.map(field => (
+                      <div
+                        key={field.id}
+                        className="group flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 transition-colors hover:border-indigo-200 hover:bg-indigo-50/30 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            {field.fieldType === 'calculated' && (
+                              <Calculator className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                            )}
 
-          {fieldForm.fieldType !== 'calculated' && (
-            <>
-              <Input
-                label="Unit (Optional)"
-                placeholder="e.g. mg/dL, g/L, %"
-                value={fieldForm.unit}
-                onChange={e => setFieldForm(p => ({ ...p, unit: e.target.value }))}
-              />
-              {fieldForm.fieldType !== 'checkbox' && (
-                <label className="flex cursor-pointer items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={fieldForm.required}
-                    onChange={e => setFieldForm(p => ({ ...p, required: e.target.checked }))}
-                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                  />
-                  <span className="text-sm font-medium text-slate-700">Required field</span>
-                </label>
-              )}
-            </>
-          )}
+                            <p className="truncate text-sm font-medium text-slate-700">
+                              {field.fieldName}
+                            </p>
+                          </div>
 
-          {fieldForm.fieldType === 'calculated' && (
-            <Input
-              label="Unit (Optional)"
-              placeholder="e.g. mg/dL, g/L, %"
-              value={fieldForm.unit}
-              onChange={e => setFieldForm(p => ({ ...p, unit: e.target.value }))}
-            />
-          )}
+                          {field.unit && (
+                            <p className="text-xs text-slate-400">
+                              Unit: {field.unit}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Badge
+                            variant={
+                              fieldTypeBadgeVariants[field.fieldType]
+                            }
+                          >
+                            {fieldTypeLabels[field.fieldType]}
+                          </Badge>
+
+                          {field.required && (
+                            <Badge variant="danger">
+                              Required
+                            </Badge>
+                          )}
+
+                          <button
+                            onClick={() =>
+                              setDeleteField({ template, field })
+                            }
+                            className="rounded p-0.5 text-slate-300 transition-colors hover:bg-rose-100 hover:text-rose-500 sm:opacity-0 sm:group-hover:opacity-100"
+                            title="Remove field"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border-2 border-dashed border-slate-200 p-6 text-center">
+                    <Tag className="mx-auto mb-2 h-8 w-8 text-slate-300" />
+
+                    <p className="text-sm text-slate-400">
+                      No fields configured yet.
+                    </p>
+
+                    <button
+                      className="mt-2 text-sm text-indigo-600 hover:underline"
+                      onClick={() => {
+                        setFieldForm(f => ({
+                          ...f,
+                          templateId: String(template.id),
+                        }))
+
+                        setFieldModalOpen(true)
+                      }}
+                    >
+                      Add the first field
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </Card>
+        ))
+      )}
+    </div>
+
+    {/* Create Template Modal */}
+    <Modal
+      open={createModalOpen}
+      onClose={() => setCreateModalOpen(false)}
+      title="Create Test Template"
+      subtitle="Define a new laboratory test template"
+      size="sm"
+      footer={
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button
+            variant="secondary"
+            onClick={() => setCreateModalOpen(false)}
+            className="w-full sm:w-auto"
+          >
+            Cancel
+          </Button>
+
+          <Button
+            loading={createTemplate.isPending}
+            onClick={() => createTemplate.mutate(templateForm)}
+            className="w-full sm:w-auto"
+          >
+            Create Template
+          </Button>
         </div>
-      </Modal>
+      }
+    >
+      <div className="space-y-4">
+        <Input
+          label="Template Name"
+          placeholder="e.g. Complete Blood Count"
+          value={templateForm.name}
+          onChange={e =>
+            setTemplateForm(p => ({
+              ...p,
+              name: e.target.value,
+            }))
+          }
+          required
+        />
+
+        <Input
+          label="Template Code"
+          placeholder="e.g. CBC"
+          value={templateForm.code}
+          onChange={e =>
+            setTemplateForm(p => ({
+              ...p,
+              code: e.target.value.toUpperCase(),
+            }))
+          }
+          hint="Unique short identifier for this template"
+          required
+        />
+      </div>
+    </Modal>
+  
 
       {/* Delete Template Confirm */}
       <ConfirmModal

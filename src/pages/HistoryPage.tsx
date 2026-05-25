@@ -97,7 +97,7 @@ export default function HistoryPage() {
         subtitle="View complete diagnostic history and generate patient reports"
       />
 
-      <div className="p-6 space-y-6">
+      <div className="space-y-6 p-4 sm:p-6">
         {/* Patient selector */}
         <Card>
           <h3 className="mb-4 text-sm font-bold text-slate-700">Select Patient</h3>
@@ -146,7 +146,7 @@ export default function HistoryPage() {
             {/* Patient header */}
             <Card className="border-indigo-200 bg-indigo-50/30">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-600 text-lg font-bold text-white">
                     {history.patient.fullName.charAt(0).toUpperCase()}
                   </div>
