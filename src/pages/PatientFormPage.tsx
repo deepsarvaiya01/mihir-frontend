@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Save, User, Phone, MapPin, AlertCircle, Building2,
-  FlaskConical, CreditCard, Loader2,
+  FlaskConical, CreditCard, Loader2, Upload, FileText, X, Paperclip,
 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Input, Select } from '../components/ui/Input'
@@ -16,7 +16,6 @@ import { PageLoader } from '../components/ui/Spinner'
 import { toast } from 'sonner'
 
 const GENDERS = ['Male', 'Female', 'Other', 'Prefer not to say']
-const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
 const DISCOUNT_OPTIONS = [0, 5, 10, 15, 20, 25, 30, 50]
 
 interface PatientFormState extends Omit<CreatePatientDto, 'age' | 'isB2b' | 'b2bLabId' | 'labBranchId'> {
@@ -28,7 +27,7 @@ interface PatientFormState extends Omit<CreatePatientDto, 'age' | 'isB2b' | 'b2b
 
 const emptyForm: PatientFormState = {
   fullName: '', patientCode: '', age: '', dateOfBirth: '',
-  gender: '', bloodGroup: '', email: '', phoneNumber: '',
+  gender: '', email: '', phoneNumber: '',
   addressLine: '', city: '', state: '', postalCode: '',
   emergencyContactName: '', emergencyContactPhone: '',
   isB2b: false, b2bLabId: '', labBranchId: '',
@@ -39,7 +38,7 @@ function patientToForm(p: import('../types').Patient): PatientFormState {
   return {
     fullName: p.fullName ?? '', patientCode: p.patientCode ?? '',
     age: p.age != null ? String(p.age) : '', dateOfBirth: p.dateOfBirth ?? '',
-    gender: p.gender ?? '', bloodGroup: p.bloodGroup ?? '',
+    gender: p.gender ?? '',
     email: p.email ?? '', phoneNumber: p.phoneNumber ?? '',
     addressLine: p.addressLine ?? '', city: p.city ?? '',
     state: p.state ?? '', postalCode: p.postalCode ?? '',
@@ -60,7 +59,6 @@ function formToDto(form: PatientFormState): CreatePatientDto {
     age: form.age ? Number(form.age) : undefined,
     dateOfBirth: form.dateOfBirth || undefined,
     gender: form.gender || undefined,
-    bloodGroup: form.bloodGroup || undefined,
     email: form.email || undefined,
     phoneNumber: form.phoneNumber || undefined,
     addressLine: form.addressLine || undefined,
@@ -75,6 +73,27 @@ function formToDto(form: PatientFormState): CreatePatientDto {
     doctorName: form.doctorName || undefined,
     reportDate: form.reportDate || undefined,
   }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function getFileIcon(fileName: string) {
+  const ext = fileName.split('.').pop()?.toLowerCase()
+  if (ext === 'pdf') return '📄'
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext ?? '')) return '🖼️'
+  if (['doc', 'docx'].includes(ext ?? '')) return '📝'
+  return '📎'
+}
+
+interface DocumentEntry {
+  id: string
+  name: string
+  file: File
+  url: string
 }
 
 function SectionTitle({ icon, title }: { icon: React.ReactNode; title: string }) {
@@ -108,6 +127,11 @@ export default function PatientFormPage() {
   const [paymentStatus, setPaymentStatus] = useState<'PENDING' | 'PAID' | 'PARTIAL'>('PENDING')
   const [paymentType, setPaymentType] = useState<'CASH' | 'CHEQUE' | 'ONLINE'>('CASH')
 
+  // Document upload state
+  const [documents, setDocuments] = useState<DocumentEntry[]>([])
+  const [pendingFile, setPendingFile] = useState<{ file: File; name: string } | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   // Lookups
   const { data: b2bLabs = [] } = useQuery({ queryKey: ['b2b-labs'], queryFn: b2bLabService.getAll })
   const { data: labBranches = [] } = useQuery({ queryKey: ['lab-branches'], queryFn: labBranchService.getAll })
@@ -124,6 +148,14 @@ export default function PatientFormPage() {
   useEffect(() => {
     if (existingPatient) setForm(patientToForm(existingPatient))
   }, [existingPatient])
+
+  // Cleanup object URLs on unmount
+  useEffect(() => {
+    return () => {
+      documents.forEach(d => URL.revokeObjectURL(d.url))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const setField = (key: keyof PatientFormState) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -151,6 +183,37 @@ export default function PatientFormPage() {
   }, 0)
   const discountAmt = Math.round(subtotal * discount / 100)
   const netAmount = subtotal - discountAmt
+
+  // Document handlers
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    // Default name = filename without extension
+    const defaultName = file.name.replace(/\.[^/.]+$/, '')
+    setPendingFile({ file, name: defaultName })
+    e.target.value = '' // reset so same file can be re-selected
+  }
+
+  const confirmAddDocument = () => {
+    if (!pendingFile) return
+    const url = URL.createObjectURL(pendingFile.file)
+    const entry: DocumentEntry = {
+      id: `${Date.now()}-${Math.random()}`,
+      name: pendingFile.name.trim() || pendingFile.file.name,
+      file: pendingFile.file,
+      url,
+    }
+    setDocuments(prev => [...prev, entry])
+    setPendingFile(null)
+  }
+
+  const removeDocument = (docId: string) => {
+    setDocuments(prev => {
+      const doc = prev.find(d => d.id === docId)
+      if (doc) URL.revokeObjectURL(doc.url)
+      return prev.filter(d => d.id !== docId)
+    })
+  }
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -239,10 +302,6 @@ export default function PatientFormPage() {
               <option value="">Select gender</option>
               {GENDERS.map(g => <option key={g} value={g}>{g}</option>)}
             </Select>
-            <Select label="Blood Group" value={form.bloodGroup} onChange={setField('bloodGroup')}>
-              <option value="">Select blood group</option>
-              {BLOOD_GROUPS.map(b => <option key={b} value={b}>{b}</option>)}
-            </Select>
           </div>
         </FormCard>
 
@@ -321,6 +380,112 @@ export default function PatientFormPage() {
                 value={form.reportDate ?? ''} onChange={setField('reportDate')} />
             </div>
           </div>
+        </FormCard>
+
+        {/* Documents */}
+        <FormCard>
+          <SectionTitle icon={<Paperclip className="h-4 w-4" />} title="Documents" />
+
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.gif,.webp"
+            onChange={handleFileSelect}
+          />
+
+          {/* Uploaded documents list */}
+          {documents.length > 0 && (
+            <div className="mb-4 space-y-2">
+              {documents.map(doc => (
+                <div
+                  key={doc.id}
+                  className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 transition-colors hover:border-indigo-200 hover:bg-indigo-50/40"
+                >
+                  {/* Clickable document name */}
+                  <a
+                    href={doc.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex min-w-0 flex-1 items-center gap-3 group"
+                    title={`Open ${doc.name}`}
+                  >
+                    <span className="text-xl leading-none select-none">{getFileIcon(doc.file.name)}</span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-slate-800 group-hover:text-indigo-600 transition-colors">
+                        {doc.name}
+                      </p>
+                      <p className="truncate text-xs text-slate-400">
+                        {doc.file.name} · {formatBytes(doc.file.size)}
+                      </p>
+                    </div>
+                    <FileText className="h-4 w-4 shrink-0 text-slate-300 group-hover:text-indigo-400 transition-colors" />
+                  </a>
+
+                  {/* Remove */}
+                  <button
+                    onClick={() => removeDocument(doc.id)}
+                    className="ml-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-100 hover:text-rose-500 transition-colors"
+                    title="Remove document"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Pending file — name input */}
+          {pendingFile ? (
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-indigo-600">
+                Name this document
+              </p>
+              <div className="flex items-center gap-3">
+                <span className="text-xl leading-none">{getFileIcon(pendingFile.file.name)}</span>
+                <input
+                  autoFocus
+                  type="text"
+                  value={pendingFile.name}
+                  onChange={e => setPendingFile(p => p ? { ...p, name: e.target.value } : null)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') confirmAddDocument()
+                    if (e.key === 'Escape') setPendingFile(null)
+                  }}
+                  placeholder="Document name"
+                  className="flex-1 rounded-xl border border-indigo-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                />
+                <button
+                  onClick={confirmAddDocument}
+                  className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
+                >
+                  Add
+                </button>
+                <button
+                  onClick={() => setPendingFile(null)}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-indigo-500">{pendingFile.file.name} · {formatBytes(pendingFile.file.size)}</p>
+            </div>
+          ) : (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 bg-white py-4 text-sm font-medium text-slate-500 transition-all hover:border-indigo-300 hover:bg-indigo-50/40 hover:text-indigo-600"
+            >
+              <Upload className="h-4 w-4" />
+              Upload Document
+            </button>
+          )}
+
+          {documents.length === 0 && !pendingFile && (
+            <p className="mt-2 text-center text-xs text-slate-400">
+              PDF, JPG, PNG, Word — up to any size · Click a document to open it
+            </p>
+          )}
         </FormCard>
 
         {/* Test Selection — only on create */}
