@@ -17,6 +17,7 @@ import {
   Receipt,
   Pin,
   PinOff,
+  PenLine,
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 import { toast } from 'sonner'
@@ -35,6 +36,7 @@ const navItems: NavItem[] = [
   { to: '/users',        label: 'User Management',   icon: <UserCog className="h-5 w-5" />,         roles: ['SUPER_ADMIN'] },
   { to: '/b2b-labs',     label: 'B2B Partners',      icon: <Building2 className="h-5 w-5" />,       roles: ['SUPER_ADMIN'] },
   { to: '/lab-branches', label: 'Lab Branches',      icon: <MapPin className="h-5 w-5" />,          roles: ['SUPER_ADMIN'] },
+  { to: '/signatures',   label: 'Signatures',        icon: <PenLine className="h-5 w-5" />,         roles: ['SUPER_ADMIN'] },
   { to: '/patients',     label: 'Patients',          icon: <Users className="h-5 w-5" />,           roles: ['SUPER_ADMIN', 'LAB_USER'] },
   { to: '/orders',       label: 'Orders & Results',  icon: <ClipboardList className="h-5 w-5" />,   roles: ['SUPER_ADMIN', 'LAB_USER'] },
   { to: '/billing',      label: 'Billing & Reports', icon: <Receipt className="h-5 w-5" />,         roles: ['SUPER_ADMIN', 'LAB_USER'] },
