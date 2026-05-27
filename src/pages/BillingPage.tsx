@@ -1,8 +1,9 @@
-import { useState } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useState, useEffect } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Search, Receipt, Printer, ChevronDown, DollarSign,
-  CheckCircle, Clock, AlertCircle, FileText,
+  CheckCircle, Clock, AlertCircle, FileText, Pencil, X,
+  RefreshCw,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Card } from '../components/ui/Card'
@@ -12,7 +13,7 @@ import { EmptyState } from '../components/ui/EmptyState'
 import { PageLoader } from '../components/ui/Spinner'
 import { Badge } from '../components/ui/Badge'
 import { orderService } from '../services/orders'
-import type { Order, OrderResult, PaymentStatus } from '../types'
+import type { Order, OrderResult, PaymentStatus, PaymentType } from '../types'
 import { toast } from 'sonner'
 
 type PaymentFilter = 'ALL' | PaymentStatus
@@ -23,6 +24,7 @@ const PAYMENT_VARIANTS: Record<PaymentStatus, 'success' | 'warning' | 'info'> = 
   PARTIAL: 'info',
 }
 
+/* ─── print helpers (unchanged) ─────────────────────────── */
 function printReceipt(order: Order) {
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${order.receiptNumber ?? ''}</title>
   <style>
@@ -63,7 +65,6 @@ function printReceipt(order: Order) {
     <div class="section-title">Test Details</div>
     <div class="row"><span class="label">Test</span><span>${order.template?.name ?? '—'}</span></div>
     <div class="row"><span class="label">Code</span><span>${order.template?.code ?? '—'}</span></div>
-    ${order.isEmergency ? '<div class="row"><span class="label">Type</span><span style="color:#d97706;font-weight:600">⚡ Emergency</span></div>' : ''}
   </div>
   <div class="section">
     <div class="section-title">Payment Details</div>
@@ -79,9 +80,7 @@ function printReceipt(order: Order) {
   </body></html>`
   const w = window.open('', '_blank')
   if (!w) { toast.error('Pop-up blocked. Please allow pop-ups and try again.'); return }
-  w.document.write(html)
-  w.document.close()
-  w.focus()
+  w.document.write(html); w.document.close(); w.focus()
   setTimeout(() => w.print(), 300)
 }
 
@@ -112,10 +111,7 @@ function printReport(report: OrderResult) {
   </style></head><body>
   <div class="header">
     <div class="logo">LabOps<small>Laboratory Information System</small></div>
-    <div class="report-title">
-      <h2>Laboratory Test Report</h2>
-      <div class="order-num">Order #${report.order.id}</div>
-    </div>
+    <div class="report-title"><h2>Laboratory Test Report</h2><div class="order-num">Order #${report.order.id}</div></div>
   </div>
   <div class="info-grid">
     <div class="info-item"><div class="label">Patient Name</div><div class="value">${report.order.patient?.fullName ?? '—'}</div></div>
@@ -129,9 +125,7 @@ function printReport(report: OrderResult) {
   <div class="section-title">Test Results</div>
   <table>
     <thead><tr><th>Parameter</th><th>Result</th><th>Unit</th></tr></thead>
-    <tbody>
-      ${report.results.map(r => `<tr><td>${r.fieldName}</td><td class="value">${String(r.value ?? '—')}</td><td class="unit">${r.unit ?? '—'}</td></tr>`).join('')}
-    </tbody>
+    <tbody>${report.results.map(r => `<tr><td>${r.fieldName}</td><td class="value">${String(r.value ?? '—')}</td><td class="unit">${r.unit ?? '—'}</td></tr>`).join('')}</tbody>
   </table>
   <div class="footer">
     <span>Generated on ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
@@ -140,18 +134,188 @@ function printReport(report: OrderResult) {
   </body></html>`
   const w = window.open('', '_blank')
   if (!w) { toast.error('Pop-up blocked. Please allow pop-ups and try again.'); return }
-  w.document.write(html)
-  w.document.close()
-  w.focus()
+  w.document.write(html); w.document.close(); w.focus()
   setTimeout(() => w.print(), 300)
 }
 
+/* ─── Payment edit modal ─────────────────────────────────── */
+interface PaymentForm {
+  paymentStatus: PaymentStatus
+  paymentType: PaymentType | ''
+  amount: string
+  discount: string
+  receiptNumber: string
+}
+
+interface PaymentModalProps {
+  order: Order
+  onClose: () => void
+  onSave: (id: number, form: PaymentForm) => void
+  saving: boolean
+}
+
+function PaymentModal({ order, onClose, onSave, saving }: PaymentModalProps) {
+  const [form, setForm] = useState<PaymentForm>({
+    paymentStatus: order.paymentStatus ?? 'PENDING',
+    paymentType: order.paymentType ?? '',
+    amount: String(order.amount ?? 0),
+    discount: String(order.discount ?? 0),
+    receiptNumber: order.receiptNumber ?? '',
+  })
+
+  const amount = parseFloat(form.amount) || 0
+  const discount = parseFloat(form.discount) || 0
+  const netAmount = Math.round(amount * (1 - discount / 100) * 100) / 100
+
+  const set = (key: keyof PaymentForm, val: string) =>
+    setForm(prev => ({ ...prev, [key]: val }))
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
+        {/* header */}
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Update Payment — Order #{order.id}</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {order.patient?.fullName} · {order.template?.name}
+            </p>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="space-y-4 px-6 py-5">
+          {/* Amount + Discount row */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Amount (₹)
+              </label>
+              <input
+                type="number" min="0" step="0.01"
+                value={form.amount}
+                onChange={e => set('amount', e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Discount (%)
+              </label>
+              <input
+                type="number" min="0" max="100" step="0.5"
+                value={form.discount}
+                onChange={e => set('discount', e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              />
+            </div>
+          </div>
+
+          {/* Net amount (read-only calculated) */}
+          <div className="flex items-center justify-between rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3">
+            <span className="text-sm font-medium text-indigo-700">Net Amount</span>
+            <span className="text-xl font-bold text-indigo-800">
+              ₹{netAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+
+          {/* Payment status */}
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Payment Status <span className="text-rose-500">*</span>
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {(['PENDING', 'PARTIAL', 'PAID'] as PaymentStatus[]).map(s => (
+                <button
+                  key={s}
+                  onClick={() => set('paymentStatus', s)}
+                  className={`rounded-xl border-2 py-2.5 text-sm font-semibold transition-all ${
+                    form.paymentStatus === s
+                      ? s === 'PAID'
+                        ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                        : s === 'PARTIAL'
+                          ? 'border-blue-400 bg-blue-50 text-blue-700'
+                          : 'border-amber-400 bg-amber-50 text-amber-700'
+                      : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                  }`}
+                >
+                  {s.charAt(0) + s.slice(1).toLowerCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Payment method */}
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Payment Method
+            </label>
+            <div className="grid grid-cols-4 gap-2">
+              {(['', 'CASH', 'CHEQUE', 'ONLINE'] as const).map(m => (
+                <button
+                  key={m}
+                  onClick={() => set('paymentType', m)}
+                  className={`rounded-xl border-2 py-2.5 text-sm font-semibold transition-all ${
+                    form.paymentType === m
+                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                      : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                  }`}
+                >
+                  {m === '' ? 'None' : m.charAt(0) + m.slice(1).toLowerCase()}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Receipt number */}
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Receipt Number
+            </label>
+            <input
+              type="text"
+              value={form.receiptNumber}
+              onChange={e => set('receiptNumber', e.target.value)}
+              placeholder="e.g. RCP1234567890"
+              maxLength={30}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-mono text-slate-900 placeholder-slate-400 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            />
+          </div>
+        </div>
+
+        {/* footer */}
+        <div className="flex justify-end gap-3 border-t border-slate-100 px-6 py-4">
+          <button
+            onClick={onClose}
+            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onSave(order.id, form)}
+            disabled={saving}
+            className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
+          >
+            {saving && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
+            Save Changes
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ─── Main page ──────────────────────────────────────────── */
 export default function BillingPage() {
+  const qc = useQueryClient()
   const [search, setSearch] = useState('')
   const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>('ALL')
   const [reportModal, setReportModal] = useState<OrderResult | null>(null)
+  const [editOrder, setEditOrder] = useState<Order | null>(null)
 
-  const { data: orders = [], isLoading } = useQuery({
+  const { data: orders = [], isLoading, refetch } = useQuery({
     queryKey: ['orders'],
     queryFn: orderService.getAll,
   })
@@ -160,6 +324,23 @@ export default function BillingPage() {
     mutationFn: (id: number) => orderService.getResults(id),
     onSuccess: data => setReportModal(data),
     onError: () => toast.error('Failed to load report'),
+  })
+
+  const updatePayment = useMutation({
+    mutationFn: ({ id, form }: { id: number; form: PaymentForm }) =>
+      orderService.updatePayment(id, {
+        paymentStatus: form.paymentStatus,
+        paymentType: form.paymentType || null,
+        amount: parseFloat(form.amount) || 0,
+        discount: parseFloat(form.discount) || 0,
+        receiptNumber: form.receiptNumber.trim() || null,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['orders'] })
+      setEditOrder(null)
+      toast.success('Payment updated')
+    },
+    onError: () => toast.error('Failed to update payment'),
   })
 
   const filtered = orders.filter(o => {
@@ -258,6 +439,12 @@ export default function BillingPage() {
             </select>
             <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           </div>
+          <button
+            onClick={() => refetch()}
+            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+          </button>
           <span className="self-center ml-auto text-sm text-slate-500">
             {filtered.length} record{filtered.length !== 1 ? 's' : ''}
           </span>
@@ -292,14 +479,9 @@ export default function BillingPage() {
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {filtered.map(order => (
-                  <tr key={order.id} className="hover:bg-slate-50/60 transition-colors">
+                  <tr key={order.id} className="group hover:bg-slate-50/60 transition-colors">
                     <td className="px-5 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-slate-700">#{order.id}</span>
-                        {order.isEmergency && (
-                          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">⚡ EMRG</span>
-                        )}
-                      </div>
+                      <span className="font-bold text-slate-700">#{order.id}</span>
                       <p className="text-[11px] text-slate-400">{order.createdAt ? new Date(order.createdAt).toLocaleDateString() : ''}</p>
                     </td>
                     <td className="px-5 py-4">
@@ -326,9 +508,21 @@ export default function BillingPage() {
                         {order.paymentStatus?.charAt(0) + order.paymentStatus?.slice(1).toLowerCase()}
                       </Badge>
                     </td>
-                    <td className="px-5 py-4 font-mono text-xs text-slate-500">{order.receiptNumber ?? <span className="text-slate-300">—</span>}</td>
+                    <td className="px-5 py-4 font-mono text-xs text-slate-500">
+                      {order.receiptNumber ?? <span className="text-slate-300">—</span>}
+                    </td>
                     <td className="px-5 py-4">
                       <div className="flex justify-end gap-2">
+                        {/* Update payment — always visible */}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon={<Pencil className="h-3.5 w-3.5" />}
+                          onClick={() => setEditOrder(order)}
+                        >
+                          Payment
+                        </Button>
+
                         {order.receiptNumber && (
                           <Button
                             size="sm"
@@ -359,6 +553,16 @@ export default function BillingPage() {
           </div>
         )}
       </div>
+
+      {/* Payment edit modal */}
+      {editOrder && (
+        <PaymentModal
+          order={editOrder}
+          onClose={() => setEditOrder(null)}
+          saving={updatePayment.isPending}
+          onSave={(id, form) => updatePayment.mutate({ id, form })}
+        />
+      )}
 
       {/* Report Preview Modal */}
       <Modal

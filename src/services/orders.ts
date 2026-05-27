@@ -68,6 +68,18 @@ export const orderService = {
     return data
   },
 
+  updatePayment: async (orderId: number, payload: {
+    paymentStatus?: 'PENDING' | 'PAID' | 'PARTIAL'
+    paymentType?: 'CASH' | 'CHEQUE' | 'ONLINE' | null
+    amount?: number
+    discount?: number
+    netAmount?: number
+    receiptNumber?: string | null
+  }): Promise<Order> => {
+    const { data } = await api.patch(`/orders/${orderId}/payment`, payload)
+    return data
+  },
+
   delete: async (orderId: number): Promise<void> => {
     await api.delete(`/orders/${orderId}`)
   },
