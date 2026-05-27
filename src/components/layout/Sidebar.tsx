@@ -35,10 +35,10 @@ const navItems: NavItem[] = [
   { to: '/users',        label: 'User Management',   icon: <UserCog className="h-5 w-5" />,         roles: ['SUPER_ADMIN'] },
   { to: '/b2b-labs',     label: 'B2B Partners',      icon: <Building2 className="h-5 w-5" />,       roles: ['SUPER_ADMIN'] },
   { to: '/lab-branches', label: 'Lab Branches',      icon: <MapPin className="h-5 w-5" />,          roles: ['SUPER_ADMIN'] },
-  { to: '/patients',     label: 'Patients',          icon: <Users className="h-5 w-5" />,           roles: ['LAB_USER'] },
-  { to: '/orders',       label: 'Orders & Results',  icon: <ClipboardList className="h-5 w-5" />,   roles: ['LAB_USER'] },
-  { to: '/billing',      label: 'Billing & Reports', icon: <Receipt className="h-5 w-5" />,         roles: ['LAB_USER'] },
-  { to: '/history',      label: 'Result History',    icon: <History className="h-5 w-5" />,         roles: ['LAB_USER'] },
+  { to: '/patients',     label: 'Patients',          icon: <Users className="h-5 w-5" />,           roles: ['SUPER_ADMIN', 'LAB_USER'] },
+  { to: '/orders',       label: 'Orders & Results',  icon: <ClipboardList className="h-5 w-5" />,   roles: ['SUPER_ADMIN', 'LAB_USER'] },
+  { to: '/billing',      label: 'Billing & Reports', icon: <Receipt className="h-5 w-5" />,         roles: ['SUPER_ADMIN', 'LAB_USER'] },
+  { to: '/history',      label: 'Result History',    icon: <History className="h-5 w-5" />,         roles: ['SUPER_ADMIN', 'LAB_USER'] },
   { to: '/settings',     label: 'Settings',          icon: <Settings className="h-5 w-5" />,        roles: ['SUPER_ADMIN', 'LAB_USER'] },
 ]
 

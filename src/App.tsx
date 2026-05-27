@@ -33,10 +33,10 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
   return isAuthenticated ? <Navigate to="/dashboard" replace /> : <>{children}</>
 }
 
-function RoleRoute({ role, children }: { role: 'SUPER_ADMIN' | 'LAB_USER'; children: React.ReactNode }) {
+function RoleRoute({ roles, children }: { roles: ('SUPER_ADMIN' | 'LAB_USER')[]; children: React.ReactNode }) {
   const { user } = useAuthStore()
   if (!user) return <Navigate to="/login" replace />
-  return user.role === role ? <>{children}</> : <Navigate to="/dashboard" replace />
+  return roles.includes(user.role as 'SUPER_ADMIN' | 'LAB_USER') ? <>{children}</> : <Navigate to="/dashboard" replace />
 }
 
 export default function App() {
@@ -47,19 +47,19 @@ export default function App() {
           <Route path="/login" element={<AuthRoute><LoginPage /></AuthRoute>} />
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/templates" element={<RoleRoute role="SUPER_ADMIN"><TemplatesPage /></RoleRoute>} />
-            <Route path="/templates/new" element={<RoleRoute role="SUPER_ADMIN"><TemplateFormPage /></RoleRoute>} />
-            <Route path="/templates/:id/edit" element={<RoleRoute role="SUPER_ADMIN"><TemplateFormPage /></RoleRoute>} />
-            <Route path="/approvals" element={<RoleRoute role="SUPER_ADMIN"><ApprovalsPage /></RoleRoute>} />
-            <Route path="/patients" element={<RoleRoute role="LAB_USER"><PatientsPage /></RoleRoute>} />
-            <Route path="/patients/new" element={<RoleRoute role="LAB_USER"><PatientFormPage /></RoleRoute>} />
-            <Route path="/patients/:id/edit" element={<RoleRoute role="LAB_USER"><PatientFormPage /></RoleRoute>} />
-            <Route path="/orders" element={<RoleRoute role="LAB_USER"><OrdersPage /></RoleRoute>} />
-            <Route path="/billing" element={<RoleRoute role="LAB_USER"><BillingPage /></RoleRoute>} />
-            <Route path="/history" element={<RoleRoute role="LAB_USER"><HistoryPage /></RoleRoute>} />
-            <Route path="/users" element={<RoleRoute role="SUPER_ADMIN"><UsersPage /></RoleRoute>} />
-            <Route path="/b2b-labs" element={<RoleRoute role="SUPER_ADMIN"><B2bLabsPage /></RoleRoute>} />
-            <Route path="/lab-branches" element={<RoleRoute role="SUPER_ADMIN"><LabBranchesPage /></RoleRoute>} />
+            <Route path="/templates" element={<RoleRoute roles={['SUPER_ADMIN']}><TemplatesPage /></RoleRoute>} />
+            <Route path="/templates/new" element={<RoleRoute roles={['SUPER_ADMIN']}><TemplateFormPage /></RoleRoute>} />
+            <Route path="/templates/:id/edit" element={<RoleRoute roles={['SUPER_ADMIN']}><TemplateFormPage /></RoleRoute>} />
+            <Route path="/approvals" element={<RoleRoute roles={['SUPER_ADMIN']}><ApprovalsPage /></RoleRoute>} />
+            <Route path="/patients" element={<RoleRoute roles={['SUPER_ADMIN', 'LAB_USER']}><PatientsPage /></RoleRoute>} />
+            <Route path="/patients/new" element={<RoleRoute roles={['SUPER_ADMIN', 'LAB_USER']}><PatientFormPage /></RoleRoute>} />
+            <Route path="/patients/:id/edit" element={<RoleRoute roles={['SUPER_ADMIN', 'LAB_USER']}><PatientFormPage /></RoleRoute>} />
+            <Route path="/orders" element={<RoleRoute roles={['SUPER_ADMIN', 'LAB_USER']}><OrdersPage /></RoleRoute>} />
+            <Route path="/billing" element={<RoleRoute roles={['SUPER_ADMIN', 'LAB_USER']}><BillingPage /></RoleRoute>} />
+            <Route path="/history" element={<RoleRoute roles={['SUPER_ADMIN', 'LAB_USER']}><HistoryPage /></RoleRoute>} />
+            <Route path="/users" element={<RoleRoute roles={['SUPER_ADMIN']}><UsersPage /></RoleRoute>} />
+            <Route path="/b2b-labs" element={<RoleRoute roles={['SUPER_ADMIN']}><B2bLabsPage /></RoleRoute>} />
+            <Route path="/lab-branches" element={<RoleRoute roles={['SUPER_ADMIN']}><LabBranchesPage /></RoleRoute>} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
