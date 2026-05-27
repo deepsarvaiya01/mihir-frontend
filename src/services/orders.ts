@@ -74,7 +74,6 @@ export const orderService = {
     amount?: number
     discount?: number
     netAmount?: number
-    receiptNumber?: string | null
   }): Promise<Order> => {
     const { data } = await api.patch(`/orders/${orderId}/payment`, payload)
     return data

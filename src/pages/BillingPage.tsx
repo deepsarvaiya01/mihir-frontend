@@ -1,19 +1,21 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Search, Receipt, Printer, ChevronDown, DollarSign,
-  CheckCircle, Clock, AlertCircle, FileText, Pencil, X,
-  RefreshCw,
+  Search, Receipt, ChevronDown, DollarSign,
+  CheckCircle, Clock, FileText, Pencil, X,
+  RefreshCw, Download,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
-import { Modal } from '../components/ui/Modal'
 import { EmptyState } from '../components/ui/EmptyState'
 import { PageLoader } from '../components/ui/Spinner'
 import { Badge } from '../components/ui/Badge'
 import { orderService } from '../services/orders'
-import type { Order, OrderResult, PaymentStatus, PaymentType } from '../types'
+import { labSettingsService } from '../services/labSettings'
+import { signatureService } from '../services/signatures'
+import { generateLabReport } from '../utils/generateReport'
+import type { Order, PaymentStatus, PaymentType } from '../types'
 import { toast } from 'sonner'
 
 type PaymentFilter = 'ALL' | PaymentStatus
@@ -24,7 +26,7 @@ const PAYMENT_VARIANTS: Record<PaymentStatus, 'success' | 'warning' | 'info'> = 
   PARTIAL: 'info',
 }
 
-/* ─── print helpers (unchanged) ─────────────────────────── */
+/* ─── Receipt print helper ───────────────────────────────── */
 function printReceipt(order: Order) {
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${order.receiptNumber ?? ''}</title>
   <style>
@@ -84,67 +86,12 @@ function printReceipt(order: Order) {
   setTimeout(() => w.print(), 300)
 }
 
-function printReport(report: OrderResult) {
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Lab Report — Order #${report.order.id}</title>
-  <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:40px;color:#111;max-width:700px;margin:0 auto}
-    .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #4f46e5;padding-bottom:20px;margin-bottom:24px}
-    .logo{font-size:22px;font-weight:800;color:#4f46e5}
-    .logo small{display:block;font-size:11px;font-weight:400;color:#6b7280;margin-top:2px}
-    .report-title{text-align:right}
-    .report-title h2{font-size:18px;font-weight:700;color:#111}
-    .report-title .order-num{font-size:12px;color:#6b7280;margin-top:3px}
-    .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;background:#f8fafc;border-radius:8px;padding:16px;margin-bottom:24px;font-size:13px}
-    .info-item .label{color:#9ca3af;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em}
-    .info-item .value{color:#111;font-weight:500;margin-top:2px}
-    .approved{display:inline-block;background:#dcfce7;color:#166534;padding:3px 10px;border-radius:9999px;font-size:11px;font-weight:700;letter-spacing:0.03em}
-    .section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#4f46e5;margin-bottom:12px;border-bottom:2px solid #e0e7ff;padding-bottom:6px}
-    table{width:100%;border-collapse:collapse;font-size:13px}
-    th{background:#f8fafc;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:#6b7280;padding:10px 14px;text-align:left;border-bottom:2px solid #e5e7eb}
-    td{padding:12px 14px;border-bottom:1px solid #f1f5f9;color:#374151}
-    td.value{font-weight:700;font-size:15px;color:#111}
-    td.unit{color:#9ca3af;font-size:12px}
-    tr:last-child td{border-bottom:none}
-    .footer{margin-top:32px;border-top:1px solid #e5e7eb;padding-top:16px;font-size:11px;color:#9ca3af;display:flex;justify-content:space-between}
-    @media print{body{padding:20px}}
-  </style></head><body>
-  <div class="header">
-    <div class="logo">LabOps<small>Laboratory Information System</small></div>
-    <div class="report-title"><h2>Laboratory Test Report</h2><div class="order-num">Order #${report.order.id}</div></div>
-  </div>
-  <div class="info-grid">
-    <div class="info-item"><div class="label">Patient Name</div><div class="value">${report.order.patient?.fullName ?? '—'}</div></div>
-    <div class="info-item"><div class="label">Patient Code</div><div class="value">${report.order.patient?.patientCode ?? '—'}</div></div>
-    <div class="info-item"><div class="label">Test Name</div><div class="value">${report.order.template?.name ?? '—'}</div></div>
-    <div class="info-item"><div class="label">Test Code</div><div class="value">${report.order.template?.code ?? '—'}</div></div>
-    ${report.order.patient?.doctorName ? `<div class="info-item"><div class="label">Referring Doctor</div><div class="value">${report.order.patient.doctorName}</div></div>` : ''}
-    <div class="info-item"><div class="label">Report Date</div><div class="value">${report.order.createdAt ? new Date(report.order.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' }) : '—'}</div></div>
-    <div class="info-item"><div class="label">Status</div><div class="value"><span class="approved">✓ APPROVED</span></div></div>
-  </div>
-  <div class="section-title">Test Results</div>
-  <table>
-    <thead><tr><th>Parameter</th><th>Result</th><th>Unit</th></tr></thead>
-    <tbody>${report.results.map(r => `<tr><td>${r.fieldName}</td><td class="value">${String(r.value ?? '—')}</td><td class="unit">${r.unit ?? '—'}</td></tr>`).join('')}</tbody>
-  </table>
-  <div class="footer">
-    <span>Generated on ${new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-    <span>This is a computer-generated report.</span>
-  </div>
-  </body></html>`
-  const w = window.open('', '_blank')
-  if (!w) { toast.error('Pop-up blocked. Please allow pop-ups and try again.'); return }
-  w.document.write(html); w.document.close(); w.focus()
-  setTimeout(() => w.print(), 300)
-}
-
 /* ─── Payment edit modal ─────────────────────────────────── */
 interface PaymentForm {
   paymentStatus: PaymentStatus
   paymentType: PaymentType | ''
   amount: string
   discount: string
-  receiptNumber: string
 }
 
 interface PaymentModalProps {
@@ -160,7 +107,6 @@ function PaymentModal({ order, onClose, onSave, saving }: PaymentModalProps) {
     paymentType: order.paymentType ?? '',
     amount: String(order.amount ?? 0),
     discount: String(order.discount ?? 0),
-    receiptNumber: order.receiptNumber ?? '',
   })
 
   const amount = parseFloat(form.amount) || 0
@@ -269,19 +215,12 @@ function PaymentModal({ order, onClose, onSave, saving }: PaymentModalProps) {
             </div>
           </div>
 
-          {/* Receipt number */}
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Receipt Number
-            </label>
-            <input
-              type="text"
-              value={form.receiptNumber}
-              onChange={e => set('receiptNumber', e.target.value)}
-              placeholder="e.g. RCP1234567890"
-              maxLength={30}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-mono text-slate-900 placeholder-slate-400 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100"
-            />
+          {/* Receipt number info */}
+          <div className="flex items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Receipt #</span>
+            <span className="font-mono text-sm text-slate-600">
+              {order.receiptNumber ?? <span className="italic text-slate-400">Auto-generated on save</span>}
+            </span>
           </div>
         </div>
 
@@ -312,7 +251,6 @@ export default function BillingPage() {
   const qc = useQueryClient()
   const [search, setSearch] = useState('')
   const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>('ALL')
-  const [reportModal, setReportModal] = useState<OrderResult | null>(null)
   const [editOrder, setEditOrder] = useState<Order | null>(null)
 
   const { data: orders = [], isLoading, refetch } = useQuery({
@@ -320,10 +258,14 @@ export default function BillingPage() {
     queryFn: orderService.getAll,
   })
 
-  const loadReport = useMutation({
-    mutationFn: (id: number) => orderService.getResults(id),
-    onSuccess: data => setReportModal(data),
-    onError: () => toast.error('Failed to load report'),
+  // Pre-fetch lab settings and active signature for report generation
+  const { data: labSettings = {} } = useQuery({
+    queryKey: ['lab-settings'],
+    queryFn: labSettingsService.getAll,
+  })
+  const { data: activeSignature = null } = useQuery({
+    queryKey: ['active-signature'],
+    queryFn: signatureService.getActive,
   })
 
   const updatePayment = useMutation({
@@ -333,7 +275,6 @@ export default function BillingPage() {
         paymentType: form.paymentType || null,
         amount: parseFloat(form.amount) || 0,
         discount: parseFloat(form.discount) || 0,
-        receiptNumber: form.receiptNumber.trim() || null,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['orders'] })
@@ -341,6 +282,28 @@ export default function BillingPage() {
       toast.success('Payment updated')
     },
     onError: () => toast.error('Failed to update payment'),
+  })
+
+  // Directly generates & downloads the PDF report
+  const downloadReport = useMutation({
+    mutationFn: (orderId: number) => orderService.getResults(orderId),
+    onSuccess: (data) => {
+      generateLabReport({
+        order: data.order,
+        results: data.results.map(r => ({
+          fieldName: r.fieldName,
+          fieldType: r.fieldType,
+          value: r.value,
+          unit: r.unit ?? null,
+          referenceRange: r.referenceRange ?? null,
+          isSectionHeader: r.isSectionHeader ?? false,
+        })),
+        labSettings,
+        signature: activeSignature,
+      })
+      toast.success('Report downloaded')
+    },
+    onError: () => toast.error('Failed to generate report'),
   })
 
   const filtered = orders.filter(o => {
@@ -513,7 +476,7 @@ export default function BillingPage() {
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex justify-end gap-2">
-                        {/* Update payment — always visible */}
+                        {/* Update payment */}
                         <Button
                           size="sm"
                           variant="ghost"
@@ -523,23 +486,23 @@ export default function BillingPage() {
                           Payment
                         </Button>
 
-                        {order.receiptNumber && (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            icon={<Receipt className="h-3.5 w-3.5" />}
-                            onClick={() => printReceipt(order)}
-                          >
-                            Receipt
-                          </Button>
-                        )}
+                        {/* Receipt — always available (pending orders show without receipt number) */}
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          icon={<Receipt className="h-3.5 w-3.5" />}
+                          onClick={() => printReceipt(order)}
+                        >
+                          Receipt
+                        </Button>
+
                         {order.status === 'APPROVED' && (
                           <Button
                             size="sm"
                             variant="success"
-                            icon={<Printer className="h-3.5 w-3.5" />}
-                            loading={loadReport.isPending && loadReport.variables === order.id}
-                            onClick={() => loadReport.mutate(order.id)}
+                            icon={<Download className="h-3.5 w-3.5" />}
+                            loading={downloadReport.isPending && downloadReport.variables === order.id}
+                            onClick={() => downloadReport.mutate(order.id)}
                           >
                             Report
                           </Button>
@@ -563,63 +526,6 @@ export default function BillingPage() {
           onSave={(id, form) => updatePayment.mutate({ id, form })}
         />
       )}
-
-      {/* Report Preview Modal */}
-      <Modal
-        open={!!reportModal}
-        onClose={() => setReportModal(null)}
-        title={`Lab Report — Order #${reportModal?.order.id ?? ''}`}
-        subtitle={reportModal?.order.patient?.fullName}
-        size="lg"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setReportModal(null)}>Close</Button>
-            {reportModal && (
-              <Button variant="primary" icon={<Printer className="h-4 w-4" />} onClick={() => printReport(reportModal)}>
-                Print / Download
-              </Button>
-            )}
-          </>
-        }
-      >
-        {reportModal && (
-          <div>
-            <div className="mb-5 grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-4 text-sm">
-              <div>
-                <span className="text-slate-400 text-xs uppercase tracking-wide">Patient</span>
-                <p className="font-semibold text-slate-800 mt-0.5">{reportModal.order.patient?.fullName ?? '—'}</p>
-              </div>
-              <div>
-                <span className="text-slate-400 text-xs uppercase tracking-wide">Code</span>
-                <p className="font-mono font-semibold text-slate-700 mt-0.5">{reportModal.order.patient?.patientCode ?? '—'}</p>
-              </div>
-              <div>
-                <span className="text-slate-400 text-xs uppercase tracking-wide">Test</span>
-                <p className="font-semibold text-slate-800 mt-0.5">{reportModal.order.template?.name ?? '—'}</p>
-              </div>
-              <div>
-                <span className="text-slate-400 text-xs uppercase tracking-wide">Status</span>
-                <p className="mt-0.5">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
-                    <AlertCircle className="h-3 w-3" /> APPROVED
-                  </span>
-                </p>
-              </div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {reportModal.results.map((result, i) => (
-                <div key={i} className="rounded-xl border border-slate-200 bg-white p-4 hover:border-indigo-200 transition-colors">
-                  <p className="text-xs text-slate-400 uppercase tracking-wide">{result.fieldName}</p>
-                  <p className="mt-1 text-xl font-bold text-slate-900">
-                    {String(result.value ?? '—')}
-                    {result.unit && <span className="ml-1.5 text-sm font-normal text-slate-400">{result.unit}</span>}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </Modal>
     </div>
   )
 }

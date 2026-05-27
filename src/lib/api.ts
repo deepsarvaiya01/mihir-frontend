@@ -11,7 +11,7 @@ export const api = axios.create({
 })
 
 api.interceptors.request.use((config) => {
-  const token = sessionStorage.getItem('lab_access_token')
+  const token = localStorage.getItem('lab_access_token')
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
@@ -23,16 +23,16 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && !original._retry) {
       original._retry = true
       try {
-        const refreshToken = sessionStorage.getItem('lab_refresh_token')
+        const refreshToken = localStorage.getItem('lab_refresh_token')
         if (!refreshToken) throw new Error('No refresh token')
         const { data } = await axios.post(`${BASE_URL}/auth/refresh`, { refreshToken })
-        sessionStorage.setItem('lab_access_token', data.accessToken)
-        sessionStorage.setItem('lab_refresh_token', data.refreshToken)
+        localStorage.setItem('lab_access_token', data.accessToken)
+        localStorage.setItem('lab_refresh_token', data.refreshToken)
         original.headers.Authorization = `Bearer ${data.accessToken}`
         return api(original)
       } catch {
-        sessionStorage.removeItem('lab_access_token')
-        sessionStorage.removeItem('lab_refresh_token')
+        localStorage.removeItem('lab_access_token')
+        localStorage.removeItem('lab_refresh_token')
         window.location.href = '/login'
       }
     }

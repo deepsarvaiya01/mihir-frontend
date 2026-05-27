@@ -150,7 +150,8 @@ export default function EnterResultsPage() {
   const submitMut = useMutation({
     mutationFn: () =>
       orderService.submitResults(orderId, {
-        values: (form?.fields ?? []).map(field => ({
+        // Section headers have no value — skip them
+        values: (form?.fields ?? []).filter(f => !f.isSectionHeader).map(field => ({
           fieldId: field.id,
           textValue: field.fieldType === 'text' || field.fieldType === 'select'
             ? String(values[field.id] ?? '') : undefined,
@@ -281,25 +282,39 @@ export default function EnterResultsPage() {
             <p className="text-center text-sm text-slate-400">No fields defined for this test template.</p>
           ) : (
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              {fields.map(field => (
-                <div
-                  key={field.id}
-                  className={field.fieldType === 'text' && !field.optionsJson ? 'sm:col-span-2' : ''}
-                >
-                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    {field.fieldName}
-                    {field.unit && (
-                      <span className="ml-1 normal-case font-normal text-slate-400">({field.unit})</span>
-                    )}
-                    {field.required && <span className="ml-1 text-rose-500">*</span>}
-                  </label>
-                  <ResultField
-                    field={field}
-                    values={values}
-                    onChange={(fid, val) => setValues(prev => ({ ...prev, [fid]: val }))}
-                  />
-                </div>
-              ))}
+              {fields.map(field => {
+                // Section headers render as bold dividers, not inputs
+                if (field.isSectionHeader) {
+                  return (
+                    <div key={field.id} className="sm:col-span-2 pt-2">
+                      <div className="border-b-2 border-slate-200 pb-1.5">
+                        <span className="text-sm font-bold text-slate-700 underline underline-offset-2">
+                          {field.fieldName}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                }
+                return (
+                  <div
+                    key={field.id}
+                    className={field.fieldType === 'text' && !field.optionsJson ? 'sm:col-span-2' : ''}
+                  >
+                    <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      {field.fieldName}
+                      {field.unit && (
+                        <span className="ml-1 normal-case font-normal text-slate-400">({field.unit})</span>
+                      )}
+                      {field.required && <span className="ml-1 text-rose-500">*</span>}
+                    </label>
+                    <ResultField
+                      field={field}
+                      values={values}
+                      onChange={(fid, val) => setValues(prev => ({ ...prev, [fid]: val }))}
+                    />
+                  </div>
+                )
+              })}
             </div>
           )}
         </FormCard>

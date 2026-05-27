@@ -54,7 +54,8 @@ function FormCard({ children }: { children: React.ReactNode }) {
 
 const emptyFieldForm = {
   fieldName: '', fieldType: 'text' as FieldType, required: false,
-  options: '', unit: '', formulaFirstFieldId: '', formulaPairs: [] as FormulaPair[],
+  options: '', unit: '', referenceRange: '', isSectionHeader: false,
+  formulaFirstFieldId: '', formulaPairs: [] as FormulaPair[],
 }
 
 export default function TemplateFormPage() {
@@ -121,11 +122,18 @@ export default function TemplateFormPage() {
   const addFieldMutation = useMutation({
     mutationFn: () => {
       if (!isEdit || !id) throw new Error('Save the template first')
+      if (fieldForm.isSectionHeader) {
+        return templateService.addField(Number(id), {
+          fieldName: fieldForm.fieldName, fieldType: 'text', required: false,
+          isSectionHeader: true,
+        })
+      }
       if (fieldForm.fieldType === 'calculated') {
         return templateService.addField(Number(id), {
           fieldName: fieldForm.fieldName, fieldType: 'calculated', required: false,
           unit: fieldForm.unit || undefined,
           formulaJson: buildFormulaJson(fieldForm.formulaFirstFieldId, fieldForm.formulaPairs),
+          referenceRange: fieldForm.referenceRange || undefined,
         })
       }
       return templateService.addField(Number(id), {
@@ -133,6 +141,7 @@ export default function TemplateFormPage() {
         required: fieldForm.required, unit: fieldForm.unit || undefined,
         options: fieldForm.fieldType === 'select'
           ? fieldForm.options.split(',').map(o => o.trim()).filter(Boolean) : undefined,
+        referenceRange: fieldForm.referenceRange || undefined,
       })
     },
     onSuccess: () => {
@@ -164,6 +173,7 @@ export default function TemplateFormPage() {
 
   const handleAddField = () => {
     if (!fieldForm.fieldName.trim()) { toast.error('Field name is required'); return }
+    if (fieldForm.isSectionHeader) { addFieldMutation.mutate(); return }
     if (fieldForm.fieldType === 'calculated') {
       if (!fieldForm.formulaFirstFieldId) { toast.error('Select at least one field for the formula'); return }
       if (fieldForm.formulaPairs.length === 0) { toast.error('Formula needs at least two fields'); return }
@@ -293,15 +303,26 @@ export default function TemplateFormPage() {
 
             {addFieldOpen && (
               <div className="mt-3 rounded-xl border border-indigo-200 bg-white p-5 space-y-4">
+                {/* Section header toggle */}
+                <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 hover:bg-slate-100 w-fit">
+                  <input type="checkbox" checked={fieldForm.isSectionHeader}
+                    onChange={e => setFieldForm(p => ({ ...p, isSectionHeader: e.target.checked, required: false }))}
+                    className="h-4 w-4 rounded accent-indigo-600" />
+                  <span className="text-sm font-medium text-slate-700">Section Header</span>
+                  <span className="text-xs text-slate-400">(a bold group title in the report — no value entered)</span>
+                </label>
+
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Input label="Field Name" placeholder="e.g. Hemoglobin" value={fieldForm.fieldName}
+                  <Input label="Field Name" placeholder={fieldForm.isSectionHeader ? 'e.g. RBC Indices :' : 'e.g. Hemoglobin'} value={fieldForm.fieldName}
                     onChange={e => setFieldForm(p => ({ ...p, fieldName: e.target.value }))} required />
-                  <Select label="Field Type" value={fieldForm.fieldType}
-                    onChange={e => setFieldForm(p => ({ ...p, fieldType: e.target.value as FieldType, formulaFirstFieldId: '', formulaPairs: [] }))}>
-                    {(Object.entries(fieldTypeLabels) as [FieldType, string][]).map(([v, l]) => (
-                      <option key={v} value={v}>{l}</option>
-                    ))}
-                  </Select>
+                  {!fieldForm.isSectionHeader && (
+                    <Select label="Field Type" value={fieldForm.fieldType}
+                      onChange={e => setFieldForm(p => ({ ...p, fieldType: e.target.value as FieldType, formulaFirstFieldId: '', formulaPairs: [] }))}>
+                      {(Object.entries(fieldTypeLabels) as [FieldType, string][]).map(([v, l]) => (
+                        <option key={v} value={v}>{l}</option>
+                      ))}
+                    </Select>
+                  )}
                 </div>
 
                 {fieldForm.fieldType === 'calculated' && (
@@ -362,20 +383,25 @@ export default function TemplateFormPage() {
                     hint="Comma-separated list" />
                 )}
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Input label="Unit (Optional)" placeholder="e.g. mg/dL, g/L, %"
-                    value={fieldForm.unit} onChange={e => setFieldForm(p => ({ ...p, unit: e.target.value }))} />
-                  {fieldForm.fieldType !== 'calculated' && fieldForm.fieldType !== 'checkbox' && (
-                    <div className="flex flex-col justify-end">
-                      <label className="flex cursor-pointer items-center gap-2.5 pb-0.5">
-                        <input type="checkbox" checked={fieldForm.required}
-                          onChange={e => setFieldForm(p => ({ ...p, required: e.target.checked }))}
-                          className="h-4 w-4 rounded accent-indigo-600" />
-                        <span className="text-sm font-medium text-slate-700">Required field</span>
-                      </label>
-                    </div>
-                  )}
-                </div>
+                {!fieldForm.isSectionHeader && (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Input label="Unit (Optional)" placeholder="e.g. mg/dL, g/L, %"
+                      value={fieldForm.unit} onChange={e => setFieldForm(p => ({ ...p, unit: e.target.value }))} />
+                    <Input label="Reference Range (Optional)" placeholder="e.g. 13.0-18.0"
+                      value={fieldForm.referenceRange} onChange={e => setFieldForm(p => ({ ...p, referenceRange: e.target.value }))}
+                      hint="Used for out-of-range highlighting in reports" />
+                  </div>
+                )}
+                {!fieldForm.isSectionHeader && fieldForm.fieldType !== 'calculated' && fieldForm.fieldType !== 'checkbox' && (
+                  <div className="flex flex-col justify-end">
+                    <label className="flex cursor-pointer items-center gap-2.5 pb-0.5">
+                      <input type="checkbox" checked={fieldForm.required}
+                        onChange={e => setFieldForm(p => ({ ...p, required: e.target.checked }))}
+                        className="h-4 w-4 rounded accent-indigo-600" />
+                      <span className="text-sm font-medium text-slate-700">Required field</span>
+                    </label>
+                  </div>
+                )}
 
                 <div className="flex justify-end gap-3 pt-1">
                   <button onClick={() => { setAddFieldOpen(false); setFieldForm(emptyFieldForm) }}

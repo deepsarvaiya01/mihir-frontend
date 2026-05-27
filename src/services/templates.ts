@@ -52,6 +52,8 @@ export const templateService = {
       unit?: string
       options?: string[]
       formulaJson?: string
+      referenceRange?: string
+      isSectionHeader?: boolean
     }
   ): Promise<TestTemplate> => {
     const { data } = await api.post(`/tests/templates/${templateId}/fields`, payload)
