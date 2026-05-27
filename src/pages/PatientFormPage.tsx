@@ -3,7 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Save, User, Phone, MapPin, AlertCircle, Building2,
-  FlaskConical, CreditCard, Loader2, Upload, FileText, X, Paperclip,
+  FlaskConical, CreditCard, Loader2, Upload, FileText, X,
+  Paperclip, ChevronDown, Search, Stethoscope,
 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Input, Select } from '../components/ui/Input'
@@ -90,29 +91,20 @@ function getFileIcon(fileName: string) {
 }
 
 interface DocumentEntry {
-  id: string
-  name: string
-  file: File
-  url: string
+  id: string; name: string; file: File; url: string
 }
 
 function SectionTitle({ icon, title }: { icon: React.ReactNode; title: string }) {
   return (
     <div className="flex items-center gap-2 mb-4">
-      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600">
-        {icon}
-      </div>
+      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600">{icon}</div>
       <h3 className="text-sm font-bold uppercase tracking-wide text-slate-600">{title}</h3>
     </div>
   )
 }
 
 function FormCard({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-      {children}
-    </div>
-  )
+  return <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">{children}</div>
 }
 
 export default function PatientFormPage() {
@@ -126,6 +118,11 @@ export default function PatientFormPage() {
   const [discount, setDiscount] = useState(0)
   const [paymentStatus, setPaymentStatus] = useState<'PENDING' | 'PAID' | 'PARTIAL'>('PENDING')
   const [paymentType, setPaymentType] = useState<'CASH' | 'CHEQUE' | 'ONLINE'>('CASH')
+
+  // Test dropdown state
+  const [testDropdownOpen, setTestDropdownOpen] = useState(false)
+  const [testSearch, setTestSearch] = useState('')
+  const testDropdownRef = useRef<HTMLDivElement>(null)
 
   // Document upload state
   const [documents, setDocuments] = useState<DocumentEntry[]>([])
@@ -149,11 +146,22 @@ export default function PatientFormPage() {
     if (existingPatient) setForm(patientToForm(existingPatient))
   }, [existingPatient])
 
+  // Close test dropdown on outside click
+  useEffect(() => {
+    if (!testDropdownOpen) return
+    const handler = (e: MouseEvent) => {
+      if (testDropdownRef.current && !testDropdownRef.current.contains(e.target as Node)) {
+        setTestDropdownOpen(false)
+        setTestSearch('')
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [testDropdownOpen])
+
   // Cleanup object URLs on unmount
   useEffect(() => {
-    return () => {
-      documents.forEach(d => URL.revokeObjectURL(d.url))
-    }
+    return () => { documents.forEach(d => URL.revokeObjectURL(d.url)) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -161,12 +169,13 @@ export default function PatientFormPage() {
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setForm(p => ({ ...p, [key]: e.target.value }))
 
+  // ── Test helpers ────────────────────────────────────────────────────────────
   const toggleTest = (templateId: number) =>
-    setSelectedTests(prev => {
-      const exists = prev.find(t => t.templateId === templateId)
-      if (exists) return prev.filter(t => t.templateId !== templateId)
-      return [...prev, { templateId }]
-    })
+    setSelectedTests(prev =>
+      prev.find(t => t.templateId === templateId)
+        ? prev.filter(t => t.templateId !== templateId)
+        : [...prev, { templateId }]
+    )
 
   const getTestPrice = (tmpl: typeof activeTemplates[0]): number => {
     if (form.isB2b && form.b2bLabId) {
@@ -176,34 +185,34 @@ export default function PatientFormPage() {
     return Number(tmpl.amount)
   }
 
+  const filteredTemplatesForDropdown = activeTemplates.filter(t =>
+    t.name.toLowerCase().includes(testSearch.toLowerCase()) ||
+    t.code.toLowerCase().includes(testSearch.toLowerCase())
+  )
+
   const subtotal = selectedTests.reduce((sum, sel) => {
     const tmpl = activeTemplates.find(t => t.id === sel.templateId)
-    if (!tmpl) return sum
-    return sum + getTestPrice(tmpl)
+    return sum + (tmpl ? getTestPrice(tmpl) : 0)
   }, 0)
   const discountAmt = Math.round(subtotal * discount / 100)
   const netAmount = subtotal - discountAmt
 
-  // Document handlers
+  // ── Document helpers ────────────────────────────────────────────────────────
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    // Default name = filename without extension
-    const defaultName = file.name.replace(/\.[^/.]+$/, '')
-    setPendingFile({ file, name: defaultName })
-    e.target.value = '' // reset so same file can be re-selected
+    setPendingFile({ file, name: file.name.replace(/\.[^/.]+$/, '') })
+    e.target.value = ''
   }
 
   const confirmAddDocument = () => {
     if (!pendingFile) return
-    const url = URL.createObjectURL(pendingFile.file)
-    const entry: DocumentEntry = {
+    setDocuments(prev => [...prev, {
       id: `${Date.now()}-${Math.random()}`,
       name: pendingFile.name.trim() || pendingFile.file.name,
       file: pendingFile.file,
-      url,
-    }
-    setDocuments(prev => [...prev, entry])
+      url: URL.createObjectURL(pendingFile.file),
+    }])
     setPendingFile(null)
   }
 
@@ -215,6 +224,7 @@ export default function PatientFormPage() {
     })
   }
 
+  // ── Mutations ───────────────────────────────────────────────────────────────
   const createMutation = useMutation({
     mutationFn: async () => {
       const patient = await patientService.create(formToDto(form))
@@ -222,9 +232,7 @@ export default function PatientFormPage() {
         const result = await orderService.createBatch({
           patientId: patient.id,
           orders: selectedTests.map(s => ({ templateId: s.templateId })),
-          discount,
-          paymentStatus,
-          paymentType,
+          discount, paymentStatus, paymentType,
         })
         toast.success(`Patient registered · ${selectedTests.length} test(s) · Receipt: ${result.receiptNumber}`)
       } else {
@@ -284,13 +292,58 @@ export default function PatientFormPage() {
             </p>
           </div>
         </div>
-        <Button icon={isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} loading={isPending} onClick={handleSave}>
+        <Button
+          icon={isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          loading={isPending}
+          onClick={handleSave}
+        >
           {isEdit ? 'Save Changes' : 'Register Patient'}
         </Button>
       </div>
 
       <div className="mx-auto max-w-5xl px-6 py-8 space-y-6">
-        {/* Basic Information */}
+
+        {/* ── 1. Referral & Visit (B2B section — FIRST) ── */}
+        <FormCard>
+          <SectionTitle icon={<Building2 className="h-4 w-4" />} title="Referral & Visit Details" />
+          <div className="space-y-5">
+            {/* B2B toggle */}
+            <div className="flex gap-6">
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input type="radio" checked={!form.isB2b}
+                  onChange={() => setForm(p => ({ ...p, isB2b: false, b2bLabId: '' }))}
+                  className="h-4 w-4 accent-indigo-600" />
+                <span className="text-sm font-medium text-slate-700">Individual Patient</span>
+              </label>
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input type="radio" checked={form.isB2b}
+                  onChange={() => setForm(p => ({ ...p, isB2b: true }))}
+                  className="h-4 w-4 accent-indigo-600" />
+                <span className="text-sm font-medium text-slate-700">B2B Referral</span>
+              </label>
+            </div>
+
+            {form.isB2b && (
+              <Select label="B2B Lab Partner" value={form.b2bLabId}
+                onChange={e => setForm(p => ({ ...p, b2bLabId: e.target.value }))}>
+                <option value="">Select B2B lab</option>
+                {b2bLabs.filter(l => l.active).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </Select>
+            )}
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Select label="Our Branch (Optional)" value={form.labBranchId}
+                onChange={e => setForm(p => ({ ...p, labBranchId: e.target.value }))}>
+                <option value="">Select branch</option>
+                {labBranches.filter(b => b.active).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </Select>
+              <Input label="Report Date" type="date"
+                value={form.reportDate ?? ''} onChange={setField('reportDate')} />
+            </div>
+          </div>
+        </FormCard>
+
+        {/* ── 2. Basic Information ── */}
         <FormCard>
           <SectionTitle icon={<User className="h-4 w-4" />} title="Basic Information" />
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -305,7 +358,7 @@ export default function PatientFormPage() {
           </div>
         </FormCard>
 
-        {/* Contact */}
+        {/* ── 3. Contact ── */}
         <FormCard>
           <SectionTitle icon={<Phone className="h-4 w-4" />} title="Contact Information" />
           <div className="grid gap-4 sm:grid-cols-2">
@@ -314,7 +367,7 @@ export default function PatientFormPage() {
           </div>
         </FormCard>
 
-        {/* Address */}
+        {/* ── 4. Address ── */}
         <FormCard>
           <SectionTitle icon={<MapPin className="h-4 w-4" />} title="Address" />
           <div className="grid gap-4 sm:grid-cols-2">
@@ -327,7 +380,7 @@ export default function PatientFormPage() {
           </div>
         </FormCard>
 
-        {/* Emergency Contact */}
+        {/* ── 5. Emergency Contact ── */}
         <FormCard>
           <SectionTitle icon={<AlertCircle className="h-4 w-4" />} title="Emergency Contact" />
           <div className="grid gap-4 sm:grid-cols-2">
@@ -336,99 +389,31 @@ export default function PatientFormPage() {
           </div>
         </FormCard>
 
-        {/* Referral & Visit */}
-        <FormCard>
-          <SectionTitle icon={<Building2 className="h-4 w-4" />} title="Referral & Visit Details" />
-          <div className="space-y-5">
-            {/* B2B toggle */}
-            <div className="flex gap-6">
-              <label className="flex items-center gap-2.5 cursor-pointer">
-                <input
-                  type="radio" checked={!form.isB2b}
-                  onChange={() => setForm(p => ({ ...p, isB2b: false, b2bLabId: '' }))}
-                  className="h-4 w-4 accent-indigo-600"
-                />
-                <span className="text-sm font-medium text-slate-700">Individual Patient</span>
-              </label>
-              <label className="flex items-center gap-2.5 cursor-pointer">
-                <input
-                  type="radio" checked={form.isB2b}
-                  onChange={() => setForm(p => ({ ...p, isB2b: true }))}
-                  className="h-4 w-4 accent-indigo-600"
-                />
-                <span className="text-sm font-medium text-slate-700">B2B Referral</span>
-              </label>
-            </div>
-
-            {form.isB2b && (
-              <Select label="B2B Lab Partner" value={form.b2bLabId}
-                onChange={e => setForm(p => ({ ...p, b2bLabId: e.target.value }))}>
-                <option value="">Select B2B lab</option>
-                {b2bLabs.filter(l => l.active).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-              </Select>
-            )}
-
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Select label="Our Branch (Optional)" value={form.labBranchId}
-                onChange={e => setForm(p => ({ ...p, labBranchId: e.target.value }))}>
-                <option value="">Select branch</option>
-                {labBranches.filter(b => b.active).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-              </Select>
-              <Input label="Referring Doctor" placeholder="Dr. Name"
-                value={form.doctorName ?? ''} onChange={setField('doctorName')} />
-              <Input label="Report Date" type="date"
-                value={form.reportDate ?? ''} onChange={setField('reportDate')} />
-            </div>
-          </div>
-        </FormCard>
-
-        {/* Documents */}
+        {/* ── 6. Documents ── */}
         <FormCard>
           <SectionTitle icon={<Paperclip className="h-4 w-4" />} title="Documents" />
 
-          {/* Hidden file input */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            className="hidden"
+          <input ref={fileInputRef} type="file" className="hidden"
             accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.gif,.webp"
-            onChange={handleFileSelect}
-          />
+            onChange={handleFileSelect} />
 
-          {/* Uploaded documents list */}
           {documents.length > 0 && (
             <div className="mb-4 space-y-2">
               {documents.map(doc => (
-                <div
-                  key={doc.id}
-                  className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 transition-colors hover:border-indigo-200 hover:bg-indigo-50/40"
-                >
-                  {/* Clickable document name */}
-                  <a
-                    href={doc.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex min-w-0 flex-1 items-center gap-3 group"
-                    title={`Open ${doc.name}`}
-                  >
+                <div key={doc.id}
+                  className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 hover:border-indigo-200 hover:bg-indigo-50/40 transition-colors">
+                  <a href={doc.url} target="_blank" rel="noopener noreferrer"
+                    className="flex min-w-0 flex-1 items-center gap-3 group" title={`Open ${doc.name}`}>
                     <span className="text-xl leading-none select-none">{getFileIcon(doc.file.name)}</span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-slate-800 group-hover:text-indigo-600 transition-colors">
-                        {doc.name}
-                      </p>
-                      <p className="truncate text-xs text-slate-400">
-                        {doc.file.name} · {formatBytes(doc.file.size)}
-                      </p>
+                      <p className="truncate text-sm font-semibold text-slate-800 group-hover:text-indigo-600 transition-colors">{doc.name}</p>
+                      <p className="truncate text-xs text-slate-400">{doc.file.name} · {formatBytes(doc.file.size)}</p>
                     </div>
                     <FileText className="h-4 w-4 shrink-0 text-slate-300 group-hover:text-indigo-400 transition-colors" />
                   </a>
-
-                  {/* Remove */}
-                  <button
-                    onClick={() => removeDocument(doc.id)}
-                    className="ml-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-100 hover:text-rose-500 transition-colors"
-                    title="Remove document"
-                  >
+                  <button onClick={() => removeDocument(doc.id)}
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-100 hover:text-rose-500 transition-colors"
+                    title="Remove">
                     <X className="h-3.5 w-3.5" />
                   </button>
                 </div>
@@ -436,106 +421,161 @@ export default function PatientFormPage() {
             </div>
           )}
 
-          {/* Pending file — name input */}
           {pendingFile ? (
             <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-indigo-600">
-                Name this document
-              </p>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-indigo-600">Name this document</p>
               <div className="flex items-center gap-3">
                 <span className="text-xl leading-none">{getFileIcon(pendingFile.file.name)}</span>
-                <input
-                  autoFocus
-                  type="text"
-                  value={pendingFile.name}
+                <input autoFocus type="text" value={pendingFile.name}
                   onChange={e => setPendingFile(p => p ? { ...p, name: e.target.value } : null)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') confirmAddDocument()
-                    if (e.key === 'Escape') setPendingFile(null)
-                  }}
+                  onKeyDown={e => { if (e.key === 'Enter') confirmAddDocument(); if (e.key === 'Escape') setPendingFile(null) }}
                   placeholder="Document name"
-                  className="flex-1 rounded-xl border border-indigo-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-                />
-                <button
-                  onClick={confirmAddDocument}
-                  className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
-                >
-                  Add
-                </button>
-                <button
-                  onClick={() => setPendingFile(null)}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-                >
-                  Cancel
-                </button>
+                  className="flex-1 rounded-xl border border-indigo-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
+                <button onClick={confirmAddDocument}
+                  className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors">Add</button>
+                <button onClick={() => setPendingFile(null)}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
               </div>
               <p className="mt-2 text-xs text-indigo-500">{pendingFile.file.name} · {formatBytes(pendingFile.file.size)}</p>
             </div>
           ) : (
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 bg-white py-4 text-sm font-medium text-slate-500 transition-all hover:border-indigo-300 hover:bg-indigo-50/40 hover:text-indigo-600"
-            >
+            <button onClick={() => fileInputRef.current?.click()}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 bg-white py-4 text-sm font-medium text-slate-500 transition-all hover:border-indigo-300 hover:bg-indigo-50/40 hover:text-indigo-600">
               <Upload className="h-4 w-4" />
               Upload Document
             </button>
           )}
 
           {documents.length === 0 && !pendingFile && (
-            <p className="mt-2 text-center text-xs text-slate-400">
-              PDF, JPG, PNG, Word — up to any size · Click a document to open it
-            </p>
+            <p className="mt-2 text-center text-xs text-slate-400">PDF, JPG, PNG, Word · Click a document to open it</p>
           )}
         </FormCard>
 
-        {/* Test Selection — only on create */}
+        {/* ── 7. Test Selection — dropdown, only on create ── */}
         {!isEdit && activeTemplates.length > 0 && (
           <FormCard>
             <SectionTitle icon={<FlaskConical className="h-4 w-4" />} title="Test Selection" />
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {activeTemplates.map(tmpl => {
-                const isSelected = !!selectedTests.find(t => t.templateId === tmpl.id)
-                const price = getTestPrice(tmpl)
-                return (
-                  <div
-                    key={tmpl.id}
-                    onClick={() => toggleTest(tmpl.id)}
-                    className={`cursor-pointer rounded-xl border p-3.5 transition-all ${
-                      isSelected ? 'border-indigo-400 bg-indigo-50 shadow-sm' : 'border-slate-200 bg-white hover:border-indigo-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
+
+            {/* Dropdown trigger */}
+            <div ref={testDropdownRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setTestDropdownOpen(o => !o)}
+                className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 transition-all hover:border-indigo-300 focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              >
+                <span className={selectedTests.length === 0 ? 'text-slate-400' : 'font-medium text-slate-700'}>
+                  {selectedTests.length === 0
+                    ? 'Click to select tests…'
+                    : `${selectedTests.length} test${selectedTests.length !== 1 ? 's' : ''} selected`}
+                </span>
+                <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${testDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {testDropdownOpen && (
+                <div className="absolute left-0 right-0 top-full z-20 mt-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+                  {/* Search inside dropdown */}
+                  <div className="border-b border-slate-100 px-3 py-2">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
                       <input
-                        type="checkbox" checked={isSelected}
-                        onChange={() => toggleTest(tmpl.id)}
-                        onClick={e => e.stopPropagation()}
-                        className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-indigo-600"
+                        autoFocus
+                        type="text"
+                        value={testSearch}
+                        onChange={e => setTestSearch(e.target.value)}
+                        placeholder="Search tests…"
+                        className="w-full rounded-lg bg-slate-50 py-1.5 pl-8 pr-3 text-sm outline-none focus:bg-white focus:ring-1 focus:ring-indigo-200"
                       />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm text-slate-800">{tmpl.name}</p>
-                        <p className="text-xs font-mono text-slate-400">{tmpl.code}</p>
-                        <p className="text-xs text-indigo-600 mt-1 font-medium">
-                          ₹{price > 0 ? price.toLocaleString() : '—'}
-                        </p>
-                      </div>
                     </div>
                   </div>
-                )
-              })}
+
+                  {/* Options list */}
+                  <div className="max-h-60 overflow-y-auto">
+                    {filteredTemplatesForDropdown.length === 0 ? (
+                      <p className="px-4 py-3 text-sm text-slate-400">No tests found</p>
+                    ) : filteredTemplatesForDropdown.map(tmpl => {
+                      const isSelected = !!selectedTests.find(t => t.templateId === tmpl.id)
+                      const price = getTestPrice(tmpl)
+                      return (
+                        <div
+                          key={tmpl.id}
+                          onClick={() => toggleTest(tmpl.id)}
+                          className={`flex cursor-pointer items-center gap-3 px-4 py-2.5 transition-colors hover:bg-slate-50 ${isSelected ? 'bg-indigo-50/60' : ''}`}
+                        >
+                          <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 transition-colors ${
+                            isSelected ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'
+                          }`}>
+                            {isSelected && (
+                              <svg className="h-2.5 w-2.5 text-white" fill="none" viewBox="0 0 12 12">
+                                <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                              </svg>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <span className={`text-sm ${isSelected ? 'font-semibold text-indigo-700' : 'text-slate-700'}`}>{tmpl.name}</span>
+                            <span className="ml-2 text-xs font-mono text-slate-400">{tmpl.code}</span>
+                          </div>
+                          <span className="shrink-0 text-xs font-semibold text-indigo-600">
+                            {price > 0 ? `₹${price.toLocaleString()}` : '—'}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Footer */}
+                  <div className="border-t border-slate-100 px-4 py-2 flex justify-between items-center bg-slate-50">
+                    <span className="text-xs text-slate-400">
+                      {selectedTests.length} of {activeTemplates.length} selected
+                    </span>
+                    <button
+                      onClick={() => { setTestDropdownOpen(false); setTestSearch('') }}
+                      className="text-xs font-semibold text-indigo-600 hover:underline"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
+
+            {/* Selected tests summary list */}
             {selectedTests.length > 0 && (
-              <div className="mt-4 flex items-center gap-4 rounded-xl bg-indigo-50 px-4 py-3 text-sm">
-                <span className="text-indigo-600">
-                  <span className="font-bold">{selectedTests.length}</span> test{selectedTests.length !== 1 ? 's' : ''} selected
-                </span>
-                <span className="text-slate-400">·</span>
-                <span className="text-slate-700">Subtotal: <span className="font-bold">₹{subtotal.toLocaleString()}</span></span>
+              <div className="mt-3 space-y-1.5">
+                {selectedTests.map(sel => {
+                  const tmpl = activeTemplates.find(t => t.id === sel.templateId)
+                  if (!tmpl) return null
+                  const price = getTestPrice(tmpl)
+                  return (
+                    <div key={sel.templateId}
+                      className="flex items-center justify-between rounded-xl bg-indigo-50 px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <FlaskConical className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+                        <span className="text-sm font-medium text-indigo-800">{tmpl.name}</span>
+                        <span className="text-xs font-mono text-indigo-400">{tmpl.code}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-semibold text-indigo-700">
+                          {price > 0 ? `₹${price.toLocaleString()}` : '—'}
+                        </span>
+                        <button onClick={() => toggleTest(sel.templateId)}
+                          className="flex h-5 w-5 items-center justify-center rounded-full text-indigo-400 hover:bg-indigo-200 hover:text-indigo-700 transition-colors">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+                {/* Subtotal */}
+                <div className="flex justify-between rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm">
+                  <span className="text-slate-500">Subtotal</span>
+                  <span className="font-bold text-slate-800">₹{subtotal.toLocaleString()}</span>
+                </div>
               </div>
             )}
           </FormCard>
         )}
 
-        {/* Payment — only on create with tests selected */}
+        {/* ── 8. Payment — only on create with tests selected ── */}
         {!isEdit && selectedTests.length > 0 && (
           <FormCard>
             <SectionTitle icon={<CreditCard className="h-4 w-4" />} title="Payment" />
@@ -545,15 +585,12 @@ export default function PatientFormPage() {
                 <label className="text-sm font-semibold text-slate-700 shrink-0">Discount:</label>
                 <div className="flex gap-2 flex-wrap">
                   {DISCOUNT_OPTIONS.map(d => (
-                    <button
-                      key={d}
-                      onClick={() => setDiscount(d)}
+                    <button key={d} onClick={() => setDiscount(d)}
                       className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-all ${
                         discount === d
                           ? 'border-indigo-500 bg-indigo-600 text-white shadow-sm'
                           : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-300 hover:text-indigo-600'
-                      }`}
-                    >
+                      }`}>
                       {d}%
                     </button>
                   ))}
@@ -563,18 +600,15 @@ export default function PatientFormPage() {
               {/* Amount breakdown */}
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2.5 text-sm">
                 <div className="flex justify-between text-slate-600">
-                  <span>Subtotal</span>
-                  <span>₹{subtotal.toLocaleString()}</span>
+                  <span>Subtotal</span><span>₹{subtotal.toLocaleString()}</span>
                 </div>
                 {discount > 0 && (
                   <div className="flex justify-between text-emerald-600">
-                    <span>Discount ({discount}%)</span>
-                    <span>− ₹{discountAmt.toLocaleString()}</span>
+                    <span>Discount ({discount}%)</span><span>− ₹{discountAmt.toLocaleString()}</span>
                   </div>
                 )}
                 <div className="flex justify-between font-bold text-slate-900 border-t border-slate-200 pt-2.5 text-base">
-                  <span>Net Amount</span>
-                  <span>₹{netAmount.toLocaleString()}</span>
+                  <span>Net Amount</span><span>₹{netAmount.toLocaleString()}</span>
                 </div>
               </div>
 
@@ -587,11 +621,8 @@ export default function PatientFormPage() {
                       <label key={pt} className={`flex items-center gap-2 cursor-pointer rounded-xl border px-3 py-2 transition-all ${
                         paymentType === pt ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-200'
                       }`}>
-                        <input
-                          type="radio" checked={paymentType === pt}
-                          onChange={() => setPaymentType(pt)}
-                          className="h-4 w-4 accent-indigo-600"
-                        />
+                        <input type="radio" checked={paymentType === pt}
+                          onChange={() => setPaymentType(pt)} className="h-4 w-4 accent-indigo-600" />
                         <span className="text-sm font-medium capitalize">{pt.toLowerCase()}</span>
                       </label>
                     ))}
@@ -610,11 +641,8 @@ export default function PatientFormPage() {
                           ? `border-${color}-400 bg-${color}-50 text-${color}-700`
                           : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                       }`}>
-                        <input
-                          type="radio" checked={paymentStatus === ps}
-                          onChange={() => setPaymentStatus(ps)}
-                          className="h-4 w-4 accent-indigo-600"
-                        />
+                        <input type="radio" checked={paymentStatus === ps}
+                          onChange={() => setPaymentStatus(ps)} className="h-4 w-4 accent-indigo-600" />
                         <span className="text-sm font-medium capitalize">{ps.toLowerCase()}</span>
                       </label>
                     ))}
@@ -624,6 +652,19 @@ export default function PatientFormPage() {
             </div>
           </FormCard>
         )}
+
+        {/* ── 9. Doctor Name — LAST ── */}
+        <FormCard>
+          <SectionTitle icon={<Stethoscope className="h-4 w-4" />} title="Referring Doctor" />
+          <div className="max-w-sm">
+            <Input
+              label="Doctor Name"
+              placeholder="Dr. Name"
+              value={form.doctorName ?? ''}
+              onChange={setField('doctorName')}
+            />
+          </div>
+        </FormCard>
 
         {/* Bottom save button */}
         <div className="flex justify-end gap-3 pb-8">
