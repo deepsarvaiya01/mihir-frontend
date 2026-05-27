@@ -54,6 +54,17 @@ export const orderService = {
     return data
   },
 
+  createBatch: async (payload: {
+    patientId: number
+    orders: Array<{ templateId: number; isEmergency?: boolean }>
+    discount?: number
+    paymentStatus?: 'PENDING' | 'PAID' | 'PARTIAL'
+    paymentType?: 'CASH' | 'CHEQUE' | 'ONLINE'
+  }): Promise<{ receiptNumber: string; orders: Order[] }> => {
+    const { data } = await api.post('/orders/batch', payload)
+    return data
+  },
+
   delete: async (orderId: number): Promise<void> => {
     await api.delete(`/orders/${orderId}`)
   },

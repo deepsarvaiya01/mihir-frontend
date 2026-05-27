@@ -9,12 +9,28 @@ export const templateService = {
     return []
   },
 
-  create: async (payload: { name: string; code: string }): Promise<TestTemplate> => {
+  getById: async (id: number): Promise<TestTemplate> => {
+    const { data } = await api.get(`/tests/templates/${id}`)
+    return data
+  },
+
+  create: async (payload: {
+    name: string
+    code: string
+    amount?: number
+    b2bPrices?: Array<{ b2bLabId: number; amount: number }>
+  }): Promise<TestTemplate> => {
     const { data } = await api.post('/tests/templates', payload)
     return data
   },
 
-  update: async (id: number, payload: { name?: string; active?: boolean }): Promise<TestTemplate> => {
+  update: async (id: number, payload: {
+    name?: string
+    code?: string
+    active?: boolean
+    amount?: number
+    b2bPrices?: Array<{ b2bLabId: number; amount: number }>
+  }): Promise<TestTemplate> => {
     const { data } = await api.patch(`/tests/templates/${id}`, payload)
     return data
   },

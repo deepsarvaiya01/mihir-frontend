@@ -16,6 +16,11 @@ export interface CreatePatientDto {
   postalCode?: string
   emergencyContactName?: string
   emergencyContactPhone?: string
+  isB2b?: boolean
+  b2bLabId?: number | null
+  labBranchId?: number | null
+  doctorName?: string
+  reportDate?: string
 }
 
 export const patientService = {
@@ -38,6 +43,11 @@ export const patientService = {
 
   delete: async (id: number): Promise<void> => {
     await api.delete(`/patients/${id}`)
+  },
+
+  getById: async (id: number): Promise<Patient> => {
+    const { data } = await api.get(`/patients/${id}`)
+    return data
   },
 
   getHistory: async (patientId: number): Promise<PatientHistory> => {

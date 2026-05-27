@@ -11,6 +11,11 @@ import ApprovalsPage from './pages/ApprovalsPage'
 import HistoryPage from './pages/HistoryPage'
 import UsersPage from './pages/UsersPage'
 import SettingsPage from './pages/SettingsPage'
+import B2bLabsPage from './pages/B2bLabsPage'
+import LabBranchesPage from './pages/LabBranchesPage'
+import PatientFormPage from './pages/PatientFormPage'
+import TemplateFormPage from './pages/TemplateFormPage'
+import BillingPage from './pages/BillingPage'
 import { useAuthStore } from './store/authStore'
 
 const queryClient = new QueryClient({
@@ -43,11 +48,18 @@ export default function App() {
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/templates" element={<RoleRoute role="SUPER_ADMIN"><TemplatesPage /></RoleRoute>} />
+            <Route path="/templates/new" element={<RoleRoute role="SUPER_ADMIN"><TemplateFormPage /></RoleRoute>} />
+            <Route path="/templates/:id/edit" element={<RoleRoute role="SUPER_ADMIN"><TemplateFormPage /></RoleRoute>} />
             <Route path="/approvals" element={<RoleRoute role="SUPER_ADMIN"><ApprovalsPage /></RoleRoute>} />
             <Route path="/patients" element={<RoleRoute role="LAB_USER"><PatientsPage /></RoleRoute>} />
+            <Route path="/patients/new" element={<RoleRoute role="LAB_USER"><PatientFormPage /></RoleRoute>} />
+            <Route path="/patients/:id/edit" element={<RoleRoute role="LAB_USER"><PatientFormPage /></RoleRoute>} />
             <Route path="/orders" element={<RoleRoute role="LAB_USER"><OrdersPage /></RoleRoute>} />
+            <Route path="/billing" element={<RoleRoute role="LAB_USER"><BillingPage /></RoleRoute>} />
             <Route path="/history" element={<RoleRoute role="LAB_USER"><HistoryPage /></RoleRoute>} />
             <Route path="/users" element={<RoleRoute role="SUPER_ADMIN"><UsersPage /></RoleRoute>} />
+            <Route path="/b2b-labs" element={<RoleRoute role="SUPER_ADMIN"><B2bLabsPage /></RoleRoute>} />
+            <Route path="/lab-branches" element={<RoleRoute role="SUPER_ADMIN"><LabBranchesPage /></RoleRoute>} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
