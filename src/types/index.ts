@@ -26,6 +26,8 @@ export interface Order {
   amount: number; discount: number; netAmount: number
   paymentStatus: PaymentStatus; paymentType: PaymentType | null
   receiptNumber: string | null
+  attachmentBase64: string | null
+  attachmentName: string | null
 }
 
 export interface OrderFormData { order: Order; fields: TestTemplateField[] }

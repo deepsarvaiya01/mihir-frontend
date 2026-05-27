@@ -1,64 +1,37 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, ClipboardList, Search, FileText, ChevronDown,
-  Trash2, RotateCcw, Calculator,
+  Trash2, RotateCcw, ExternalLink, Paperclip,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
-import { Input, Select } from '../components/ui/Input'
+import { Select } from '../components/ui/Input'
 import { Modal, ConfirmModal } from '../components/ui/Modal'
 import { EmptyState } from '../components/ui/EmptyState'
 import { PageLoader } from '../components/ui/Spinner'
 import { OrderStatusBadge } from '../components/ui/Badge'
-import { orderService, type SubmitResultsDto } from '../services/orders'
-import type { Order, OrderFormData, OrderResult, TestTemplateField } from '../types'
+import { orderService } from '../services/orders'
+import type { Order, OrderResult } from '../types'
 import { patientService } from '../services/patients'
 import { templateService } from '../services/templates'
 import { toast } from 'sonner'
-
-function evalFormula(optionsJson: string | null, values: Record<number, string | boolean>): number {
-  if (!optionsJson) return 0
-  try {
-    const steps: Array<{ fieldId?: number; op?: string }> = JSON.parse(optionsJson)
-    let result = 0
-    let pendingOp: string | null = null
-    let isFirst = true
-    for (const step of steps) {
-      if ('fieldId' in step && step.fieldId !== undefined) {
-        const val = Number(values[step.fieldId] ?? 0) || 0
-        if (isFirst) { result = val; isFirst = false }
-        else if (pendingOp === '+') result += val
-        else if (pendingOp === '-') result -= val
-        else if (pendingOp === '*') result *= val
-        else if (pendingOp === '/') result = val !== 0 ? result / val : 0
-        pendingOp = null
-      } else if ('op' in step) {
-        pendingOp = step.op!
-      }
-    }
-    return Math.round(result * 1000) / 1000
-  } catch {
-    return 0
-  }
-}
 
 // Only show active (non-approved) orders in this page
 type StatusFilter = 'ALL' | 'PENDING' | 'IN_PROGRESS' | 'AWAITING_APPROVAL' | 'REJECTED'
 
 export default function OrdersPage() {
+  const navigate = useNavigate()
   const qc = useQueryClient()
   const [createModalOpen, setCreateModalOpen] = useState(false)
-  const [resultModalOpen, setResultModalOpen] = useState(false)
   const [viewResultsModalOpen, setViewResultsModalOpen] = useState(false)
   const [deleteOrder, setDeleteOrder] = useState<Order | null>(null)
   const [reopenOrder, setReopenOrder] = useState<Order | null>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
   const [orderForm, setOrderForm] = useState({ patientId: '', templateId: '' })
-  const [selectedOrderForm, setSelectedOrderForm] = useState<OrderFormData | null>(null)
   const [selectedResults, setSelectedResults] = useState<OrderResult | null>(null)
-  const [resultValues, setResultValues] = useState<Record<number, string | boolean>>({})
 
   const { data: orders = [], isLoading } = useQuery({ queryKey: ['orders'], queryFn: orderService.getAll })
   const { data: patients = [] } = useQuery({ queryKey: ['patients'], queryFn: () => patientService.getAll() })
@@ -77,16 +50,6 @@ export default function OrdersPage() {
     },
     onError: (err: unknown) =>
       toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to create order'),
-  })
-
-  const loadOrderForm = useMutation({
-    mutationFn: (orderId: number) => orderService.getForm(orderId),
-    onSuccess: (data) => {
-      setSelectedOrderForm(data)
-      setResultValues({})
-      setResultModalOpen(true)
-    },
-    onError: () => toast.error('Failed to load order form'),
   })
 
   const loadOrderResults = useMutation({
@@ -117,81 +80,6 @@ export default function OrdersPage() {
     },
     onError: () => toast.error('Failed to reopen order'),
   })
-
-  const submitResults = useMutation({
-    mutationFn: (dto: SubmitResultsDto) => orderService.submitResults(selectedOrderForm!.order.id, dto),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['orders'] })
-      setResultModalOpen(false)
-      setSelectedOrderForm(null)
-      toast.success('Results submitted for approval')
-    },
-    onError: (err: unknown) =>
-      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to submit results'),
-  })
-
-  const handleSubmitResults = () => {
-    if (!selectedOrderForm) return
-    const values: SubmitResultsDto['values'] = selectedOrderForm.fields.map(field => ({
-      fieldId: field.id,
-      textValue: field.fieldType === 'text' || field.fieldType === 'select'
-        ? String(resultValues[field.id] ?? '') : undefined,
-      numberValue: field.fieldType === 'number' && resultValues[field.id] !== undefined
-        ? Number(resultValues[field.id])
-        : field.fieldType === 'calculated'
-          ? evalFormula(field.optionsJson, resultValues)
-          : undefined,
-      booleanValue: field.fieldType === 'checkbox' ? Boolean(resultValues[field.id]) : undefined,
-      dateValue: field.fieldType === 'date' ? String(resultValues[field.id] ?? '') : undefined,
-    }))
-    submitResults.mutate({ values })
-  }
-
-  const renderResultField = (field: TestTemplateField) => {
-    if (field.fieldType === 'calculated') {
-      const computed = evalFormula(field.optionsJson, resultValues)
-      return (
-        <div className="relative">
-          <Calculator className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-amber-500" />
-          <input
-            type="number" value={computed} readOnly
-            className="w-full cursor-not-allowed rounded-xl border border-amber-200 bg-amber-50 py-2.5 pl-10 pr-12 text-sm font-semibold text-amber-800 outline-none"
-          />
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-amber-500">auto</span>
-        </div>
-      )
-    }
-    const value = resultValues[field.id]
-    if (field.fieldType === 'checkbox') {
-      return (
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox" checked={Boolean(value)}
-            onChange={e => setResultValues(p => ({ ...p, [field.id]: e.target.checked }))}
-            className="h-4 w-4 rounded border-slate-300 accent-indigo-600"
-          />
-          <span className="text-sm text-slate-600">Yes</span>
-        </label>
-      )
-    }
-    if (field.fieldType === 'select') {
-      const options = field.optionsJson ? (JSON.parse(field.optionsJson) as string[]) : []
-      return (
-        <Select value={String(value ?? '')} onChange={e => setResultValues(p => ({ ...p, [field.id]: e.target.value }))}>
-          <option value="">Select option</option>
-          {options.map(o => <option key={o} value={o}>{o}</option>)}
-        </Select>
-      )
-    }
-    return (
-      <Input
-        type={field.fieldType === 'number' ? 'number' : field.fieldType === 'date' ? 'date' : 'text'}
-        value={String(value ?? '')}
-        onChange={e => setResultValues(p => ({ ...p, [field.id]: e.target.value }))}
-        placeholder={field.fieldType === 'number' ? '0.00' : 'Enter value'}
-      />
-    )
-  }
 
   // Exclude APPROVED orders — those live on the Billing page
   const activeOrders = orders.filter(o => o.status !== 'APPROVED')
@@ -290,9 +178,8 @@ export default function OrdersPage() {
                         {(order.status === 'PENDING' || order.status === 'IN_PROGRESS') && (
                           <Button
                             size="sm" variant="secondary"
-                            icon={<FileText className="h-3.5 w-3.5" />}
-                            loading={loadOrderForm.isPending && loadOrderForm.variables === order.id}
-                            onClick={() => loadOrderForm.mutate(order.id)}
+                            icon={<ExternalLink className="h-3.5 w-3.5" />}
+                            onClick={() => navigate(`/orders/${order.id}/enter-results`)}
                           >
                             Enter Results
                           </Button>
@@ -372,49 +259,6 @@ export default function OrdersPage() {
         </div>
       </Modal>
 
-      {/* Result Entry Modal */}
-      <Modal
-        open={resultModalOpen}
-        onClose={() => setResultModalOpen(false)}
-        title={`Enter Results — Order #${selectedOrderForm?.order.id ?? ''}`}
-        subtitle={selectedOrderForm?.order.template?.name}
-        size="lg"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setResultModalOpen(false)}>Cancel</Button>
-            <Button loading={submitResults.isPending} onClick={handleSubmitResults}>
-              Submit for Approval
-            </Button>
-          </>
-        }
-      >
-        {selectedOrderForm && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between rounded-xl bg-slate-50 p-4">
-              <div>
-                <p className="font-semibold text-slate-800">
-                  Patient: {selectedOrderForm.order.patient?.fullName ?? '—'}
-                </p>
-                <p className="text-sm text-slate-500">
-                  Order #{selectedOrderForm.order.id} · {selectedOrderForm.order.template?.name}
-                </p>
-              </div>
-              <OrderStatusBadge status={selectedOrderForm.order.status} />
-            </div>
-            {selectedOrderForm.fields.map(field => (
-              <div key={field.id}>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  {field.fieldName}
-                  {field.unit && <span className="ml-1 text-slate-400 normal-case">({field.unit})</span>}
-                  {field.required && <span className="ml-1 text-rose-500">*</span>}
-                </label>
-                {renderResultField(field)}
-              </div>
-            ))}
-          </div>
-        )}
-      </Modal>
-
       {/* View Submitted Results Modal */}
       <Modal
         open={viewResultsModalOpen}
@@ -459,6 +303,24 @@ export default function OrdersPage() {
                 </div>
               ))}
             </div>
+
+            {/* Attached PDF */}
+            {selectedResults.order.attachmentName && selectedResults.order.attachmentBase64 && (
+              <div className="mt-4 flex items-center gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3">
+                <Paperclip className="h-4 w-4 shrink-0 text-indigo-600" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-slate-800">{selectedResults.order.attachmentName}</p>
+                  <p className="text-xs text-slate-500">Attached PDF document</p>
+                </div>
+                <a
+                  href={selectedResults.order.attachmentBase64}
+                  download={selectedResults.order.attachmentName}
+                  className="shrink-0 rounded-lg border border-indigo-200 bg-white px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
+                >
+                  Download
+                </a>
+              </div>
+            )}
           </div>
         )}
       </Modal>

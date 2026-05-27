@@ -17,6 +17,7 @@ import PatientFormPage from './pages/PatientFormPage'
 import TemplateFormPage from './pages/TemplateFormPage'
 import BillingPage from './pages/BillingPage'
 import SignaturesPage from './pages/SignaturesPage'
+import EnterResultsPage from './pages/EnterResultsPage'
 import { useAuthStore } from './store/authStore'
 
 const queryClient = new QueryClient({
@@ -56,6 +57,7 @@ export default function App() {
             <Route path="/patients/new" element={<RoleRoute roles={['SUPER_ADMIN', 'LAB_USER']}><PatientFormPage /></RoleRoute>} />
             <Route path="/patients/:id/edit" element={<RoleRoute roles={['SUPER_ADMIN', 'LAB_USER']}><PatientFormPage /></RoleRoute>} />
             <Route path="/orders" element={<RoleRoute roles={['SUPER_ADMIN', 'LAB_USER']}><OrdersPage /></RoleRoute>} />
+            <Route path="/orders/:id/enter-results" element={<RoleRoute roles={['SUPER_ADMIN', 'LAB_USER']}><EnterResultsPage /></RoleRoute>} />
             <Route path="/billing" element={<RoleRoute roles={['SUPER_ADMIN', 'LAB_USER']}><BillingPage /></RoleRoute>} />
             <Route path="/history" element={<RoleRoute roles={['SUPER_ADMIN', 'LAB_USER']}><HistoryPage /></RoleRoute>} />
             <Route path="/users" element={<RoleRoute roles={['SUPER_ADMIN']}><UsersPage /></RoleRoute>} />

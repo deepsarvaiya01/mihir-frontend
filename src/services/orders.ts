@@ -9,6 +9,9 @@ export interface SubmitResultsDto {
     booleanValue?: boolean
     dateValue?: string
   }[]
+  /** Base64 data URI of an attached PDF (optional) */
+  attachmentBase64?: string
+  attachmentName?: string
 }
 
 export const orderService = {
