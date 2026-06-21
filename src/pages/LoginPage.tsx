@@ -1,10 +1,16 @@
 import { type FormEvent, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Activity, Eye, EyeOff, Lock, Mail } from 'lucide-react'
-import { Button } from '../components/ui/Button'
+import { Eye, EyeOff, FlaskConical, ShieldCheck, BarChart3, Users } from 'lucide-react'
 import { authService } from '../services/auth'
 import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
+
+const features = [
+  { icon: <FlaskConical className="h-4 w-4" />, text: 'End-to-end test result management' },
+  { icon: <BarChart3 className="h-4 w-4" />,   text: 'Real-time billing & reports' },
+  { icon: <ShieldCheck className="h-4 w-4" />,  text: 'Role-based approval workflows' },
+  { icon: <Users className="h-4 w-4" />,        text: 'Multi-branch & B2B support' },
+]
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -23,126 +29,162 @@ export default function LoginPage() {
       toast.success(`Welcome back, ${data.user.name}!`)
       navigate('/dashboard')
     } catch (err: unknown) {
-      const axiosMsg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast.error(axiosMsg || 'Invalid credentials')
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg || 'Invalid email or password')
     } finally {
       setLoading(false)
     }
   }
 
-  const fillDemo = (role: 'admin' | 'lab') => {
-    if (role === 'admin') { setEmail('admin@lab.com'); setPassword('admin123') }
-    else { setEmail('lab@lab.com'); setPassword('lab12345') }
-  }
-
   return (
-    <div className="relative min-h-screen overflow-hidden bg-slate-950 flex items-center justify-center p-4">
-      {/* Background gradient orbs */}
-      <div className="pointer-events-none absolute inset-0 select-none">
-        <div className="absolute -left-24 -top-24 h-96 w-96 rounded-full bg-indigo-600/20 blur-3xl" />
-        <div className="absolute -bottom-32 -right-16 h-[500px] w-[500px] rounded-full bg-violet-700/15 blur-3xl" />
-        <div className="absolute left-1/2 top-1/2 h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-800/10 blur-3xl" />
-      </div>
-
-      <div className="relative w-full max-w-md">
-        {/* Brand */}
-        <div className="mb-8 flex flex-col items-center text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-xl shadow-indigo-900/60 ring-1 ring-white/10">
-            <Activity className="h-8 w-8 text-white" />
+    <div className="flex min-h-screen">
+      {/* ── Left brand panel ─────────────────────────────── */}
+      <div className="hidden lg:flex lg:w-[55%] flex-col justify-between bg-[#0F2544] px-14 py-12">
+        {/* Logo */}
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10">
+            <FlaskConical className="h-5 w-5 text-white" />
           </div>
-          <h1 className="mt-4 text-2xl font-bold tracking-tight text-white">LabOps Console</h1>
-          <p className="mt-1 text-sm text-slate-400">Mihir Laboratory Management System</p>
+          <span className="text-[15px] font-semibold text-white tracking-tight">Mihir Laboratory</span>
         </div>
 
-        {/* Card */}
-        <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] shadow-2xl backdrop-blur-2xl">
-          {/* Top accent bar */}
-          <div className="h-1 w-full bg-gradient-to-r from-indigo-500 via-violet-500 to-indigo-500" />
+        {/* Center content */}
+        <div>
+          <h1 className="text-4xl font-bold text-white leading-tight">
+            Laboratory<br />Management,<br />Simplified.
+          </h1>
+          <p className="mt-4 text-base text-blue-200/70 leading-relaxed max-w-sm">
+            A complete platform for diagnostic labs — from patient registration to report approval.
+          </p>
 
-          <div className="p-8">
-            <h2 className="text-lg font-bold text-white">Sign in to your workspace</h2>
-            <p className="mb-7 mt-1 text-sm text-slate-400">Enter your credentials to access the system</p>
+          <ul className="mt-10 space-y-4">
+            {features.map((f, i) => (
+              <li key={i} className="flex items-center gap-3">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/10 text-blue-200">
+                  {f.icon}
+                </span>
+                <span className="text-sm text-blue-100/80">{f.text}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Footer */}
+        <p className="text-xs text-blue-200/40">
+          © {new Date().getFullYear()} Mihir Laboratory · All rights reserved
+        </p>
+      </div>
+
+      {/* ── Right form panel ─────────────────────────────── */}
+      <div className="flex flex-1 flex-col bg-gray-50">
+        {/* Mobile brand bar */}
+        <div className="flex lg:hidden items-center gap-2 px-6 py-5 border-b border-gray-200 bg-white">
+          <FlaskConical className="h-5 w-5 text-blue-600" />
+          <span className="text-sm font-semibold text-gray-900">Mihir Laboratory</span>
+        </div>
+
+        {/* Form area — vertically centered but pushed up slightly */}
+        <div className="flex flex-1 items-center justify-center px-6 py-10">
+          <div className="w-full max-w-sm">
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Sign in</h2>
+              <p className="mt-1.5 text-sm text-gray-500">Enter your credentials to continue</p>
+            </div>
 
             <form onSubmit={handleLogin} className="space-y-5">
               {/* Email */}
               <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  Email Address
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Email address
                 </label>
-                <div className="relative">
-                  <Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="you@lab.com"
-                    required
-                    className="w-full rounded-xl border border-white/10 bg-white/5 py-3 pl-10 pr-4 text-sm text-white placeholder-slate-600 outline-none transition-all hover:border-white/20 focus:border-indigo-500 focus:bg-white/8 focus:ring-2 focus:ring-indigo-500/20"
-                  />
-                </div>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="you@laboratory.com"
+                  required
+                  autoComplete="email"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                />
               </div>
 
               {/* Password */}
               <div>
-                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-400">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Password
                 </label>
                 <div className="relative">
-                  <Lock className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                   <input
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     placeholder="Enter your password"
                     required
-                    className="w-full rounded-xl border border-white/10 bg-white/5 py-3 pl-10 pr-12 text-sm text-white placeholder-slate-600 outline-none transition-all hover:border-white/20 focus:border-indigo-500 focus:bg-white/8 focus:ring-2 focus:ring-indigo-500/20"
+                    autoComplete="current-password"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 pr-10 text-sm text-gray-900 placeholder-gray-400 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(p => !p)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 transition-colors hover:text-slate-300"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
               </div>
 
-              <Button type="submit" loading={loading} className="w-full" size="lg">
-                Sign In Securely
-              </Button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Signing in…' : 'Sign in'}
+              </button>
             </form>
 
-            {/* Demo credentials */}
-            <div className="mt-6 rounded-xl border border-indigo-500/20 bg-indigo-950/60 p-4">
-              <p className="mb-2.5 text-xs font-semibold uppercase tracking-wider text-indigo-400">
-                Demo Credentials
-              </p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => fillDemo('admin')}
-                  className="flex-1 rounded-lg border border-indigo-500/30 bg-indigo-600/20 px-3 py-2 text-left transition-colors hover:bg-indigo-600/30"
-                >
-                  <p className="text-[11px] font-semibold text-indigo-300">Super Admin</p>
-                  <p className="mt-0.5 font-mono text-[10px] text-slate-400">admin@lab.com</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => fillDemo('lab')}
-                  className="flex-1 rounded-lg border border-slate-700/50 bg-slate-800/50 px-3 py-2 text-left transition-colors hover:bg-slate-700/50"
-                >
-                  <p className="text-[11px] font-semibold text-slate-300">Lab User</p>
-                  <p className="mt-0.5 font-mono text-[10px] text-slate-400">lab@lab.com</p>
-                </button>
-              </div>
-              <p className="mt-2 text-center text-[10px] text-slate-500">Click a card to auto-fill credentials</p>
-            </div>
+            {/* Security note */}
+            <p className="mt-5 text-center text-xs text-gray-400">
+              Protected by JWT · Role-based access control
+            </p>
           </div>
         </div>
 
-        <p className="mt-5 text-center text-xs text-slate-600">
-          Protected by JWT authentication · Role-based access control
-        </p>
+        {/* ── Demo credentials — bottom right ────────────── */}
+        <div className="flex justify-end px-6 pb-6">
+          <div className="w-72 rounded-xl border border-gray-200 bg-white shadow-sm p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-3">
+              Demo credentials
+            </p>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => { setEmail('admin@lab.com'); setPassword('admin123') }}
+                className="w-full flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2.5 text-left transition hover:border-blue-300 hover:bg-blue-50 group"
+              >
+                <div>
+                  <p className="text-xs font-semibold text-gray-800 group-hover:text-blue-700">Super Admin</p>
+                  <p className="mt-0.5 font-mono text-[11px] text-gray-400">admin@lab.com · admin123</p>
+                </div>
+                <span className="text-[10px] font-medium text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                  Fill →
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setEmail('lab@lab.com'); setPassword('lab12345') }}
+                className="w-full flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2.5 text-left transition hover:border-blue-300 hover:bg-blue-50 group"
+              >
+                <div>
+                  <p className="text-xs font-semibold text-gray-800 group-hover:text-blue-700">Lab User</p>
+                  <p className="mt-0.5 font-mono text-[11px] text-gray-400">lab@lab.com · lab12345</p>
+                </div>
+                <span className="text-[10px] font-medium text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                  Fill →
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )

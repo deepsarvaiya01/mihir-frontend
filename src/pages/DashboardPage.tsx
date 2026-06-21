@@ -1,29 +1,32 @@
-import { useQuery } from '@tanstack/react-query'
+﻿import { useQuery } from '@tanstack/react-query'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from 'recharts'
-import { FlaskConical, Users, ClipboardList, CheckCircle2, Clock, XCircle, UserCog, Activity } from 'lucide-react'
+import {
+  FlaskConical, Users, ClipboardList, CheckCircle2,
+  Clock, XCircle, UserCog, TrendingUp,
+} from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { StatCard } from '../components/ui/StatCard'
 import { Card, CardHeader } from '../components/ui/Card'
 import { PageLoader } from '../components/ui/Spinner'
+import { OrderStatusBadge } from '../components/ui/Badge'
 import { useAuthStore } from '../store/authStore'
 import { dashboardService } from '../services/dashboard'
 import { orderService } from '../services/orders'
 import { patientService } from '../services/patients'
 import { templateService } from '../services/templates'
-import { OrderStatusBadge } from '../components/ui/Badge'
 
 const STATUS_COLORS: Record<string, string> = {
-  PENDING: '#94a3b8',
-  IN_PROGRESS: '#3b82f6',
-  AWAITING_APPROVAL: '#f59e0b',
-  APPROVED: '#10b981',
-  REJECTED: '#f43f5e',
+  PENDING:           '#9CA3AF',
+  IN_PROGRESS:       '#3B82F6',
+  AWAITING_APPROVAL: '#F59E0B',
+  APPROVED:          '#10B981',
+  REJECTED:          '#EF4444',
 }
 
-const PIE_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#f43f5e', '#3b82f6']
+const PIE_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6']
 
 export default function DashboardPage() {
   const { user } = useAuthStore()
@@ -55,7 +58,7 @@ export default function DashboardPage() {
 
   if (isLoading) return (
     <div>
-      <Header title="Dashboard" subtitle={isAdmin ? 'Executive overview' : 'Lab operations overview'} />
+      <Header title="Dashboard" />
       <div className="p-6"><PageLoader /></div>
     </div>
   )
@@ -68,7 +71,7 @@ export default function DashboardPage() {
   const barData = Object.entries(statusCounts).map(([status, count]) => ({
     name: status.replace(/_/g, ' '),
     count,
-    fill: STATUS_COLORS[status] || '#6366f1',
+    fill: STATUS_COLORS[status] || '#6B7280',
   }))
 
   const pieData = templates.slice(0, 5).map((t, i) => ({
@@ -77,192 +80,151 @@ export default function DashboardPage() {
     color: PIE_COLORS[i % PIE_COLORS.length],
   }))
 
-  const recentOrders = [...orders].sort((a, b) =>
-    new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-  ).slice(0, 5)
+  const recentOrders = [...orders]
+    .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+    .slice(0, 5)
+
+  const awaitingCount = orders.filter(o => o.status === 'AWAITING_APPROVAL').length
+  const rejectedCount = orders.filter(o => o.status === 'REJECTED').length
 
   return (
-    <div className="w-full overflow-x-hidden">
-     
-         <Header
-    title="Dashboard"
-    subtitle={
-      isAdmin
-        ? 'Executive overview of laboratory operations'
-        : 'Your lab operations at a glance'
-    }
-  />
-      
-      
-      <div className="space-y-6 p-4 sm:p-6">
-        {/* Stats grid */}
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div>
+      <Header
+        title="Dashboard"
+        subtitle={isAdmin ? 'Overview of laboratory operations' : 'Your lab operations at a glance'}
+      />
+
+      <div className="space-y-5 p-6">
+        {/* Primary stats */}
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {isAdmin ? (
             <>
-              <StatCard title="Test Templates" value={summary?.templates ?? 0} subtitle={`${summary?.activeTemplates ?? 0} active`} icon={<FlaskConical className="h-5 w-5 text-indigo-600" />} iconBg="bg-indigo-100" />
-              <StatCard title="Total Patients" value={summary?.patients ?? 0} icon={<Users className="h-5 w-5 text-emerald-600" />} iconBg="bg-emerald-100" />
-              <StatCard title="Total Orders" value={summary?.orders ?? 0} subtitle={`${summary?.pendingOrders ?? 0} pending`} icon={<ClipboardList className="h-5 w-5 text-amber-600" />} iconBg="bg-amber-100" />
-              <StatCard title="Completed" value={summary?.completedOrders ?? 0} icon={<CheckCircle2 className="h-5 w-5 text-violet-600" />} iconBg="bg-violet-100" />
+              <StatCard title="Test Templates" value={summary?.templates ?? 0} subtitle={`${summary?.activeTemplates ?? 0} active`} icon={<FlaskConical className="h-5 w-5" />} color="blue" />
+              <StatCard title="Total Patients" value={summary?.patients ?? 0} icon={<Users className="h-5 w-5" />} color="emerald" />
+              <StatCard title="Total Orders" value={summary?.orders ?? 0} subtitle={`${summary?.pendingOrders ?? 0} pending`} icon={<ClipboardList className="h-5 w-5" />} color="amber" />
+              <StatCard title="Completed" value={summary?.completedOrders ?? 0} icon={<CheckCircle2 className="h-5 w-5" />} color="emerald" />
             </>
           ) : (
             <>
-              <StatCard title="Templates" value={templates.length} icon={<FlaskConical className="h-5 w-5 text-indigo-600" />} iconBg="bg-indigo-100" />
-              <StatCard title="My Patients" value={patients.length} icon={<Users className="h-5 w-5 text-emerald-600" />} iconBg="bg-emerald-100" />
-              <StatCard title="Total Orders" value={orders.length} icon={<ClipboardList className="h-5 w-5 text-amber-600" />} iconBg="bg-amber-100" />
-              <StatCard title="Approved" value={orders.filter(o => o.status === 'APPROVED').length} icon={<CheckCircle2 className="h-5 w-5 text-violet-600" />} iconBg="bg-violet-100" />
+              <StatCard title="Templates" value={templates.length} icon={<FlaskConical className="h-5 w-5" />} color="blue" />
+              <StatCard title="Patients" value={patients.length} icon={<Users className="h-5 w-5" />} color="emerald" />
+              <StatCard title="Total Orders" value={orders.length} icon={<ClipboardList className="h-5 w-5" />} color="amber" />
+              <StatCard title="Approved" value={orders.filter(o => o.status === 'APPROVED').length} icon={<CheckCircle2 className="h-5 w-5" />} color="emerald" />
             </>
           )}
         </div>
 
+        {/* Admin secondary stats */}
         {isAdmin && summary && (
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <StatCard title="Super Admins" value={summary.superAdmins} icon={<UserCog className="h-5 w-5 text-rose-600" />} iconBg="bg-rose-100" />
-            <StatCard title="Lab Users" value={summary.labUsers} icon={<Activity className="h-5 w-5 text-blue-600" />} iconBg="bg-blue-100" />
-            <StatCard title="Pending Orders" value={summary.pendingOrders} icon={<Clock className="h-5 w-5 text-amber-600" />} iconBg="bg-amber-100" />
-            <StatCard title="Completed Orders" value={summary.completedOrders} icon={<CheckCircle2 className="h-5 w-5 text-emerald-600" />} iconBg="bg-emerald-100" />
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <StatCard title="Super Admins" value={summary.superAdmins} icon={<UserCog className="h-5 w-5" />} color="violet" />
+            <StatCard title="Lab Users" value={summary.labUsers} icon={<TrendingUp className="h-5 w-5" />} color="blue" />
+            <StatCard title="Pending Orders" value={summary.pendingOrders} icon={<Clock className="h-5 w-5" />} color="amber" />
+            <StatCard title="Completed Orders" value={summary.completedOrders} icon={<CheckCircle2 className="h-5 w-5" />} color="emerald" />
           </div>
         )}
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          {/* Bar chart */}
-          <Card className="overflow-hidden lg:col-span-2">
-            <CardHeader title="Orders by Status" subtitle="Distribution of all diagnostic orders" />
+        {/* Charts */}
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+          <Card className="lg:col-span-2">
+            <CardHeader title="Orders by Status" subtitle="Current distribution of all orders" />
             {barData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={barData} barSize={36}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} />
-                  <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} allowDecimals={false} />
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={barData} barSize={32} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} allowDecimals={false} />
                   <Tooltip
-                    contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }}
-                    cursor={{ fill: '#f8fafc' }}
+                    contentStyle={{ borderRadius: 8, border: '1px solid #E5E7EB', fontSize: 12, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    cursor={{ fill: '#F9FAFB' }}
                   />
-                  <Bar dataKey="count" radius={[6, 6, 0, 0]}>
-                    {barData.map((entry, i) => (
-                      <Cell key={i} fill={entry.fill} />
-                    ))}
+                  <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                    {barData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex h-64 items-center justify-center text-sm text-slate-400">No order data yet</div>
+              <div className="flex h-52 items-center justify-center text-sm text-gray-400">No orders yet</div>
             )}
           </Card>
 
-          {/* Pie chart */}
           <Card>
-            <CardHeader title="Tests by Template" subtitle="Order distribution" />
+            <CardHeader title="Top Tests" subtitle="By order volume" />
             {pieData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={220}>
+              <ResponsiveContainer width="100%" height={200}>
                 <PieChart>
-                  <Pie
-  data={pieData}
-  cx="50%"
-  cy="45%"
-  innerRadius={40}
-  outerRadius={70}
-  paddingAngle={3}
-  dataKey="value"
->
-                    {pieData.map((entry, i) => (
-                      <Cell key={i} fill={entry.color} />
-                    ))}
+                  <Pie data={pieData} cx="50%" cy="43%" innerRadius={38} outerRadius={65} paddingAngle={3} dataKey="value">
+                    {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                   </Pie>
-                  <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e2e8f0', fontSize: 12 }} />
-                  <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
+                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #E5E7EB', fontSize: 12 }} />
+                  <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 11 }} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex h-64 items-center justify-center text-sm text-slate-400">No data yet</div>
+              <div className="flex h-52 items-center justify-center text-sm text-gray-400">No data yet</div>
             )}
           </Card>
         </div>
 
-        {/* Recent orders */}
+        {/* Alert banners */}
+        {isAdmin && awaitingCount > 0 && (
+          <div className="flex items-center gap-4 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4">
+            <Clock className="h-5 w-5 shrink-0 text-amber-600" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-amber-900">{awaitingCount} order{awaitingCount > 1 ? 's' : ''} awaiting approval</p>
+              <p className="text-xs text-amber-700 mt-0.5">Review submitted test results in the Approvals section.</p>
+            </div>
+            <a href="/approvals" className="shrink-0 rounded-lg bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-700 transition-colors">
+              Review
+            </a>
+          </div>
+        )}
+
+        {rejectedCount > 0 && (
+          <div className="flex items-center gap-4 rounded-xl border border-red-200 bg-red-50 px-5 py-4">
+            <XCircle className="h-5 w-5 shrink-0 text-red-500" />
+            <p className="text-sm font-semibold text-red-800">{rejectedCount} order{rejectedCount > 1 ? 's' : ''} rejected — check the Orders section for details.</p>
+          </div>
+        )}
+
+        {/* Recent orders table */}
         <Card>
-          <CardHeader title="Recent Orders" subtitle="Latest diagnostic orders" badge={<span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{orders.length} total</span>} />
+          <CardHeader
+            title="Recent Orders"
+            subtitle="Latest diagnostic orders"
+            badge={<span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">{orders.length} total</span>}
+          />
           {recentOrders.length > 0 ? (
-            <div className="w-full overflow-x-auto">
-              <table className="min-w-[700px] w-full text-sm">
+            <div className="overflow-x-auto">
+              <table className="min-w-[600px] w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-100">
-                    <th className="pb-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Order</th>
-                    <th className="pb-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Patient</th>
-                    <th className="pb-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Test</th>
-                    <th className="pb-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Status</th>
-                    <th className="pb-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Date</th>
+                  <tr className="border-b border-gray-100">
+                    {['Order', 'Patient', 'Test', 'Status', 'Date'].map(h => (
+                      <th key={h} className="pb-3 text-left text-xs font-semibold text-gray-400">{h}</th>
+                    ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50">
+                <tbody>
                   {recentOrders.map(order => (
-                    <tr key={order.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="whitespace-nowrap py-3 align-middle font-semibold text-slate-700">
-  #{order.id}
-</td>
-                      <td className="whitespace-nowrap py-3 align-middle text-slate-600">
-  {order.patient?.fullName ?? '—'}
-</td>
-                      <td className="whitespace-nowrap py-3 align-middle text-slate-500">
-  {order.template?.name ?? '—'}
-</td>
-                      <td className="py-3 align-middle">
-                        <OrderStatusBadge status={order.status} />
+                    <tr key={order.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                      <td className="py-3 font-semibold text-gray-900">#{order.id}</td>
+                      <td className="py-3 text-gray-600">{order.patient?.fullName ?? '—'}</td>
+                      <td className="py-3 text-gray-500 text-xs">{order.template?.name ?? '—'}</td>
+                      <td className="py-3"><OrderStatusBadge status={order.status} /></td>
+                      <td className="py-3 text-xs text-gray-400">
+                        {order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-IN') : '—'}
                       </td>
-                      <td className="whitespace-nowrap py-3 align-middle text-xs text-slate-400">
-  {order.createdAt
-    ? new Date(order.createdAt).toLocaleDateString()
-    : '—'}
-</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           ) : (
-            <div className="flex items-center justify-center h-24 text-sm text-slate-400">No orders yet</div>
+            <p className="py-8 text-center text-sm text-gray-400">No orders yet</p>
           )}
         </Card>
-
-        {/* Awaiting approval callout for admins */}
-        {isAdmin && orders.filter(o => o.status === 'AWAITING_APPROVAL').length > 0 && (
-          <Card className="border-amber-200 bg-amber-50">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-100">
-                <Clock className="h-5 w-5 text-amber-600" />
-              </div>
-              <div className="flex-1">
-                <p className="font-semibold text-amber-900">
-                  {orders.filter(o => o.status === 'AWAITING_APPROVAL').length} order(s) awaiting your approval
-                </p>
-                <p className="text-sm text-amber-700">Review and approve submitted test results in the Approvals section.</p>
-              </div>
-              <a
-  href="/approvals"
-  className="w-full rounded-xl bg-amber-600 px-4 py-2 text-center text-sm font-semibold text-white transition-colors hover:bg-amber-700 sm:w-auto"
->
-                Review Now
-              </a>
-            </div>
-          </Card>
-        )}
-
-        {/* Rejected orders info */}
-        {orders.filter(o => o.status === 'REJECTED').length > 0 && (
-          <Card className="border-rose-200 bg-rose-50">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-100">
-                <XCircle className="h-5 w-5 text-rose-600" />
-              </div>
-              <div>
-                <p className="font-semibold text-rose-900">
-                  {orders.filter(o => o.status === 'REJECTED').length} order(s) rejected
-                </p>
-                <p className="text-sm text-rose-700">Some test results were rejected. Check the Orders section for details.</p>
-              </div>
-            </div>
-          </Card>
-        )}
       </div>
     </div>
   )
 }
+

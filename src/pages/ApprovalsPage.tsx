@@ -1,6 +1,6 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, XCircle, FileText, Download, RefreshCw, RotateCcw } from 'lucide-react'
+import { CheckCircle2, XCircle, FileText, Download, RefreshCw, RotateCcw, Undo2 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -11,6 +11,7 @@ import { OrderStatusBadge } from '../components/ui/Badge'
 import { orderService } from '../services/orders'
 import { labSettingsService } from '../services/labSettings'
 import { signatureService } from '../services/signatures'
+import { logoService } from '../services/logos'
 import { generateLabReport } from '../utils/generateReport'
 import type { Order, OrderResult } from '../types'
 import { toast } from 'sonner'
@@ -21,6 +22,8 @@ export default function ApprovalsPage() {
   const [selectedReport, setSelectedReport] = useState<OrderResult | null>(null)
   const [confirmAction, setConfirmAction] = useState<{ type: 'approve' | 'reject'; order: Order } | null>(null)
   const [reopenOrder, setReopenOrder] = useState<Order | null>(null)
+  const [revertOrder, setRevertOrder] = useState<Order | null>(null)
+  const [revertRemark, setRevertRemark] = useState('')
 
   const { data: orders = [], isLoading, refetch } = useQuery({
     queryKey: ['orders'],
@@ -35,6 +38,10 @@ export default function ApprovalsPage() {
   const { data: activeSignature = null } = useQuery({
     queryKey: ['active-signature'],
     queryFn: signatureService.getActive,
+  })
+  const { data: activeLogo = null } = useQuery({
+    queryKey: ['logos', 'active'],
+    queryFn: logoService.getActive,
   })
 
   // Loads results and opens review modal (AWAITING_APPROVAL — for approve/reject decision)
@@ -63,6 +70,7 @@ export default function ApprovalsPage() {
         })),
         labSettings,
         signature: activeSignature,
+        activeLogo,
       })
       toast.success('Report downloaded')
     },
@@ -88,6 +96,21 @@ export default function ApprovalsPage() {
       toast.success(`Order #${order.id} reopened for re-submission`)
     },
     onError: () => toast.error('Failed to reopen order'),
+  })
+
+  const revert = useMutation({
+    mutationFn: ({ orderId, remark }: { orderId: number; remark: string }) =>
+      orderService.revert(orderId, remark),
+    onSuccess: (order) => {
+      qc.invalidateQueries({ queryKey: ['orders'] })
+      setRevertOrder(null)
+      setRevertRemark('')
+      toast.success(`Order #${order.id} reverted — lab user can now correct the results`)
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg || 'Failed to revert order')
+    },
   })
 
   const reject = useMutation({
@@ -130,7 +153,7 @@ export default function ApprovalsPage() {
           <>
             {/* ── Pending approvals ── */}
             <div>
-              <h2 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-500">
+              <h2 className="mb-3 text-sm font-bold uppercase tracking-wider text-gray-500">
                 Pending Review ({pending.length})
               </h2>
 
@@ -147,11 +170,11 @@ export default function ApprovalsPage() {
                       <div className="mb-4 flex flex-row items-start justify-between gap-3">
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-800">Order #{order.id}</span>
+                            <span className="font-bold text-gray-800">Order #{order.id}</span>
                           </div>
-                          <p className="mt-1 text-sm font-medium text-slate-700">{order.patient?.fullName ?? '—'}</p>
-                          <p className="text-xs text-slate-500">{order.template?.name ?? '—'}</p>
-                          <p className="mt-1 text-xs text-slate-400">
+                          <p className="mt-1 text-sm font-medium text-gray-700">{order.patient?.fullName ?? '—'}</p>
+                          <p className="text-xs text-gray-500">{order.template?.name ?? '—'}</p>
+                          <p className="mt-1 text-xs text-gray-400">
                             {order.createdAt ? new Date(order.createdAt).toLocaleString() : ''}
                           </p>
                         </div>
@@ -197,45 +220,54 @@ export default function ApprovalsPage() {
             {/* ── Reviewed orders ── */}
             {reviewed.length > 0 && (
               <div>
-                <h2 className="mb-3 text-sm font-bold uppercase tracking-wider text-slate-500">
+                <h2 className="mb-3 text-sm font-bold uppercase tracking-wider text-gray-500">
                   Recently Reviewed ({reviewed.length})
                 </h2>
 
-                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
                   <div className="w-full overflow-x-auto">
                     <table className="min-w-[750px] w-full text-sm">
                       <thead>
-                        <tr className="border-b border-slate-100 bg-slate-50">
-                          <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Order</th>
-                          <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Patient</th>
-                          <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Test</th>
-                          <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Status</th>
-                          <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">Actions</th>
+                        <tr className="border-b border-gray-100 bg-gray-50">
+                          <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Order</th>
+                          <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Patient</th>
+                          <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Test</th>
+                          <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Status</th>
+                          <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-400">Actions</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-50">
+                      <tbody className="divide-y divide-gray-50">
                         {reviewed.map(order => (
-                          <tr key={order.id} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="whitespace-nowrap px-5 py-4 align-middle font-bold text-slate-700">#{order.id}</td>
+                          <tr key={order.id} className="hover:bg-gray-50/50 transition-colors">
+                            <td className="whitespace-nowrap px-5 py-4 align-middle font-bold text-gray-700">#{order.id}</td>
                             <td className="px-5 py-4 align-middle">
-                              <p className="font-medium text-slate-800">{order.patient?.fullName ?? '—'}</p>
-                              <p className="text-xs text-slate-400">{order.patient?.patientCode ?? ''}</p>
+                              <p className="font-medium text-gray-800">{order.patient?.fullName ?? '—'}</p>
+                              <p className="text-xs text-gray-400">{order.patient?.patientCode ?? ''}</p>
                             </td>
-                            <td className="whitespace-nowrap px-5 py-4 align-middle text-slate-600">{order.template?.name ?? '—'}</td>
+                            <td className="whitespace-nowrap px-5 py-4 align-middle text-gray-600">{order.template?.name ?? '—'}</td>
                             <td className="px-5 py-4 align-middle"><OrderStatusBadge status={order.status} /></td>
                             <td className="px-5 py-4 align-middle text-right">
                               <div className="flex flex-wrap justify-end gap-2">
                                 {order.status === 'APPROVED' && (
-                                  // Direct PDF download — no preview modal
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    icon={<Download className="h-3.5 w-3.5" />}
-                                    loading={downloadReport.isPending && downloadReport.variables === order.id}
-                                    onClick={() => downloadReport.mutate(order.id)}
-                                  >
-                                    Report
-                                  </Button>
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      icon={<Download className="h-3.5 w-3.5" />}
+                                      loading={downloadReport.isPending && downloadReport.variables === order.id}
+                                      onClick={() => downloadReport.mutate(order.id)}
+                                    >
+                                      Report
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      icon={<Undo2 className="h-3.5 w-3.5" />}
+                                      onClick={() => { setRevertOrder(order); setRevertRemark('') }}
+                                    >
+                                      Revert
+                                    </Button>
+                                  </>
                                 )}
                                 {order.status === 'REJECTED' && (
                                   <Button
@@ -301,21 +333,21 @@ export default function ApprovalsPage() {
       >
         {selectedReport && (
           <div>
-            <div className="mb-5 grid grid-cols-1 gap-3 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2">
+            <div className="mb-5 grid grid-cols-1 gap-3 rounded-xl bg-gray-50 p-4 text-sm sm:grid-cols-2">
               <div>
-                <span className="text-slate-400">Patient:</span>{' '}
-                <span className="font-medium text-slate-800">{selectedReport.order.patient?.fullName ?? '—'}</span>
+                <span className="text-gray-400">Patient:</span>{' '}
+                <span className="font-medium text-gray-800">{selectedReport.order.patient?.fullName ?? '—'}</span>
               </div>
               <div>
-                <span className="text-slate-400">Code:</span>{' '}
-                <span className="font-mono text-slate-700">{selectedReport.order.patient?.patientCode ?? '—'}</span>
+                <span className="text-gray-400">Code:</span>{' '}
+                <span className="font-mono text-gray-700">{selectedReport.order.patient?.patientCode ?? '—'}</span>
               </div>
               <div>
-                <span className="text-slate-400">Test:</span>{' '}
-                <span className="font-medium text-slate-800">{selectedReport.order.template?.name ?? '—'}</span>
+                <span className="text-gray-400">Test:</span>{' '}
+                <span className="font-medium text-gray-800">{selectedReport.order.template?.name ?? '—'}</span>
               </div>
               <div>
-                <span className="text-slate-400">Status:</span>{' '}
+                <span className="text-gray-400">Status:</span>{' '}
                 <OrderStatusBadge status={selectedReport.order.status} />
               </div>
             </div>
@@ -324,22 +356,65 @@ export default function ApprovalsPage() {
               {selectedReport.results
                 .filter(r => !r.isSectionHeader)
                 .map((result, i) => (
-                  <div key={i} className="rounded-xl border border-slate-200 bg-white p-4">
-                    <p className="text-xs uppercase tracking-wide text-slate-400">{result.fieldName}</p>
-                    <p className="mt-1 text-lg font-bold text-slate-900">
+                  <div key={i} className="rounded-xl border border-gray-200 bg-white p-4">
+                    <p className="text-xs uppercase tracking-wide text-gray-400">{result.fieldName}</p>
+                    <p className="mt-1 text-lg font-bold text-gray-900">
                       {String(result.value ?? '—')}
                       {result.unit && (
-                        <span className="ml-1.5 text-sm font-normal text-slate-400">{result.unit}</span>
+                        <span className="ml-1.5 text-sm font-normal text-gray-400">{result.unit}</span>
                       )}
                     </p>
                     {result.referenceRange && (
-                      <p className="mt-0.5 text-xs text-slate-400">Ref: {result.referenceRange}</p>
+                      <p className="mt-0.5 text-xs text-gray-400">Ref: {result.referenceRange}</p>
                     )}
                   </div>
                 ))}
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Revert Approved Order */}
+      <Modal
+        open={!!revertOrder}
+        onClose={() => { setRevertOrder(null); setRevertRemark('') }}
+        title={`Revert Order #${revertOrder?.id ?? ''}`}
+        subtitle={`${revertOrder?.patient?.fullName ?? ''} · ${revertOrder?.template?.name ?? ''}`}
+        size="sm"
+        footer={
+          <div className="flex gap-3">
+            <Button variant="secondary" onClick={() => { setRevertOrder(null); setRevertRemark('') }}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              icon={<Undo2 className="h-4 w-4" />}
+              loading={revert.isPending}
+              disabled={!revertRemark.trim()}
+              onClick={() => revertOrder && revert.mutate({ orderId: revertOrder.id, remark: revertRemark })}
+            >
+              Revert &amp; Unlock
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            This will unlock the order so the lab user can correct and re-submit the results for approval again.
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-semibold text-gray-700">
+              Reason for reverting <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={revertRemark}
+              onChange={e => setRevertRemark(e.target.value)}
+              placeholder="e.g. Haemoglobin value was incorrectly entered"
+              rows={3}
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500/20 resize-none"
+            />
+          </div>
+        </div>
       </Modal>
 
       {/* Reopen Order */}
@@ -376,3 +451,4 @@ export default function ApprovalsPage() {
     </div>
   )
 }
+

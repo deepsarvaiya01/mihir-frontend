@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -68,16 +68,16 @@ export default function TemplatesPage() {
           <Card key={template.id} hover>
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-4">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50">
-                  <FlaskConical className="h-5 w-5 text-indigo-600" />
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50">
+                  <FlaskConical className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-bold text-slate-800">{template.name}</h3>
-                    <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-mono text-slate-500">{template.code}</span>
+                    <h3 className="font-bold text-gray-800">{template.name}</h3>
+                    <span className="rounded-lg bg-gray-100 px-2 py-0.5 text-xs font-mono text-gray-500">{template.code}</span>
                     <Badge variant={template.active ? 'success' : 'default'} dot>{template.active ? 'Active' : 'Inactive'}</Badge>
                   </div>
-                  <div className="mt-1 flex items-center gap-3 text-xs text-slate-400">
+                  <div className="mt-1 flex items-center gap-3 text-xs text-gray-400">
                     <span>{template.fields?.length ?? 0} field{(template.fields?.length ?? 0) !== 1 ? 's' : ''}</span>
                     {template.amount > 0 && <span>Default: ₹{Number(template.amount).toLocaleString()}</span>}
                     {(template.b2bPrices?.length ?? 0) > 0 && (
@@ -91,8 +91,8 @@ export default function TemplatesPage() {
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <button onClick={() => toggleActive.mutate({ id: template.id, active: !template.active })}
-                  className="text-slate-400 hover:text-indigo-600 transition-colors" title={template.active ? 'Deactivate' : 'Activate'}>
-                  {template.active ? <ToggleRight className="h-6 w-6 text-indigo-600" /> : <ToggleLeft className="h-6 w-6" />}
+                  className="text-gray-400 hover:text-blue-600 transition-colors" title={template.active ? 'Deactivate' : 'Activate'}>
+                  {template.active ? <ToggleRight className="h-6 w-6 text-blue-600" /> : <ToggleLeft className="h-6 w-6" />}
                 </button>
                 <Button variant="ghost" size="sm"
                   icon={expandedId === template.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -100,30 +100,30 @@ export default function TemplatesPage() {
                   {expandedId === template.id ? 'Collapse' : 'Details'}
                 </Button>
                 <button onClick={() => navigate(`/templates/${template.id}/edit`)}
-                  className="rounded-lg p-1.5 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors" title="Edit template">
+                  className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600 transition-colors" title="Edit template">
                   <Pencil className="h-4 w-4" />
                 </button>
                 <button onClick={() => setDeleteTemplate(template)}
-                  className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors" title="Delete template">
+                  className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors" title="Delete template">
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
             </div>
 
             {expandedId === template.id && (
-              <div className="mt-4 border-t border-slate-100 pt-4 space-y-4">
+              <div className="mt-4 border-t border-gray-100 pt-4 space-y-4">
                 <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Fields</p>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Fields</p>
                   {template.fields && template.fields.length > 0 ? (
                     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                       {template.fields.map(field => (
-                        <div key={field.id} className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <div key={field.id} className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
                               {field.fieldType === 'calculated' && <Calculator className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
-                              <p className="truncate text-sm font-medium text-slate-700">{field.fieldName}</p>
+                              <p className="truncate text-sm font-medium text-gray-700">{field.fieldName}</p>
                             </div>
-                            {field.unit && <p className="text-xs text-slate-400">Unit: {field.unit}</p>}
+                            {field.unit && <p className="text-xs text-gray-400">Unit: {field.unit}</p>}
                           </div>
                           <div className="flex shrink-0 items-center gap-1.5 ml-2">
                             <Badge variant={fieldTypeBadgeVariants[field.fieldType]}>{fieldTypeLabels[field.fieldType]}</Badge>
@@ -133,17 +133,17 @@ export default function TemplatesPage() {
                       ))}
                     </div>
                   ) : (
-                    <div className="rounded-xl border-2 border-dashed border-slate-200 p-4 text-center">
-                      <Tag className="mx-auto mb-2 h-6 w-6 text-slate-300" />
-                      <p className="text-sm text-slate-400">No fields.{' '}
-                        <button className="text-indigo-600 hover:underline" onClick={() => navigate(`/templates/${template.id}/edit`)}>Add fields →</button>
+                    <div className="rounded-xl border-2 border-dashed border-gray-200 p-4 text-center">
+                      <Tag className="mx-auto mb-2 h-6 w-6 text-gray-300" />
+                      <p className="text-sm text-gray-400">No fields.{' '}
+                        <button className="text-blue-600 hover:underline" onClick={() => navigate(`/templates/${template.id}/edit`)}>Add fields →</button>
                       </p>
                     </div>
                   )}
                 </div>
                 {(template.b2bPrices?.length ?? 0) > 0 && (
                   <div>
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">B2B Pricing</p>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">B2B Pricing</p>
                     <div className="flex flex-wrap gap-2">
                       {template.b2bPrices.map(p => (
                         <div key={p.id} className="flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs">
@@ -170,3 +170,4 @@ export default function TemplatesPage() {
     </div>
   )
 }
+

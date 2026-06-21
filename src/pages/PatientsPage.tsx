@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -53,9 +53,9 @@ function Pagination({
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-      <p className="text-sm text-slate-500">
-        Showing <span className="font-semibold text-slate-700">{from}–{to}</span> of{' '}
-        <span className="font-semibold text-slate-700">{total}</span> patients
+      <p className="text-sm text-gray-500">
+        Showing <span className="font-semibold text-gray-700">{from}–{to}</span> of{' '}
+        <span className="font-semibold text-gray-700">{total}</span> patients
       </p>
       <div className="flex items-center gap-2">
         {/* Page size */}
@@ -63,17 +63,17 @@ function Pagination({
           <select
             value={pageSize}
             onChange={e => onPageSize(Number(e.target.value))}
-            className="appearance-none rounded-lg border border-slate-200 bg-white py-1.5 pl-3 pr-7 text-sm text-slate-700 outline-none focus:border-indigo-400"
+            className="appearance-none rounded-lg border border-gray-200 bg-white py-1.5 pl-3 pr-7 text-sm text-gray-700 outline-none focus:border-blue-400"
           >
             {PAGE_SIZES.map(s => <option key={s} value={s}>{s} / page</option>)}
           </select>
-          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
         </div>
 
         {/* Prev */}
         <button
           onClick={() => onPage(page - 1)} disabled={page === 1}
-          className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
@@ -81,15 +81,15 @@ function Pagination({
         {/* Pages */}
         {pages.map((p, i) =>
           p === '…' ? (
-            <span key={`e${i}`} className="px-1 text-sm text-slate-400">…</span>
+            <span key={`e${i}`} className="px-1 text-sm text-gray-400">…</span>
           ) : (
             <button
               key={p}
               onClick={() => onPage(p as number)}
               className={`h-8 min-w-[32px] rounded-lg border px-2 text-sm font-medium transition-colors ${
                 p === page
-                  ? 'border-indigo-500 bg-indigo-600 text-white shadow-sm'
-                  : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                  ? 'border-blue-500 bg-blue-600 text-white shadow-sm'
+                  : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
               }`}
             >
               {p}
@@ -100,7 +100,7 @@ function Pagination({
         {/* Next */}
         <button
           onClick={() => onPage(page + 1)} disabled={page >= totalPages}
-          className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
         >
           <ChevronRight className="h-4 w-4" />
         </button>
@@ -175,12 +175,12 @@ export default function PatientsPage() {
         <div className="flex flex-wrap items-center gap-3">
           {/* Search */}
           <div className="relative flex-1 min-w-[200px] max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Name, code, phone, city..."
-              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-4 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+              className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-4 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
             />
           </div>
 
@@ -189,14 +189,14 @@ export default function PatientsPage() {
             <select
               value={genderFilter}
               onChange={e => setGenderFilter(e.target.value)}
-              className="appearance-none rounded-xl border border-slate-200 bg-white py-2.5 pl-4 pr-9 text-sm text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+              className="appearance-none rounded-xl border border-gray-200 bg-white py-2.5 pl-4 pr-9 text-sm text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
             >
               <option value="">All Genders</option>
               <option value="Male">Male</option>
               <option value="Female">Female</option>
               <option value="Other">Other</option>
             </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           </div>
 
           {/* Type */}
@@ -204,25 +204,25 @@ export default function PatientsPage() {
             <select
               value={typeFilter}
               onChange={e => setTypeFilter(e.target.value as typeof typeFilter)}
-              className="appearance-none rounded-xl border border-slate-200 bg-white py-2.5 pl-4 pr-9 text-sm text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+              className="appearance-none rounded-xl border border-gray-200 bg-white py-2.5 pl-4 pr-9 text-sm text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
             >
               <option value="ALL">All Types</option>
               <option value="INDIVIDUAL">Individual</option>
               <option value="B2B">B2B</option>
             </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           </div>
 
           {/* Refresh */}
           <button
             onClick={() => refetch()}
             title="Refresh"
-            className={`flex h-[42px] w-[42px] items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition-colors hover:bg-slate-50 hover:text-indigo-600 ${isFetching ? 'animate-spin text-indigo-500' : ''}`}
+            className={`flex h-[42px] w-[42px] items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 hover:text-blue-600 ${isFetching ? 'animate-spin text-blue-500' : ''}`}
           >
             <RefreshCw className="h-4 w-4" />
           </button>
 
-          <span className="ml-auto text-sm text-slate-400">
+          <span className="ml-auto text-sm text-gray-400">
             {filtered.length} patient{filtered.length !== 1 ? 's' : ''}
           </span>
         </div>
@@ -245,61 +245,61 @@ export default function PatientsPage() {
           <EmptyState icon={<Search className="h-10 w-10" />} title="No results" description="Try adjusting your search or filters" />
         ) : (
           <>
-            <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
               <table className="min-w-[780px] w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50 text-left">
-                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-400">#</th>
-                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-400">Patient</th>
-                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-400">Age / Gender</th>
-                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-400">Contact</th>
-                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-400">City</th>
-                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-400">Status</th>
-                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-slate-400">Report Date</th>
-                    <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">Actions</th>
+                  <tr className="border-b border-gray-100 bg-gray-50 text-left">
+                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400">#</th>
+                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Patient</th>
+                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Age / Gender</th>
+                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Contact</th>
+                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400">City</th>
+                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Status</th>
+                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Report Date</th>
+                    <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-400">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-50">
+                <tbody className="divide-y divide-gray-50">
                   {paginated.map((patient, idx) => (
-                    <tr key={patient.id} className="group hover:bg-slate-50/60 transition-colors">
+                    <tr key={patient.id} className="group hover:bg-gray-50/60 transition-colors">
                       {/* # */}
-                      <td className="px-5 py-3.5 text-xs text-slate-400 font-mono">
+                      <td className="px-5 py-3.5 text-xs text-gray-400 font-mono">
                         {(safePage - 1) * pageSize + idx + 1}
                       </td>
 
                       {/* Patient */}
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-sm font-bold text-indigo-600">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-600">
                             {patient.fullName.charAt(0).toUpperCase()}
                           </div>
                           <div>
-                            <p className="font-semibold text-slate-800">{patient.fullName}</p>
-                            <p className="text-xs font-mono text-slate-400">{patient.patientCode}</p>
+                            <p className="font-semibold text-gray-800">{patient.fullName}</p>
+                            <p className="text-xs font-mono text-gray-400">{patient.patientCode}</p>
                           </div>
                         </div>
                       </td>
 
                       {/* Age / Gender */}
-                      <td className="px-5 py-3.5 text-slate-600">
+                      <td className="px-5 py-3.5 text-gray-600">
                         {patient.age || patient.gender ? (
                           <span>
                             {patient.age ? `${patient.age} yrs` : '—'}
-                            {patient.gender ? <span className="ml-1.5 text-slate-400">· {patient.gender}</span> : null}
+                            {patient.gender ? <span className="ml-1.5 text-gray-400">· {patient.gender}</span> : null}
                           </span>
-                        ) : <span className="text-slate-300">—</span>}
+                        ) : <span className="text-gray-300">—</span>}
                       </td>
 
                       {/* Contact */}
-                      <td className="px-5 py-3.5 text-slate-600">
-                        {patient.phoneNumber ?? <span className="text-slate-300">—</span>}
+                      <td className="px-5 py-3.5 text-gray-600">
+                        {patient.phoneNumber ?? <span className="text-gray-300">—</span>}
                       </td>
 
                       {/* City */}
-                      <td className="px-5 py-3.5 text-slate-600 max-w-[140px] truncate">
+                      <td className="px-5 py-3.5 text-gray-600 max-w-[140px] truncate">
                         {patient.city
                           ? [patient.city, patient.state].filter(Boolean).join(', ')
-                          : <span className="text-slate-300">—</span>}
+                          : <span className="text-gray-300">—</span>}
                       </td>
 
                       {/* Status */}
@@ -308,10 +308,10 @@ export default function PatientsPage() {
                       </td>
 
                       {/* Report Date */}
-                      <td className="px-5 py-3.5 text-xs text-slate-500">
+                      <td className="px-5 py-3.5 text-xs text-gray-500">
                         {patient.reportDate
                           ? new Date(patient.reportDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-                          : <span className="text-slate-300">—</span>}
+                          : <span className="text-gray-300">—</span>}
                       </td>
 
                       {/* Actions */}
@@ -319,14 +319,14 @@ export default function PatientsPage() {
                         <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             onClick={() => navigate(`/patients/${patient.id}/edit`)}
-                            className="rounded-lg p-1.5 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
+                            className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"
                             title="Edit"
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </button>
                           <button
                             onClick={() => setDeletePatient(patient)}
-                            className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                            className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
                             title="Delete"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -365,3 +365,4 @@ export default function PatientsPage() {
     </div>
   )
 }
+

@@ -1,10 +1,4 @@
-type BadgeVariant =
-  | 'default'
-  | 'success'
-  | 'warning'
-  | 'danger'
-  | 'info'
-  | 'purple'
+type BadgeVariant = 'default' | 'success' | 'warning' | 'danger' | 'info' | 'purple'
 
 interface BadgeProps {
   children: React.ReactNode
@@ -13,160 +7,47 @@ interface BadgeProps {
   className?: string
 }
 
-const variants: Record<BadgeVariant, string> = {
-  default: 'bg-slate-100 text-slate-600',
-  success: 'bg-emerald-100 text-emerald-700',
-  warning: 'bg-amber-100 text-amber-700',
-  danger: 'bg-rose-100 text-rose-700',
-  info: 'bg-blue-100 text-blue-700',
-  purple: 'bg-violet-100 text-violet-700',
+const variantStyles: Record<BadgeVariant, string> = {
+  default: 'bg-gray-100 text-gray-600 ring-gray-200',
+  success: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  warning: 'bg-amber-50 text-amber-700 ring-amber-200',
+  danger:  'bg-red-50 text-red-700 ring-red-200',
+  info:    'bg-blue-50 text-blue-700 ring-blue-200',
+  purple:  'bg-violet-50 text-violet-700 ring-violet-200',
 }
 
-const dotColors: Record<BadgeVariant, string> = {
-  default: 'bg-slate-400',
+const dotStyles: Record<BadgeVariant, string> = {
+  default: 'bg-gray-400',
   success: 'bg-emerald-500',
   warning: 'bg-amber-500',
-  danger: 'bg-rose-500',
-  info: 'bg-blue-500',
-  purple: 'bg-violet-500',
+  danger:  'bg-red-500',
+  info:    'bg-blue-500',
+  purple:  'bg-violet-500',
 }
 
-export function Badge({
-  children,
-  variant = 'default',
-  dot = false,
-  className = '',
-}: BadgeProps) {
+export function Badge({ children, variant = 'default', dot = false, className = '' }: BadgeProps) {
   return (
     <span
       className={`
-        inline-flex
-        items-center
-        justify-center
-        gap-1.5
-
-        rounded-full
-
-        px-3
-        py-1.5
-
-        text-xs
-        font-medium
-        leading-tight
-
-        ${variants[variant]}
-        ${className}
+        inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5
+        text-xs font-medium ring-1
+        ${variantStyles[variant]} ${className}
       `}
     >
-      {dot && (
-        <span
-          className={`
-            h-2
-            w-2
-            flex-shrink-0
-            rounded-full
-            ${dotColors[variant]}
-          `}
-        />
-      )}
-
-      <span>{children}</span>
+      {dot && <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotStyles[variant]}`} />}
+      {children}
     </span>
   )
 }
 
-export function OrderStatusBadge({
-  status,
-}: {
-  status: string
-}) {
-  const map: Record<
-    string,
-    { variant: BadgeVariant; label: string }
-  > = {
-    PENDING: {
-      variant: 'default',
-      label: 'Pending',
-    },
-
-    IN_PROGRESS: {
-      variant: 'info',
-      label: 'In Progress',
-    },
-
-    AWAITING_APPROVAL: {
-      variant: 'warning',
-      label: 'Awaiting Approval',
-    },
-
-    APPROVED: {
-      variant: 'success',
-      label: 'Approved',
-    },
-
-    REJECTED: {
-      variant: 'danger',
-      label: 'Rejected',
-    },
+export function OrderStatusBadge({ status }: { status: string }) {
+  const map: Record<string, { variant: BadgeVariant; label: string }> = {
+    PENDING:           { variant: 'default',  label: 'Pending' },
+    IN_PROGRESS:       { variant: 'info',     label: 'In Progress' },
+    AWAITING_APPROVAL: { variant: 'warning',  label: 'Awaiting Approval' },
+    APPROVED:          { variant: 'success',  label: 'Approved' },
+    REJECTED:          { variant: 'danger',   label: 'Rejected' },
   }
-
-  const cfg = map[status] ?? {
-    variant: 'default' as BadgeVariant,
-    label: status.replace(/_/g, ' '),
-  }
-
-  const isAwaiting =
-    cfg.label === 'Awaiting Approval'
-
-  return (
-    <div className="flex">
-      <Badge
-        variant={cfg.variant}
-        dot
-        className={`
-          ${
-            isAwaiting
-              ? `
-                max-w-[92px]
-
-                whitespace-normal
-                break-words
-
-                rounded-full
-
-                px-2.5
-                py-1.5
-
-                text-[11px]
-                leading-[1.15]
-
-                items-center
-                justify-center
-
-                sm:max-w-none
-                sm:whitespace-nowrap
-              `
-              : ''
-          }
-        `}
-      >
-        {isAwaiting ? (
-          <>
-            {/* Mobile View */}
-            <span className="flex flex-col leading-[1.15] sm:hidden">
-              <span>Awaiting</span>
-              <span>Approval</span>
-            </span>
-
-            {/* Desktop View */}
-            <span className="hidden sm:inline">
-              Awaiting Approval
-            </span>
-          </>
-        ) : (
-          cfg.label
-        )}
-      </Badge>
-    </div>
-  )
+  const cfg = map[status] ?? { variant: 'default' as BadgeVariant, label: status.replace(/_/g, ' ') }
+  return <Badge variant={cfg.variant} dot>{cfg.label}</Badge>
 }

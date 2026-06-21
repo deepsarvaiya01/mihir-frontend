@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Search, Receipt, ChevronDown, DollarSign,
@@ -14,6 +14,7 @@ import { Badge } from '../components/ui/Badge'
 import { orderService } from '../services/orders'
 import { labSettingsService } from '../services/labSettings'
 import { signatureService } from '../services/signatures'
+import { logoService } from '../services/logos'
 import { generateLabReport } from '../utils/generateReport'
 import type { Order, PaymentStatus, PaymentType } from '../types'
 import { toast } from 'sonner'
@@ -120,14 +121,14 @@ function PaymentModal({ order, onClose, onSave, saving }: PaymentModalProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
         {/* header */}
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
           <div>
-            <h2 className="text-base font-semibold text-slate-900">Update Payment — Order #{order.id}</h2>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <h2 className="text-base font-semibold text-gray-900">Update Payment — Order #{order.id}</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
               {order.patient?.fullName} · {order.template?.name}
             </p>
           </div>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+          <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -136,41 +137,41 @@ function PaymentModal({ order, onClose, onSave, saving }: PaymentModalProps) {
           {/* Amount + Discount row */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Amount (₹)
               </label>
               <input
                 type="number" min="0" step="0.01"
                 value={form.amount}
                 onChange={e => set('amount', e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Discount (%)
               </label>
               <input
                 type="number" min="0" max="100" step="0.5"
                 value={form.discount}
                 onChange={e => set('discount', e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:border-indigo-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               />
             </div>
           </div>
 
           {/* Net amount (read-only calculated) */}
-          <div className="flex items-center justify-between rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3">
-            <span className="text-sm font-medium text-indigo-700">Net Amount</span>
-            <span className="text-xl font-bold text-indigo-800">
+          <div className="flex items-center justify-between rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+            <span className="text-sm font-medium text-blue-700">Net Amount</span>
+            <span className="text-xl font-bold text-blue-800">
               ₹{netAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
             </span>
           </div>
 
           {/* Payment status */}
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Payment Status <span className="text-rose-500">*</span>
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Payment Status <span className="text-red-500">*</span>
             </label>
             <div className="grid grid-cols-3 gap-2">
               {(['PENDING', 'PARTIAL', 'PAID'] as PaymentStatus[]).map(s => (
@@ -184,7 +185,7 @@ function PaymentModal({ order, onClose, onSave, saving }: PaymentModalProps) {
                         : s === 'PARTIAL'
                           ? 'border-blue-400 bg-blue-50 text-blue-700'
                           : 'border-amber-400 bg-amber-50 text-amber-700'
-                      : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                      : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
                   }`}
                 >
                   {s.charAt(0) + s.slice(1).toLowerCase()}
@@ -195,7 +196,7 @@ function PaymentModal({ order, onClose, onSave, saving }: PaymentModalProps) {
 
           {/* Payment method */}
           <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">
               Payment Method
             </label>
             <div className="grid grid-cols-4 gap-2">
@@ -205,8 +206,8 @@ function PaymentModal({ order, onClose, onSave, saving }: PaymentModalProps) {
                   onClick={() => set('paymentType', m)}
                   className={`rounded-xl border-2 py-2.5 text-sm font-semibold transition-all ${
                     form.paymentType === m
-                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                      : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
                   }`}
                 >
                   {m === '' ? 'None' : m.charAt(0) + m.slice(1).toLowerCase()}
@@ -216,26 +217,26 @@ function PaymentModal({ order, onClose, onSave, saving }: PaymentModalProps) {
           </div>
 
           {/* Receipt number info */}
-          <div className="flex items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Receipt #</span>
-            <span className="font-mono text-sm text-slate-600">
-              {order.receiptNumber ?? <span className="italic text-slate-400">Auto-generated on save</span>}
+          <div className="flex items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+            <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">Receipt #</span>
+            <span className="font-mono text-sm text-gray-600">
+              {order.receiptNumber ?? <span className="italic text-gray-400">Auto-generated on save</span>}
             </span>
           </div>
         </div>
 
         {/* footer */}
-        <div className="flex justify-end gap-3 border-t border-slate-100 px-6 py-4">
+        <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
           <button
             onClick={onClose}
-            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
           >
             Cancel
           </button>
           <button
             onClick={() => onSave(order.id, form)}
             disabled={saving}
-            className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
+            className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
           >
             {saving && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
             Save Changes
@@ -266,6 +267,10 @@ export default function BillingPage() {
   const { data: activeSignature = null } = useQuery({
     queryKey: ['active-signature'],
     queryFn: signatureService.getActive,
+  })
+  const { data: activeLogo = null } = useQuery({
+    queryKey: ['logos', 'active'],
+    queryFn: logoService.getActive,
   })
 
   const updatePayment = useMutation({
@@ -300,6 +305,7 @@ export default function BillingPage() {
         })),
         labSettings,
         signature: activeSignature,
+        activeLogo,
       })
       toast.success('Report downloaded')
     },
@@ -334,12 +340,12 @@ export default function BillingPage() {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Card padding="md">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100">
-                <DollarSign className="h-5 w-5 text-indigo-600" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100">
+                <DollarSign className="h-5 w-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Total Billed</p>
-                <p className="text-xl font-bold text-slate-900">₹{totalRevenue.toLocaleString()}</p>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Total Billed</p>
+                <p className="text-xl font-bold text-gray-900">₹{totalRevenue.toLocaleString()}</p>
               </div>
             </div>
           </Card>
@@ -349,7 +355,7 @@ export default function BillingPage() {
                 <CheckCircle className="h-5 w-5 text-emerald-600" />
               </div>
               <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Collected</p>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Collected</p>
                 <p className="text-xl font-bold text-emerald-700">₹{paidRevenue.toLocaleString()}</p>
               </div>
             </div>
@@ -360,7 +366,7 @@ export default function BillingPage() {
                 <Clock className="h-5 w-5 text-amber-600" />
               </div>
               <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Pending</p>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Pending</p>
                 <p className="text-xl font-bold text-amber-700">₹{pendingRevenue.toLocaleString()}</p>
               </div>
             </div>
@@ -371,7 +377,7 @@ export default function BillingPage() {
                 <FileText className="h-5 w-5 text-violet-600" />
               </div>
               <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Reports Ready</p>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Reports Ready</p>
                 <p className="text-xl font-bold text-violet-700">{approvedCount}</p>
               </div>
             </div>
@@ -381,34 +387,34 @@ export default function BillingPage() {
         {/* Filters */}
         <div className="flex flex-wrap gap-3">
           <div className="relative flex-1 min-w-[220px] max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search by patient, order #, receipt..."
-              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-4 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+              className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-4 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
             />
           </div>
           <div className="relative">
             <select
               value={paymentFilter}
               onChange={e => setPaymentFilter(e.target.value as PaymentFilter)}
-              className="appearance-none rounded-xl border border-slate-200 bg-white py-2.5 pl-4 pr-9 text-sm text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+              className="appearance-none rounded-xl border border-gray-200 bg-white py-2.5 pl-4 pr-9 text-sm text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
             >
               <option value="ALL">All Payment Statuses</option>
               <option value="PAID">Paid</option>
               <option value="PENDING">Pending</option>
               <option value="PARTIAL">Partial</option>
             </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           </div>
           <button
             onClick={() => refetch()}
-            className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
           >
             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
-          <span className="self-center ml-auto text-sm text-slate-500">
+          <span className="self-center ml-auto text-sm text-gray-500">
             {filtered.length} record{filtered.length !== 1 ? 's' : ''}
           </span>
         </div>
@@ -425,54 +431,54 @@ export default function BillingPage() {
         ) : filtered.length === 0 ? (
           <EmptyState icon={<Search className="h-10 w-10" />} title="No records found" description="Try adjusting your search or filter" />
         ) : (
-          <div className="overflow-x-auto overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="overflow-x-auto overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-100 bg-slate-50">
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Order</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Patient</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Test</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Amount</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Net</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Method</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Payment</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-400">Receipt #</th>
-                  <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-slate-400">Actions</th>
+                <tr className="border-b border-gray-100 bg-gray-50">
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Order</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Patient</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Test</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Amount</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Net</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Method</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Payment</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Receipt #</th>
+                  <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-400">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
+              <tbody className="divide-y divide-gray-50">
                 {filtered.map(order => (
-                  <tr key={order.id} className="group hover:bg-slate-50/60 transition-colors">
+                  <tr key={order.id} className="group hover:bg-gray-50/60 transition-colors">
                     <td className="px-5 py-4">
-                      <span className="font-bold text-slate-700">#{order.id}</span>
-                      <p className="text-[11px] text-slate-400">{order.createdAt ? new Date(order.createdAt).toLocaleDateString() : ''}</p>
+                      <span className="font-bold text-gray-700">#{order.id}</span>
+                      <p className="text-[11px] text-gray-400">{order.createdAt ? new Date(order.createdAt).toLocaleDateString() : ''}</p>
                     </td>
                     <td className="px-5 py-4">
-                      <p className="font-semibold text-slate-800">{order.patient?.fullName ?? '—'}</p>
-                      <p className="text-xs text-slate-400">{order.patient?.patientCode ?? ''}</p>
+                      <p className="font-semibold text-gray-800">{order.patient?.fullName ?? '—'}</p>
+                      <p className="text-xs text-gray-400">{order.patient?.patientCode ?? ''}</p>
                     </td>
-                    <td className="px-5 py-4 text-slate-600 max-w-[160px] truncate">{order.template?.name ?? '—'}</td>
-                    <td className="px-5 py-4 text-slate-700">
+                    <td className="px-5 py-4 text-gray-600 max-w-[160px] truncate">{order.template?.name ?? '—'}</td>
+                    <td className="px-5 py-4 text-gray-700">
                       <span>₹{Number(order.amount ?? 0).toLocaleString()}</span>
                       {(order.discount ?? 0) > 0 && (
                         <span className="ml-1.5 text-xs text-emerald-600">−{order.discount}%</span>
                       )}
                     </td>
-                    <td className="px-5 py-4 font-bold text-slate-900">₹{Number(order.netAmount ?? 0).toLocaleString()}</td>
+                    <td className="px-5 py-4 font-bold text-gray-900">₹{Number(order.netAmount ?? 0).toLocaleString()}</td>
                     <td className="px-5 py-4">
                       {order.paymentType ? (
-                        <span className="inline-flex items-center rounded-lg bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700 capitalize">
+                        <span className="inline-flex items-center rounded-lg bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700 capitalize">
                           {order.paymentType.toLowerCase()}
                         </span>
-                      ) : <span className="text-slate-300">—</span>}
+                      ) : <span className="text-gray-300">—</span>}
                     </td>
                     <td className="px-5 py-4">
                       <Badge variant={PAYMENT_VARIANTS[order.paymentStatus] ?? 'default'} dot>
                         {order.paymentStatus?.charAt(0) + order.paymentStatus?.slice(1).toLowerCase()}
                       </Badge>
                     </td>
-                    <td className="px-5 py-4 font-mono text-xs text-slate-500">
-                      {order.receiptNumber ?? <span className="text-slate-300">—</span>}
+                    <td className="px-5 py-4 font-mono text-xs text-gray-500">
+                      {order.receiptNumber ?? <span className="text-gray-300">—</span>}
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex justify-end gap-2">
@@ -529,3 +535,4 @@ export default function BillingPage() {
     </div>
   )
 }
+

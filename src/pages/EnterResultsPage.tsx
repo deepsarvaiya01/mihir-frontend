@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react'
+﻿import { useRef, useState, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -6,9 +6,13 @@ import {
   Calculator,
   CheckCircle2,
   FileText,
+  Info,
+  Lock,
   Paperclip,
+  Save,
   Send,
   Trash2,
+  Undo2,
   Upload,
   User,
 } from 'lucide-react'
@@ -22,19 +26,23 @@ import type { TestTemplateField } from '../types'
 function evalFormula(optionsJson: string | null, values: Record<number, string | boolean>): number {
   if (!optionsJson) return 0
   try {
-    const steps: Array<{ fieldId?: number; op?: string }> = JSON.parse(optionsJson)
+    const steps: Array<{ fieldId?: number; op?: string; value?: number }> = JSON.parse(optionsJson)
     let result = 0
     let pendingOp: string | null = null
     let isFirst = true
+    const applyOp = (val: number) => {
+      if (isFirst) { result = val; isFirst = false; return }
+      if (pendingOp === '+') result += val
+      else if (pendingOp === '-') result -= val
+      else if (pendingOp === '*') result *= val
+      else if (pendingOp === '/') result = val !== 0 ? result / val : 0
+      pendingOp = null
+    }
     for (const step of steps) {
       if ('fieldId' in step && step.fieldId !== undefined) {
-        const val = Number(values[step.fieldId] ?? 0) || 0
-        if (isFirst) { result = val; isFirst = false }
-        else if (pendingOp === '+') result += val
-        else if (pendingOp === '-') result -= val
-        else if (pendingOp === '*') result *= val
-        else if (pendingOp === '/') result = val !== 0 ? result / val : 0
-        pendingOp = null
+        applyOp(Number(values[step.fieldId] ?? 0) || 0)
+      } else if ('value' in step && step.value !== undefined) {
+        applyOp(Number(step.value) || 0)
       } else if ('op' in step) {
         pendingOp = step.op!
       }
@@ -54,10 +62,10 @@ function formatBytes(bytes: number): string {
 /* ─── card wrapper ───────────────────────────────────────── */
 function FormCard({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-center gap-2 border-b border-slate-100 px-6 py-4">
-        <span className="text-indigo-600">{icon}</span>
-        <h2 className="text-sm font-semibold text-slate-800">{title}</h2>
+    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="flex items-center gap-2 border-b border-gray-100 px-6 py-4">
+        <span className="text-blue-600">{icon}</span>
+        <h2 className="text-sm font-semibold text-gray-800">{title}</h2>
       </div>
       <div className="px-6 py-5">{children}</div>
     </div>
@@ -92,14 +100,14 @@ function ResultField({
 
   if (field.fieldType === 'checkbox') {
     return (
-      <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 hover:bg-slate-100">
+      <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 hover:bg-gray-100">
         <input
           type="checkbox"
           checked={Boolean(value)}
           onChange={e => onChange(field.id, e.target.checked)}
-          className="h-4 w-4 rounded border-slate-300 accent-indigo-600"
+          className="h-4 w-4 rounded border-gray-300 accent-blue-600"
         />
-        <span className="text-sm text-slate-700">{Boolean(value) ? 'Yes' : 'No'}</span>
+        <span className="text-sm text-gray-700">{Boolean(value) ? 'Yes' : 'No'}</span>
       </label>
     )
   }
@@ -136,61 +144,127 @@ export default function EnterResultsPage() {
   const [attachment, setAttachment] = useState<{ name: string; size: number; base64: string } | null>(null)
   const [dragOver, setDragOver] = useState(false)
 
+  /* ── Fetch order form (fields + order info) ── */
   const { data: form, isLoading, isError } = useQuery({
     queryKey: ['order-form', orderId],
     queryFn: () => orderService.getForm(orderId),
     enabled: !isNaN(orderId),
   })
 
-  // Reset values when form loads
+  /* ── Detect batch siblings (same receipt, different order) ── */
+  const { data: allOrders = [] } = useQuery({
+    queryKey: ['orders'],
+    queryFn: orderService.getAll,
+    staleTime: 30_000,
+    enabled: !!form?.order.receiptNumber,
+  })
+  const isBatchOrder = useMemo(() => {
+    if (!form?.order.receiptNumber) return false
+    return allOrders.some(o => o.receiptNumber === form.order.receiptNumber && o.id !== orderId)
+  }, [allOrders, form?.order.receiptNumber, orderId])
+
+  /* ── Fetch existing saved results for IN_PROGRESS orders ── */
+  const hasExisting = form?.order.status === 'IN_PROGRESS' || form?.order.status === 'AWAITING_APPROVAL'
+  const { data: existingResults } = useQuery({
+    queryKey: ['order-results', orderId],
+    queryFn: () => orderService.getResults(orderId),
+    enabled: !isNaN(orderId) && hasExisting,
+  })
+
+  /* ── Initialise form values ── */
   useEffect(() => {
-    if (form) setValues({})
+    if (!form) return
+    // Fresh order — start empty
+    if (form.order.status === 'PENDING') setValues({})
   }, [form?.order.id])
 
-  const submitMut = useMutation({
-    mutationFn: () =>
-      orderService.submitResults(orderId, {
-        // Section headers have no value — skip them
-        values: (form?.fields ?? []).filter(f => !f.isSectionHeader).map(field => ({
-          fieldId: field.id,
-          textValue: field.fieldType === 'text' || field.fieldType === 'select'
-            ? String(values[field.id] ?? '') : undefined,
-          numberValue: field.fieldType === 'number' && values[field.id] !== undefined
-            ? Number(values[field.id])
-            : field.fieldType === 'calculated'
-              ? evalFormula(field.optionsJson, values)
-              : undefined,
-          booleanValue: field.fieldType === 'checkbox' ? Boolean(values[field.id]) : undefined,
-          dateValue: field.fieldType === 'date' ? String(values[field.id] ?? '') : undefined,
-        })),
-        ...(attachment ? { attachmentBase64: attachment.base64, attachmentName: attachment.name } : {}),
-      }),
-    onSuccess: () => {
+  useEffect(() => {
+    if (!existingResults) return
+    // Pre-populate from previously saved results
+    const preloaded: Record<number, string | boolean> = {}
+    for (const r of existingResults.results) {
+      if (!r.isSectionHeader && r.fieldId !== undefined && r.value !== null) {
+        preloaded[r.fieldId] = typeof r.value === 'boolean' ? r.value : String(r.value)
+      }
+    }
+    setValues(preloaded)
+  }, [existingResults])
+
+  /* ── Build the payload for save/submit ── */
+  function buildPayload(isDraft: boolean) {
+    const nonSectionFields = (form?.fields ?? []).filter(f => !f.isSectionHeader)
+
+    // Draft: only send fields the user has actually touched — avoids writing blank placeholders
+    // Submit: send every field so the backend can verify completeness
+    const fieldsToSend = isDraft
+      ? nonSectionFields.filter(f => {
+          if (f.fieldType === 'calculated') return true
+          if (f.fieldType === 'checkbox') return values[f.id] !== undefined
+          const v = values[f.id]
+          return v !== undefined && v !== ''
+        })
+      : nonSectionFields
+
+    return {
+      values: fieldsToSend.map(field => ({
+        fieldId: field.id,
+        textValue: field.fieldType === 'text' || field.fieldType === 'select'
+          ? String(values[field.id] ?? '') : undefined,
+        numberValue: field.fieldType === 'number' && values[field.id] !== undefined
+          ? Number(values[field.id])
+          : field.fieldType === 'calculated'
+            ? evalFormula(field.optionsJson, values)
+            : undefined,
+        booleanValue: field.fieldType === 'checkbox' ? Boolean(values[field.id]) : undefined,
+        dateValue: field.fieldType === 'date' ? String(values[field.id] ?? '') : undefined,
+      })),
+      isDraft,
+      ...(attachment ? { attachmentBase64: attachment.base64, attachmentName: attachment.name } : {}),
+    }
+  }
+
+  /* ── Save / Submit mutation ── */
+  const saveMut = useMutation({
+    mutationFn: (isDraft: boolean) => orderService.submitResults(orderId, buildPayload(isDraft)),
+    onSuccess: (_, isDraft) => {
       qc.invalidateQueries({ queryKey: ['orders'] })
-      toast.success('Results submitted for approval')
-      navigate('/orders')
+      qc.invalidateQueries({ queryKey: ['order-form', orderId] })
+      qc.invalidateQueries({ queryKey: ['order-results', orderId] })
+      if (isDraft) {
+        toast.success('Results saved — you can continue later')
+        // Stay on page so user can keep entering values
+      } else {
+        toast.success('Results submitted for approval')
+        navigate('/orders')
+      }
     },
-    onError: (err: unknown) =>
-      toast.error(
-        (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-        || 'Failed to submit results'
-      ),
+    onError: (err: unknown, isDraft) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast.error(msg || (isDraft ? 'Failed to save' : 'Failed to submit'))
+    },
   })
+
+  /* ── Submit with required-field validation ── */
+  const handleSubmit = () => {
+    const missing = (form?.fields ?? [])
+      .filter(f => !f.isSectionHeader && f.required)
+      .filter(f => {
+        const val = values[f.id]
+        return val === undefined || val === '' || (typeof val === 'boolean' ? false : false)
+      })
+    if (missing.length > 0) {
+      toast.error(`Fill in required fields: ${missing.map(f => f.fieldName).join(', ')}`)
+      return
+    }
+    saveMut.mutate(false)
+  }
 
   /* ── PDF handling ── */
   const handlePdfFile = (file: File) => {
-    if (file.type !== 'application/pdf') {
-      toast.error('Only PDF files are allowed')
-      return
-    }
-    if (file.size > 15 * 1024 * 1024) {
-      toast.error('PDF must be under 15 MB')
-      return
-    }
+    if (file.type !== 'application/pdf') { toast.error('Only PDF files are allowed'); return }
+    if (file.size > 15 * 1024 * 1024) { toast.error('PDF must be under 15 MB'); return }
     const reader = new FileReader()
-    reader.onload = () => {
-      setAttachment({ name: file.name, size: file.size, base64: reader.result as string })
-    }
+    reader.onload = () => setAttachment({ name: file.name, size: file.size, base64: reader.result as string })
     reader.readAsDataURL(file)
   }
 
@@ -201,15 +275,13 @@ export default function EnterResultsPage() {
     if (file) handlePdfFile(file)
   }
 
-  /* ── guards ── */
-  if (isNaN(orderId)) {
-    return <div className="p-8 text-center text-slate-500">Invalid order ID.</div>
-  }
+  /* ── Guards ── */
+  if (isNaN(orderId)) return <div className="p-8 text-center text-gray-500">Invalid order ID.</div>
 
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
       </div>
     )
   }
@@ -217,8 +289,8 @@ export default function EnterResultsPage() {
   if (isError || !form) {
     return (
       <div className="p-8 text-center">
-        <p className="text-slate-500">Could not load order form.</p>
-        <button onClick={() => navigate('/orders')} className="mt-3 text-sm text-indigo-600 hover:underline">
+        <p className="text-gray-500">Could not load order form.</p>
+        <button onClick={() => navigate('/orders')} className="mt-3 text-sm text-blue-600 hover:underline">
           ← Back to Orders
         </button>
       </div>
@@ -226,50 +298,97 @@ export default function EnterResultsPage() {
   }
 
   const { order, fields } = form
+  const isLocked = order.status === 'APPROVED' || order.status === 'AWAITING_APPROVAL'
+  const requiredCount = inputFields.filter(f => f.required).length
+  const filledCount = inputFields.filter(f => {
+    const v = values[f.id]
+    return v !== undefined && v !== ''
+  }).length
 
   return (
     <div>
       {/* Sticky page header */}
-      <div className="sticky top-0 z-30 border-b border-slate-200 bg-white shadow-sm">
+      <div className="sticky top-0 z-30 border-b border-gray-200 bg-white shadow-sm">
         <div className="flex items-center gap-4 px-6 py-4">
           <button
             onClick={() => navigate('/orders')}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-800"
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
           <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-bold text-slate-900">
+            <h1 className="text-xl font-bold text-gray-900">
               Enter Results — Order #{order.id}
             </h1>
-            <p className="mt-0.5 text-sm text-slate-500">
+            <p className="mt-0.5 text-sm text-gray-500">
               {order.template?.name} · {order.patient?.fullName}
             </p>
           </div>
-          <OrderStatusBadge status={order.status} />
+          <div className="flex items-center gap-3">
+            {/* Progress indicator */}
+            {inputFields.length > 0 && (
+              <span className="hidden text-xs text-gray-400 sm:block">
+                {filledCount} / {inputFields.length} filled
+                {requiredCount > 0 && ` · ${requiredCount} required`}
+              </span>
+            )}
+            <OrderStatusBadge status={order.status} />
+          </div>
         </div>
       </div>
 
       <div className="mx-auto max-w-4xl space-y-6 p-6">
 
+        {/* Locked notice */}
+        {isLocked && (
+          <div className={`flex items-start gap-3 rounded-2xl border px-5 py-4 ${
+            order.status === 'APPROVED'
+              ? 'border-emerald-200 bg-emerald-50'
+              : 'border-amber-200 bg-amber-50'
+          }`}>
+            <Lock className={`mt-0.5 h-5 w-5 shrink-0 ${order.status === 'APPROVED' ? 'text-emerald-600' : 'text-amber-600'}`} />
+            <div className="flex-1 min-w-0">
+              <p className={`text-sm font-semibold ${order.status === 'APPROVED' ? 'text-emerald-800' : 'text-amber-800'}`}>
+                {order.status === 'APPROVED' ? 'Results Approved — Read Only' : 'Awaiting Approval — Read Only'}
+              </p>
+              <p className={`mt-0.5 text-xs ${order.status === 'APPROVED' ? 'text-emerald-700' : 'text-amber-700'}`}>
+                {order.status === 'APPROVED'
+                  ? 'These results have been approved and are locked. A SUPER_ADMIN can revert the order from the Approvals page if a correction is needed.'
+                  : 'This order has been submitted and is pending review. Results cannot be changed until it is approved or rejected.'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Revert remark notice (shown when order was previously approved & reverted) */}
+        {order.revertRemark && order.status === 'IN_PROGRESS' && (
+          <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-4">
+            <Undo2 className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+            <div>
+              <p className="text-sm font-semibold text-red-800">Reverted for Correction</p>
+              <p className="mt-0.5 text-xs text-red-700">{order.revertRemark}</p>
+            </div>
+          </div>
+        )}
+
         {/* Patient info */}
         <FormCard title="Patient Information" icon={<User className="h-4 w-4" />}>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Patient</p>
-              <p className="mt-0.5 font-semibold text-slate-800">{order.patient?.fullName ?? '—'}</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Patient</p>
+              <p className="mt-0.5 font-semibold text-gray-800">{order.patient?.fullName ?? '—'}</p>
             </div>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Code</p>
-              <p className="mt-0.5 font-mono text-sm text-slate-700">{order.patient?.patientCode ?? '—'}</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Code</p>
+              <p className="mt-0.5 font-mono text-sm text-gray-700">{order.patient?.patientCode ?? '—'}</p>
             </div>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Test</p>
-              <p className="mt-0.5 font-semibold text-slate-800">{order.template?.name ?? '—'}</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Test</p>
+              <p className="mt-0.5 font-semibold text-gray-800">{order.template?.name ?? '—'}</p>
             </div>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Order Date</p>
-              <p className="mt-0.5 text-sm text-slate-700">
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Order Date</p>
+              <p className="mt-0.5 text-sm text-gray-700">
                 {order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
               </p>
             </div>
@@ -279,7 +398,7 @@ export default function EnterResultsPage() {
         {/* Result fields */}
         <FormCard title="Test Results" icon={<FileText className="h-4 w-4" />}>
           {fields.length === 0 ? (
-            <p className="text-center text-sm text-slate-400">No fields defined for this test template.</p>
+            <p className="text-center text-sm text-gray-400">No fields defined for this test template.</p>
           ) : (
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
               {fields.map(field => {
@@ -287,8 +406,8 @@ export default function EnterResultsPage() {
                 if (field.isSectionHeader) {
                   return (
                     <div key={field.id} className="sm:col-span-2 pt-2">
-                      <div className="border-b-2 border-slate-200 pb-1.5">
-                        <span className="text-sm font-bold text-slate-700 underline underline-offset-2">
+                      <div className="border-b-2 border-gray-200 pb-1.5">
+                        <span className="text-sm font-bold text-gray-700 underline underline-offset-2">
                           {field.fieldName}
                         </span>
                       </div>
@@ -300,12 +419,15 @@ export default function EnterResultsPage() {
                     key={field.id}
                     className={field.fieldType === 'text' && !field.optionsJson ? 'sm:col-span-2' : ''}
                   >
-                    <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">
                       {field.fieldName}
                       {field.unit && (
-                        <span className="ml-1 normal-case font-normal text-slate-400">({field.unit})</span>
+                        <span className="ml-1 normal-case font-normal text-gray-400">({field.unit})</span>
                       )}
-                      {field.required && <span className="ml-1 text-rose-500">*</span>}
+                      {field.referenceRange && (
+                        <span className="ml-1 normal-case font-normal text-gray-400">Ref: {field.referenceRange}</span>
+                      )}
+                      {field.required && <span className="ml-1 text-red-500">*</span>}
                     </label>
                     <ResultField
                       field={field}
@@ -321,52 +443,53 @@ export default function EnterResultsPage() {
 
         {/* PDF attachment */}
         <FormCard title="Attach Document (optional)" icon={<Paperclip className="h-4 w-4" />}>
-          <p className="mb-4 text-xs text-slate-500">
-            Attach a PDF document (e.g. external lab report, referral letter). It will be merged with the final report.
+          <p className="mb-4 text-xs text-gray-500">
+            Attach a PDF document (e.g. external lab report). It will be merged with the final report.
           </p>
 
+          {/* Show existing attachment notice */}
+          {!attachment && order.attachmentName && (
+            <div className="mb-3 flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-xs text-gray-500">
+              <Paperclip className="h-3.5 w-3.5 shrink-0 text-blue-400" />
+              Existing attachment: <span className="font-semibold text-gray-700">{order.attachmentName}</span>
+              <span className="ml-1 text-gray-400">(upload a new file to replace)</span>
+            </div>
+          )}
+
           {attachment ? (
-            /* Attached file preview */
-            <div className="flex items-center justify-between rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3">
+            <div className="flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-rose-100">
-                  <FileText className="h-5 w-5 text-rose-600" />
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-100">
+                  <FileText className="h-5 w-5 text-red-600" />
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-slate-800">{attachment.name}</p>
-                  <p className="text-xs text-slate-500">{formatBytes(attachment.size)} · PDF</p>
+                  <p className="truncate text-sm font-semibold text-gray-800">{attachment.name}</p>
+                  <p className="text-xs text-gray-500">{formatBytes(attachment.size)} · PDF</p>
                 </div>
               </div>
               <button
                 onClick={() => { setAttachment(null); if (fileInputRef.current) fileInputRef.current.value = '' }}
-                className="ml-3 shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-500"
+                className="ml-3 shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>
           ) : (
-            /* Drop zone */
             <div
               className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 transition-colors
-                ${dragOver
-                  ? 'border-indigo-400 bg-indigo-50'
-                  : 'border-slate-200 bg-slate-50 hover:border-indigo-300 hover:bg-indigo-50/40'
-                }`}
+                ${dragOver ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-gray-50 hover:border-blue-300 hover:bg-blue-50/40'}`}
               onClick={() => fileInputRef.current?.click()}
               onDragOver={e => { e.preventDefault(); setDragOver(true) }}
               onDragLeave={() => setDragOver(false)}
               onDrop={handleDrop}
             >
-              <Upload className="mb-3 h-8 w-8 text-slate-400" />
-              <p className="text-sm font-medium text-slate-600">
-                Drop PDF here or <span className="text-indigo-600">browse</span>
+              <Upload className="mb-3 h-8 w-8 text-gray-400" />
+              <p className="text-sm font-medium text-gray-600">
+                Drop PDF here or <span className="text-blue-600">browse</span>
               </p>
-              <p className="mt-1 text-xs text-slate-400">PDF only · max 15 MB</p>
+              <p className="mt-1 text-xs text-gray-400">PDF only · max 15 MB</p>
               <input
-                ref={fileInputRef}
-                type="file"
-                accept="application/pdf"
-                className="hidden"
+                ref={fileInputRef} type="file" accept="application/pdf" className="hidden"
                 onChange={e => { const f = e.target.files?.[0]; if (f) handlePdfFile(f) }}
               />
             </div>
@@ -374,44 +497,73 @@ export default function EnterResultsPage() {
         </FormCard>
 
         {/* Footer actions */}
-        <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-6 py-4 shadow-sm">
+        <div className={`flex items-center justify-between rounded-2xl border px-6 py-4 shadow-sm ${isLocked ? 'border-gray-100 bg-gray-50' : 'border-gray-200 bg-white'}`}>
           <button
             onClick={() => navigate('/orders')}
-            className="flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            className="flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
           >
             <ArrowLeft className="h-4 w-4" /> Cancel
           </button>
 
           <div className="flex items-center gap-3">
-            {attachment && (
-              <div className="flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
-                <Paperclip className="h-3.5 w-3.5" />
-                PDF attached
+            {isLocked ? (
+              <div className="flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-500">
+                <Lock className="h-3.5 w-3.5" /> Results locked
               </div>
+            ) : (
+              <>
+                {attachment && (
+                  <div className="flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+                    <Paperclip className="h-3.5 w-3.5" /> PDF attached
+                  </div>
+                )}
+
+                {/* Save draft */}
+                <button
+                  onClick={() => saveMut.mutate(true)}
+                  disabled={saveMut.isPending || fields.length === 0}
+                  className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {saveMut.isPending && saveMut.variables === true ? (
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  Save
+                </button>
+
+                {/* Batch notice vs individual submit */}
+                {isBatchOrder ? (
+                  <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800">
+                    <Info className="h-4 w-4 shrink-0" />
+                    Save each test, then go to <button onClick={() => navigate('/orders')} className="underline font-semibold">Orders</button> to submit all for approval
+                  </div>
+                ) : (
+                  <button
+                    onClick={handleSubmit}
+                    disabled={saveMut.isPending || fields.length === 0}
+                    className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+                  >
+                    {saveMut.isPending && saveMut.variables === false ? (
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                    Submit for Approval
+                  </button>
+                )}
+              </>
             )}
-            <button
-              onClick={() => submitMut.mutate()}
-              disabled={submitMut.isPending || fields.length === 0}
-              className="flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60"
-            >
-              {submitMut.isPending ? (
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-              Submit for Approval
-            </button>
           </div>
         </div>
 
-        {/* Success hint */}
-        {submitMut.isSuccess && (
+        {saveMut.isSuccess && saveMut.variables === false && (
           <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
-            <CheckCircle2 className="h-4 w-4" />
-            Results submitted! Redirecting…
+            <CheckCircle2 className="h-4 w-4" /> Results submitted! Redirecting…
           </div>
         )}
       </div>
     </div>
   )
 }
+

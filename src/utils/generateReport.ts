@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import type { LabSettings, ActiveSignature } from '../types'
+import type { LabSettings, ActiveSignature, Logo } from '../types'
 
 /* ─── Types ─────────────────────────────────────────────── */
 export interface ReportResult {
@@ -31,6 +31,8 @@ export interface GenerateReportOptions {
   results: ReportResult[]
   labSettings: LabSettings
   signature: ActiveSignature | null
+  /** Active logo from the Logo Manager — takes precedence over lab_logo_base64 in labSettings */
+  activeLogo?: Logo | null
 }
 
 /* ─── Helpers ───────────────────────────────────────────── */
@@ -64,7 +66,7 @@ function fmtAgeGender(age: number | null, gender: string | null): string {
 
 /* ─── Main generator ────────────────────────────────────── */
 export function generateLabReport(options: GenerateReportOptions): void {
-  const { order, results, labSettings, signature } = options
+  const { order, results, labSettings, signature, activeLogo } = options
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
 
@@ -81,20 +83,22 @@ export function generateLabReport(options: GenerateReportOptions): void {
     doc.setLineWidth(0.6)
     doc.line(ML, 8, PAGE_W - MR, 8)
 
-    // Logo
+    // Logo — prefer active logo from Logo Manager, fall back to lab_logo_base64 from settings
+    const logoImageData = activeLogo?.imageData ?? labSettings.lab_logo_base64
     let nameX = ML
-    if (labSettings.lab_logo_base64) {
+    if (logoImageData) {
       try {
-        doc.addImage(labSettings.lab_logo_base64, 'PNG', ML, 10, 18, 18)
+        doc.addImage(logoImageData, 'PNG', ML, 10, 18, 18)
         nameX = ML + 21
       } catch { /* skip invalid logo */ }
     }
 
-    // Lab name
+    // Lab name — prefer active logo's name, fall back to lab settings name
+    const labDisplayName = activeLogo?.name ?? labSettings.lab_name ?? 'Diagnostic Laboratory'
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(17)
     doc.setTextColor(10, 10, 10)
-    doc.text(labSettings.lab_name ?? 'Diagnostic Laboratory', nameX, 18)
+    doc.text(labDisplayName, nameX, 18)
 
     // Sub-label
     doc.setFont('helvetica', 'normal')

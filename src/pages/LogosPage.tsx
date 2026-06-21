@@ -1,7 +1,7 @@
 ﻿import { useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  PenLine,
+  ImageIcon,
   Upload,
   Trash2,
   CheckCircle2,
@@ -11,7 +11,8 @@ import {
   ImageOff,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { signatureService, type Signature } from '../services/signatures'
+import { logoService } from '../services/logos'
+import type { Logo } from '../types'
 
 /* ─── helpers ────────────────────────────────────────────── */
 
@@ -51,7 +52,6 @@ function UploadModal({ onClose, onSave, saving }: UploadModalProps) {
     const b64 = await fileToBase64(file)
     setImageData(b64)
     setPreview(b64)
-    // Auto-fill name from filename if blank
     if (!name) setName(file.name.replace(/\.[^/.]+$/, ''))
   }
 
@@ -63,8 +63,8 @@ function UploadModal({ onClose, onSave, saving }: UploadModalProps) {
   }
 
   const handleSubmit = () => {
-    if (!name.trim()) { toast.error('Please enter a signature name'); return }
-    if (!imageData)   { toast.error('Please select an image');         return }
+    if (!name.trim()) { toast.error('Please enter a name for this logo'); return }
+    if (!imageData)   { toast.error('Please select an image');              return }
     onSave(name.trim(), imageData)
   }
 
@@ -74,8 +74,8 @@ function UploadModal({ onClose, onSave, saving }: UploadModalProps) {
         {/* header */}
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
           <div className="flex items-center gap-2">
-            <PenLine className="h-5 w-5 text-blue-600" />
-            <h2 className="text-base font-semibold text-gray-900">Upload Signature</h2>
+            <ImageIcon className="h-5 w-5 text-blue-600" />
+            <h2 className="text-base font-semibold text-gray-900">Upload Logo</h2>
           </div>
           <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
             <X className="h-4 w-4" />
@@ -85,19 +85,20 @@ function UploadModal({ onClose, onSave, saving }: UploadModalProps) {
         <div className="space-y-5 px-6 py-5">
           {/* Name field */}
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-700">Signature Name</label>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">Company / Lab Name</label>
             <input
               type="text"
               value={name}
               onChange={e => setName(e.target.value)}
-              placeholder="e.g. Dr. Sharma"
+              placeholder="e.g. Mihir Diagnostic Lab"
               className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
             />
+            <p className="mt-1 text-xs text-gray-400">This name will be shown in the app header and on reports when this logo is active.</p>
           </div>
 
           {/* Drop zone */}
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-700">Signature Image</label>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700">Logo Image</label>
             <div
               className={`relative flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 transition-colors
                 ${dragOver ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-gray-50 hover:border-blue-300 hover:bg-blue-50/40'}`}
@@ -152,7 +153,7 @@ function UploadModal({ onClose, onSave, saving }: UploadModalProps) {
             className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
           >
             {saving && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
-            Save Signature
+            Save Logo
           </button>
         </div>
       </div>
@@ -160,27 +161,27 @@ function UploadModal({ onClose, onSave, saving }: UploadModalProps) {
   )
 }
 
-/* ─── Signature card ─────────────────────────────────────── */
+/* ─── Logo card ──────────────────────────────────────────── */
 
-interface SigCardProps {
-  sig: Signature
+interface LogoCardProps {
+  logo: Logo
   onActivate: (id: number) => void
   onDeactivate: () => void
   onDelete: (id: number) => void
   busy: boolean
 }
 
-function SigCard({ sig, onActivate, onDeactivate, onDelete, busy }: SigCardProps) {
+function LogoCard({ logo, onActivate, onDeactivate, onDelete, busy }: LogoCardProps) {
   return (
     <div
       className={`group relative flex flex-col overflow-hidden rounded-2xl border-2 bg-white shadow-sm transition-all
-        ${sig.isActive
+        ${logo.isActive
           ? 'border-blue-500 shadow-blue-100'
           : 'border-gray-100 hover:border-gray-200 hover:shadow-md'
         }`}
     >
       {/* Active badge */}
-      {sig.isActive && (
+      {logo.isActive && (
         <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-blue-600 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow">
           <CheckCircle2 className="h-3 w-3" /> Active
         </div>
@@ -188,10 +189,10 @@ function SigCard({ sig, onActivate, onDeactivate, onDelete, busy }: SigCardProps
 
       {/* Image area */}
       <div className="flex h-44 items-center justify-center bg-gray-50 p-4">
-        {sig.imageData ? (
+        {logo.imageData ? (
           <img
-            src={sig.imageData}
-            alt={sig.name}
+            src={logo.imageData}
+            alt={logo.name}
             className="max-h-full max-w-full rounded-lg object-contain"
           />
         ) : (
@@ -205,15 +206,14 @@ function SigCard({ sig, onActivate, onDeactivate, onDelete, busy }: SigCardProps
       {/* Info + actions */}
       <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-gray-900">{sig.name}</p>
+          <p className="truncate text-sm font-semibold text-gray-900">{logo.name}</p>
           <p className="text-xs text-gray-400">
-            {new Date(sig.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+            {new Date(logo.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
           </p>
         </div>
 
         <div className="ml-3 flex shrink-0 items-center gap-1">
-          {/* Activate / deactivate toggle */}
-          {sig.isActive ? (
+          {logo.isActive ? (
             <button
               onClick={() => onDeactivate()}
               disabled={busy}
@@ -224,20 +224,19 @@ function SigCard({ sig, onActivate, onDeactivate, onDelete, busy }: SigCardProps
             </button>
           ) : (
             <button
-              onClick={() => onActivate(sig.id)}
+              onClick={() => onActivate(logo.id)}
               disabled={busy}
-              title="Set as active signature"
+              title="Set as active logo"
               className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600 disabled:opacity-50"
             >
               <CheckCircle2 className="h-4 w-4" />
             </button>
           )}
 
-          {/* Delete */}
           <button
-            onClick={() => onDelete(sig.id)}
+            onClick={() => onDelete(logo.id)}
             disabled={busy}
-            title="Delete signature"
+            title="Delete logo"
             className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
           >
             <Trash2 className="h-4 w-4" />
@@ -250,64 +249,65 @@ function SigCard({ sig, onActivate, onDeactivate, onDelete, busy }: SigCardProps
 
 /* ─── Main page ──────────────────────────────────────────── */
 
-export default function SignaturesPage() {
+export default function LogosPage() {
   const qc = useQueryClient()
   const [showModal, setShowModal] = useState(false)
 
-  const { data: signatures = [], isLoading, refetch } = useQuery({
-    queryKey: ['signatures'],
-    queryFn: signatureService.getAll,
+  const { data: logos = [], isLoading, refetch } = useQuery({
+    queryKey: ['logos'],
+    queryFn: logoService.getAll,
   })
 
   const createMut = useMutation({
-    mutationFn: signatureService.create,
+    mutationFn: ({ name, imageData }: { name: string; imageData: string }) =>
+      logoService.create({ name, imageData }),
     onSuccess: () => {
-      toast.success('Signature uploaded successfully')
-      qc.invalidateQueries({ queryKey: ['signatures'] })
+      toast.success('Logo uploaded successfully')
+      qc.invalidateQueries({ queryKey: ['logos'] })
       setShowModal(false)
     },
-    onError: () => toast.error('Failed to upload signature'),
+    onError: () => toast.error('Failed to upload logo'),
   })
 
   const activateMut = useMutation({
-    mutationFn: signatureService.activate,
+    mutationFn: logoService.activate,
     onSuccess: () => {
-      toast.success('Signature set as active')
-      qc.invalidateQueries({ queryKey: ['signatures'] })
+      toast.success('Logo set as active')
+      qc.invalidateQueries({ queryKey: ['logos'] })
     },
-    onError: () => toast.error('Failed to activate signature'),
+    onError: () => toast.error('Failed to activate logo'),
   })
 
   const deactivateMut = useMutation({
-    mutationFn: signatureService.deactivateAll,
+    mutationFn: logoService.deactivateAll,
     onSuccess: () => {
-      toast.success('Active signature cleared')
-      qc.invalidateQueries({ queryKey: ['signatures'] })
+      toast.success('Active logo cleared')
+      qc.invalidateQueries({ queryKey: ['logos'] })
     },
     onError: () => toast.error('Failed to deactivate'),
   })
 
   const deleteMut = useMutation({
-    mutationFn: signatureService.delete,
+    mutationFn: logoService.delete,
     onSuccess: () => {
-      toast.success('Signature deleted')
-      qc.invalidateQueries({ queryKey: ['signatures'] })
+      toast.success('Logo deleted')
+      qc.invalidateQueries({ queryKey: ['logos'] })
     },
-    onError: () => toast.error('Failed to delete signature'),
+    onError: () => toast.error('Failed to delete logo'),
   })
 
   const busy = createMut.isPending || activateMut.isPending || deactivateMut.isPending || deleteMut.isPending
 
-  const activeCount = signatures.filter(s => s.isActive).length
+  const activeLogo = logos.find(l => l.isActive)
 
   return (
     <div className="space-y-6 p-6">
       {/* Page header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Signature Management</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Logo Management</h1>
           <p className="mt-0.5 text-sm text-gray-500">
-            Upload signature images and mark one as active for use in lab reports.
+            Upload company logos and activate one to display across the app and on reports.
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -323,7 +323,7 @@ export default function SignaturesPage() {
             className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
           >
             <Upload className="h-4 w-4" />
-            Upload Signature
+            Upload Logo
           </button>
         </div>
       </div>
@@ -332,12 +332,12 @@ export default function SignaturesPage() {
       <div className="flex gap-4">
         <div className="rounded-xl border border-gray-100 bg-white px-5 py-3 shadow-sm">
           <p className="text-xs font-medium uppercase tracking-wider text-gray-500">Total</p>
-          <p className="mt-0.5 text-2xl font-bold text-gray-900">{signatures.length}</p>
+          <p className="mt-0.5 text-2xl font-bold text-gray-900">{logos.length}</p>
         </div>
-        <div className={`rounded-xl border px-5 py-3 shadow-sm ${activeCount > 0 ? 'border-blue-100 bg-blue-50' : 'border-gray-100 bg-white'}`}>
+        <div className={`rounded-xl border px-5 py-3 shadow-sm ${activeLogo ? 'border-blue-100 bg-blue-50' : 'border-gray-100 bg-white'}`}>
           <p className="text-xs font-medium uppercase tracking-wider text-gray-500">Active</p>
-          <p className={`mt-0.5 text-2xl font-bold ${activeCount > 0 ? 'text-blue-700' : 'text-gray-400'}`}>
-            {activeCount > 0 ? signatures.find(s => s.isActive)?.name : '—'}
+          <p className={`mt-0.5 text-2xl font-bold ${activeLogo ? 'text-blue-700' : 'text-gray-400'}`}>
+            {activeLogo?.name ?? '—'}
           </p>
         </div>
       </div>
@@ -349,41 +349,40 @@ export default function SignaturesPage() {
             <div key={i} className="h-64 animate-pulse rounded-2xl bg-gray-100" />
           ))}
         </div>
-      ) : signatures.length === 0 ? (
+      ) : logos.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-white py-20 text-center">
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100">
-            <PenLine className="h-8 w-8 text-gray-400" />
+            <ImageIcon className="h-8 w-8 text-gray-400" />
           </div>
-          <h3 className="text-base font-semibold text-gray-900">No signatures yet</h3>
+          <h3 className="text-base font-semibold text-gray-900">No logos yet</h3>
           <p className="mt-1 max-w-xs text-sm text-gray-500">
-            Upload your first signature image. The active one will appear on all generated reports.
+            Upload your first logo. The active one will appear in the sidebar header and on all generated reports.
           </p>
           <button
             onClick={() => setShowModal(true)}
             className="mt-5 flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
           >
             <Upload className="h-4 w-4" />
-            Upload First Signature
+            Upload First Logo
           </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {signatures.map(sig => (
-            <SigCard
-              key={sig.id}
-              sig={sig}
+          {logos.map(logo => (
+            <LogoCard
+              key={logo.id}
+              logo={logo}
               busy={busy}
               onActivate={id => activateMut.mutate(id)}
               onDeactivate={() => deactivateMut.mutate()}
               onDelete={id => {
-                if (window.confirm(`Delete "${sig.name}"?`)) deleteMut.mutate(id)
+                if (window.confirm(`Delete "${logo.name}"?`)) deleteMut.mutate(logo.id)
               }}
             />
           ))}
         </div>
       )}
 
-      {/* Upload modal */}
       {showModal && (
         <UploadModal
           onClose={() => setShowModal(false)}

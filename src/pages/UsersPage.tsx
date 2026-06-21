@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus,
@@ -188,8 +188,8 @@ export default function UsersPage() {
               icon: (
                 <UserCog className="h-5 w-5" />
               ),
-              bg: 'bg-indigo-50',
-              text: 'text-indigo-600',
+              bg: 'bg-blue-50',
+              text: 'text-blue-600',
             },
 
             {
@@ -201,8 +201,8 @@ export default function UsersPage() {
               icon: (
                 <Shield className="h-5 w-5" />
               ),
-              bg: 'bg-rose-50',
-              text: 'text-rose-600',
+              bg: 'bg-red-50',
+              text: 'text-red-600',
             },
 
             {
@@ -230,7 +230,7 @@ export default function UsersPage() {
           ].map((card) => (
             <div
               key={card.label}
-              className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4"
+              className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4"
             >
               <div
                 className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl ${card.bg} ${card.text}`}
@@ -238,11 +238,11 @@ export default function UsersPage() {
                 {card.icon}
               </div>
 
-              <p className="text-xl font-bold text-slate-900 sm:text-2xl">
+              <p className="text-xl font-bold text-gray-900 sm:text-2xl">
                 {card.value}
               </p>
 
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-gray-500">
                 {card.label}
               </p>
             </div>
@@ -259,9 +259,9 @@ export default function UsersPage() {
             description="Create your first user"
           />
         ) : (
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-100 bg-slate-50 px-4 py-4 sm:px-6">
-              <h3 className="text-sm font-semibold text-slate-700">
+          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <div className="border-b border-gray-100 bg-gray-50 px-4 py-4 sm:px-6">
+              <h3 className="text-sm font-semibold text-gray-700">
                 All Users ({users.length})
               </h3>
             </div>
@@ -270,7 +270,7 @@ export default function UsersPage() {
             <div className="hidden w-full overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-100">
+                  <tr className="border-b border-gray-100">
                     <th className="px-6 py-4 text-left">
                       User
                     </th>
@@ -293,11 +293,11 @@ export default function UsersPage() {
                   {users.map((u) => (
                     <tr
                       key={u.id}
-                      className="border-b border-slate-100"
+                      className="border-b border-gray-100"
                     >
                       <td className="px-6 py-4 align-middle">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600 font-bold text-white">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 font-bold text-white">
                             {u.name
                               .charAt(0)
                               .toUpperCase()}
@@ -308,7 +308,7 @@ export default function UsersPage() {
                               {u.name}
                             </p>
 
-                            <p className="text-xs text-slate-400">
+                            <p className="text-xs text-gray-400">
                               ID #{u.id}
                             </p>
                           </div>
@@ -316,7 +316,7 @@ export default function UsersPage() {
                       </td>
 
                       <td className="px-6 py-4 align-middle">
-                        <div className="flex items-center gap-2 text-slate-600">
+                        <div className="flex items-center gap-2 text-gray-600">
                           <Mail className="h-4 w-4" />
                           {u.email}
                         </div>
@@ -363,7 +363,7 @@ export default function UsersPage() {
                               icon={
                                 <Trash2 className="h-4 w-4" />
                               }
-                              className="text-rose-500"
+                              className="text-red-500"
                               onClick={() =>
                                 setDeleteUser(
                                   u
@@ -386,25 +386,25 @@ export default function UsersPage() {
               {users.map((u) => (
                 <div
                   key={u.id}
-                  className="rounded-2xl border border-slate-200 p-4"
+                  className="rounded-2xl border border-gray-200 p-4"
                 >
                   <div className="flex items-start gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-600 font-bold text-white">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 font-bold text-white">
                       {u.name
                         .charAt(0)
                         .toUpperCase()}
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <h4 className="font-semibold text-slate-900">
+                      <h4 className="font-semibold text-gray-900">
                         {u.name}
                       </h4>
 
-                      <p className="text-xs text-slate-400">
+                      <p className="text-xs text-gray-400">
                         ID #{u.id}
                       </p>
 
-                      <div className="mt-2 flex items-center gap-2 break-all text-sm text-slate-600">
+                      <div className="mt-2 flex items-center gap-2 break-all text-sm text-gray-600">
                         <Mail className="h-4 w-4 shrink-0" />
                         {u.email}
                       </div>
@@ -444,7 +444,7 @@ export default function UsersPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="flex-1 text-rose-500"
+                            className="flex-1 text-red-500"
                             onClick={() =>
                               setDeleteUser(
                                 u

@@ -12,6 +12,8 @@ export interface SubmitResultsDto {
   /** Base64 data URI of an attached PDF (optional) */
   attachmentBase64?: string
   attachmentName?: string
+  /** When true: save as draft (IN_PROGRESS), skip required-field validation */
+  isDraft?: boolean
 }
 
 export const orderService = {
@@ -76,6 +78,16 @@ export const orderService = {
     netAmount?: number
   }): Promise<Order> => {
     const { data } = await api.patch(`/orders/${orderId}/payment`, payload)
+    return data
+  },
+
+  revert: async (orderId: number, remark: string): Promise<Order> => {
+    const { data } = await api.patch(`/orders/revert/${orderId}`, { remark })
+    return data
+  },
+
+  batchSubmit: async (receiptNumber: string): Promise<{ count: number; receiptNumber: string }> => {
+    const { data } = await api.post('/orders/batch-submit', { receiptNumber })
     return data
   },
 

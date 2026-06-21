@@ -1,4 +1,4 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { History, Printer, ChevronDown, ChevronUp, Calendar, FileCheck } from 'lucide-react'
 import { Header } from '../components/layout/Header'
@@ -100,11 +100,11 @@ export default function HistoryPage() {
       <div className="space-y-6 p-4 sm:p-6">
         {/* Patient selector */}
         <Card>
-          <h3 className="mb-4 text-sm font-bold text-slate-700">Select Patient</h3>
+          <h3 className="mb-4 text-sm font-bold text-gray-700">Select Patient</h3>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">
               {patientsLoading ? (
-                <div className="h-10 w-full animate-pulse rounded-xl bg-slate-100" />
+                <div className="h-10 w-full animate-pulse rounded-xl bg-gray-100" />
               ) : (
                 <Select
                   label="Patient"
@@ -144,15 +144,15 @@ export default function HistoryPage() {
         ) : history ? (
           <div className="space-y-4">
             {/* Patient header */}
-            <Card className="border-indigo-200 bg-indigo-50/30">
+            <Card className="border-blue-200 bg-blue-50/30">
               <div className="flex items-center justify-between">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-600 text-lg font-bold text-white">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-lg font-bold text-white">
                     {history.patient.fullName.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-slate-800">{history.patient.fullName}</h3>
-                    <div className="flex flex-wrap gap-3 mt-1 text-sm text-slate-500">
+                    <h3 className="text-lg font-bold text-gray-800">{history.patient.fullName}</h3>
+                    <div className="flex flex-wrap gap-3 mt-1 text-sm text-gray-500">
                       <span className="font-mono">{history.patient.patientCode}</span>
                       {history.patient.gender && <span>{history.patient.gender}</span>}
                       {history.patient.bloodGroup && <span>Blood: {history.patient.bloodGroup}</span>}
@@ -160,8 +160,8 @@ export default function HistoryPage() {
                     </div>
                   </div>
                 </div>
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-100">
-                  <span className="text-sm font-bold text-indigo-600">{history.history.length}</span>
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100">
+                  <span className="text-sm font-bold text-blue-600">{history.history.length}</span>
                 </div>
               </div>
             </Card>
@@ -180,20 +180,20 @@ export default function HistoryPage() {
                     onClick={() => setExpandedOrderId(expandedOrderId === item.orderId ? null : item.orderId)}
                   >
                     <div className="flex items-start gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100">
-                        <FileCheck className="h-5 w-5 text-slate-500" />
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100">
+                        <FileCheck className="h-5 w-5 text-gray-500" />
                       </div>
                       <div>
-                        <p className="font-bold text-slate-800">
+                        <p className="font-bold text-gray-800">
                           {item.testName}
-                          <span className="ml-2 font-mono text-xs text-slate-400">({item.testCode})</span>
+                          <span className="ml-2 font-mono text-xs text-gray-400">({item.testCode})</span>
                         </p>
-                        <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-500">
                           <Calendar className="h-3.5 w-3.5" />
                           <span>{new Date(item.createdAt).toLocaleString()}</span>
-                          <span className="text-slate-300">·</span>
+                          <span className="text-gray-300">·</span>
                           <span>Order #{item.orderId}</span>
-                          <span className="text-slate-300">·</span>
+                          <span className="text-gray-300">·</span>
                           <span>{item.results.length} parameter{item.results.length !== 1 ? 's' : ''}</span>
                         </div>
                       </div>
@@ -203,20 +203,20 @@ export default function HistoryPage() {
                         {item.status}
                       </Badge>
                       {expandedOrderId === item.orderId
-                        ? <ChevronUp className="h-4 w-4 text-slate-400" />
-                        : <ChevronDown className="h-4 w-4 text-slate-400" />}
+                        ? <ChevronUp className="h-4 w-4 text-gray-400" />
+                        : <ChevronDown className="h-4 w-4 text-gray-400" />}
                     </div>
                   </div>
 
                   {expandedOrderId === item.orderId && item.results.length > 0 && (
-                    <div className="mt-4 border-t border-slate-100 pt-4">
+                    <div className="mt-4 border-t border-gray-100 pt-4">
                       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                         {item.results.map((result, idx) => (
-                          <div key={idx} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 hover:border-indigo-200 hover:bg-white transition-colors">
-                            <p className="text-xs text-slate-400 uppercase tracking-wide">{result.fieldName}</p>
-                            <p className="mt-1 text-base font-bold text-slate-900">
+                          <div key={idx} className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 hover:border-blue-200 hover:bg-white transition-colors">
+                            <p className="text-xs text-gray-400 uppercase tracking-wide">{result.fieldName}</p>
+                            <p className="mt-1 text-base font-bold text-gray-900">
                               {String(result.value)}
-                              {result.unit && <span className="ml-1.5 text-sm font-normal text-slate-400">{result.unit}</span>}
+                              {result.unit && <span className="ml-1.5 text-sm font-normal text-gray-400">{result.unit}</span>}
                             </p>
                           </div>
                         ))}
@@ -238,3 +238,4 @@ export default function HistoryPage() {
     </div>
   )
 }
+

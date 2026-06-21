@@ -20,10 +20,14 @@ export function AppLayout() {
   })
 
   if (!isAuthenticated) return <Navigate to="/login" replace />
-  if (isLoading) return <div className="flex h-screen items-center justify-center bg-slate-50"><PageLoader /></div>
+  if (isLoading) return (
+    <div className="flex h-screen items-center justify-center bg-gray-50">
+      <PageLoader />
+    </div>
+  )
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50">
+    <div className="flex h-screen overflow-hidden bg-gray-50">
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
         <main className="flex-1 overflow-y-auto overflow-x-hidden">

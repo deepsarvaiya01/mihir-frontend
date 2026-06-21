@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import {
   Shield,
   Key,
@@ -109,8 +109,8 @@ export default function SettingsPage() {
     if (pwd.length < 6) {
       return {
         level: 'Weak',
-        color: 'text-rose-500',
-        bar: 'bg-rose-500 w-1/4',
+        color: 'text-red-500',
+        bar: 'bg-red-500 w-1/4',
       }
     }
 
@@ -140,7 +140,7 @@ export default function SettingsPage() {
   const strength = passwordStrength(newPassword)
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-gray-50">
       <Header
         title="Settings"
         subtitle="Manage your account and security preferences"
@@ -154,7 +154,7 @@ export default function SettingsPage() {
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
             
             {/* AVATAR */}
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-3xl font-bold text-white shadow-lg">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 text-3xl font-bold text-white shadow-lg">
               {user?.name?.charAt(0).toUpperCase()}
             </div>
 
@@ -164,11 +164,11 @@ export default function SettingsPage() {
               {/* TOP */}
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <h2 className="text-2xl font-bold text-slate-900">
+                  <h2 className="text-2xl font-bold text-gray-900">
                     {user?.name}
                   </h2>
 
-                  <div className="mt-2 flex items-center gap-2 text-sm text-slate-500">
+                  <div className="mt-2 flex items-center gap-2 text-sm text-gray-500">
                     <Mail className="h-4 w-4" />
                     {user?.email}
                   </div>
@@ -192,43 +192,43 @@ export default function SettingsPage() {
               <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 
                 {/* NAME */}
-                <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4">
+                <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4">
                   <div className="mb-2 flex items-center gap-2">
-                    <User className="h-4 w-4 text-slate-400" />
-                    <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                    <User className="h-4 w-4 text-gray-400" />
+                    <span className="text-xs font-medium uppercase tracking-wide text-gray-400">
                       Name
                     </span>
                   </div>
 
-                  <p className="text-sm font-semibold text-slate-700 break-words">
+                  <p className="text-sm font-semibold text-gray-700 break-words">
                     {user?.name ?? '—'}
                   </p>
                 </div>
 
                 {/* EMAIL */}
-                <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4">
+                <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4">
                   <div className="mb-2 flex items-center gap-2">
-                    <Mail className="h-4 w-4 text-slate-400" />
-                    <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                    <Mail className="h-4 w-4 text-gray-400" />
+                    <span className="text-xs font-medium uppercase tracking-wide text-gray-400">
                       Email
                     </span>
                   </div>
 
-                  <p className="text-sm font-semibold text-slate-700 break-all">
+                  <p className="text-sm font-semibold text-gray-700 break-all">
                     {user?.email ?? '—'}
                   </p>
                 </div>
 
                 {/* ACCESS */}
-                <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4">
+                <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4">
                   <div className="mb-2 flex items-center gap-2">
-                    <Shield className="h-4 w-4 text-slate-400" />
-                    <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
+                    <Shield className="h-4 w-4 text-gray-400" />
+                    <span className="text-xs font-medium uppercase tracking-wide text-gray-400">
                       Access Level
                     </span>
                   </div>
 
-                  <p className="text-sm font-semibold text-slate-700">
+                  <p className="text-sm font-semibold text-gray-700">
                     {user?.role === 'SUPER_ADMIN'
                       ? 'Administrator'
                       : 'Lab Operator'}
@@ -243,12 +243,12 @@ export default function SettingsPage() {
         {user?.role === 'SUPER_ADMIN' && (
           <Card>
             <div className="mb-6 flex items-start gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-100">
-                <Building2 className="h-5 w-5 text-indigo-600" />
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-100">
+                <Building2 className="h-5 w-5 text-blue-600" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-slate-800">Lab Profile</h3>
-                <p className="text-sm text-slate-500">
+                <h3 className="text-lg font-bold text-gray-800">Lab Profile</h3>
+                <p className="text-sm text-gray-500">
                   Appears in the header of every generated PDF report
                 </p>
               </div>
@@ -257,92 +257,92 @@ export default function SettingsPage() {
             <div className="grid gap-5 sm:grid-cols-2">
               {/* Lab name */}
               <div>
-                <label className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <label className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
                   <Building2 className="h-3.5 w-3.5" /> Lab Name
                 </label>
                 <input
                   type="text" placeholder="e.g. Rameshwar Diagnostic Laboratory"
                   value={labForm.lab_name ?? ''}
                   onChange={e => setLabForm(p => ({ ...p, lab_name: e.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none hover:border-indigo-300 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                  className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none hover:border-blue-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/20"
                 />
               </div>
 
               {/* Email */}
               <div>
-                <label className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <label className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
                   <Mail className="h-3.5 w-3.5" /> Lab Email
                 </label>
                 <input
                   type="email" placeholder="e.g. lab@example.com"
                   value={labForm.lab_email ?? ''}
                   onChange={e => setLabForm(p => ({ ...p, lab_email: e.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none hover:border-indigo-300 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                  className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none hover:border-blue-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/20"
                 />
               </div>
 
               {/* Address */}
               <div className="sm:col-span-2">
-                <label className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <label className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
                   <MapPin className="h-3.5 w-3.5" /> Address
                 </label>
                 <input
                   type="text" placeholder="e.g. Tirupati Street No.6, Raiya Road, Rajkot - 360007"
                   value={labForm.lab_address ?? ''}
                   onChange={e => setLabForm(p => ({ ...p, lab_address: e.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none hover:border-indigo-300 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                  className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none hover:border-blue-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/20"
                 />
               </div>
 
               {/* Phone */}
               <div>
-                <label className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <label className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
                   <Phone className="h-3.5 w-3.5" /> Phone / Home Collection
                 </label>
                 <input
                   type="text" placeholder="e.g. 7046119183, 7046719183"
                   value={labForm.lab_phone ?? ''}
                   onChange={e => setLabForm(p => ({ ...p, lab_phone: e.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none hover:border-indigo-300 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                  className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none hover:border-blue-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/20"
                 />
               </div>
 
               {/* Timing */}
               <div>
-                <label className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <label className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
                   <Clock className="h-3.5 w-3.5" /> Lab Timing
                 </label>
                 <input
                   type="text" placeholder="e.g. 8-00 am to 8-00 pm (24 Hours Emergency Service Available)"
                   value={labForm.lab_timing ?? ''}
                   onChange={e => setLabForm(p => ({ ...p, lab_timing: e.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none hover:border-indigo-300 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                  className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none hover:border-blue-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/20"
                 />
               </div>
 
               {/* Doctor name */}
               <div>
-                <label className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <label className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
                   <UserCheck className="h-3.5 w-3.5" /> Doctor / Pathologist Name
                 </label>
                 <input
                   type="text" placeholder="e.g. Mihir Badeliya"
                   value={labForm.doctor_name ?? ''}
                   onChange={e => setLabForm(p => ({ ...p, doctor_name: e.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none hover:border-indigo-300 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                  className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none hover:border-blue-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/20"
                 />
               </div>
 
               {/* Qualification */}
               <div>
-                <label className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <label className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
                   <UserCheck className="h-3.5 w-3.5" /> Qualification
                 </label>
                 <input
                   type="text" placeholder="e.g. PG DMLT"
                   value={labForm.doctor_qualification ?? ''}
                   onChange={e => setLabForm(p => ({ ...p, doctor_qualification: e.target.value }))}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none hover:border-indigo-300 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                  className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none hover:border-blue-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/20"
                 />
               </div>
             </div>
@@ -367,11 +367,11 @@ export default function SettingsPage() {
             </div>
 
             <div>
-              <h3 className="text-lg font-bold text-slate-800">
+              <h3 className="text-lg font-bold text-gray-800">
                 Change Password
               </h3>
 
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-gray-500">
                 Use a strong, unique password to protect your account
               </p>
             </div>
@@ -394,7 +394,7 @@ export default function SettingsPage() {
           >
             {/* CURRENT PASSWORD */}
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Current Password
               </label>
 
@@ -407,7 +407,7 @@ export default function SettingsPage() {
                   }
                   placeholder="Enter your current password"
                   required
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 pr-12 text-sm outline-none transition-all hover:border-indigo-300 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                  className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 pr-12 text-sm outline-none transition-all hover:border-blue-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/20"
                 />
 
                 <button
@@ -415,7 +415,7 @@ export default function SettingsPage() {
                   onClick={() =>
                     setShowCurrent((p) => !p)
                   }
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 >
                   {showCurrent ? (
                     <EyeOff className="h-4 w-4" />
@@ -428,7 +428,7 @@ export default function SettingsPage() {
 
             {/* NEW PASSWORD */}
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500">
                 New Password
               </label>
 
@@ -441,7 +441,7 @@ export default function SettingsPage() {
                   }
                   placeholder="Enter new password"
                   required
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 pr-12 text-sm outline-none transition-all hover:border-indigo-300 focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-100"
+                  className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 pr-12 text-sm outline-none transition-all hover:border-blue-300 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/20"
                 />
 
                 <button
@@ -449,7 +449,7 @@ export default function SettingsPage() {
                   onClick={() =>
                     setShowNew((p) => !p)
                   }
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 >
                   {showNew ? (
                     <EyeOff className="h-4 w-4" />
@@ -462,7 +462,7 @@ export default function SettingsPage() {
               {/* PASSWORD STRENGTH */}
               {strength && (
                 <div className="mt-3">
-                  <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden">
+                  <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-300 ${strength.bar}`}
                     />
@@ -479,7 +479,7 @@ export default function SettingsPage() {
 
             {/* CONFIRM PASSWORD */}
             <div>
-              <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Confirm New Password
               </label>
 
@@ -491,18 +491,18 @@ export default function SettingsPage() {
                 }
                 placeholder="Re-enter new password"
                 required
-                className={`w-full rounded-2xl border bg-slate-50 px-4 py-3 text-sm outline-none transition-all hover:border-indigo-300 focus:bg-white focus:ring-4
+                className={`w-full rounded-2xl border bg-gray-50 px-4 py-3 text-sm outline-none transition-all hover:border-blue-300 focus:bg-white focus:ring-4
                   ${
                     confirmPassword &&
                     newPassword !== confirmPassword
-                      ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-100'
-                      : 'border-slate-200 focus:border-indigo-500 focus:ring-indigo-100'
+                      ? 'border-red-400 focus:border-red-500 focus:ring-red-500/20'
+                      : 'border-gray-200 focus:border-blue-500 focus:ring-blue-500/20'
                   }`}
               />
 
               {confirmPassword &&
                 newPassword !== confirmPassword && (
-                  <p className="mt-2 text-xs font-medium text-rose-600">
+                  <p className="mt-2 text-xs font-medium text-red-600">
                     Passwords do not match
                   </p>
                 )}
@@ -524,14 +524,14 @@ export default function SettingsPage() {
         {/* SECURITY INFO */}
         <Card padding="sm">
           <div className="flex items-start gap-3">
-            <Shield className="mt-0.5 h-5 w-5 shrink-0 text-indigo-500" />
+            <Shield className="mt-0.5 h-5 w-5 shrink-0 text-blue-500" />
 
             <div>
-              <p className="text-sm font-semibold text-slate-700">
+              <p className="text-sm font-semibold text-gray-700">
                 Security Information
               </p>
 
-              <ul className="mt-3 space-y-2 text-sm text-slate-500">
+              <ul className="mt-3 space-y-2 text-sm text-gray-500">
                 <li>
                   • Sessions expire automatically after
                   15 minutes of inactivity

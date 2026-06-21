@@ -11,15 +11,15 @@ export function Header({ title, subtitle, action }: HeaderProps) {
   const { user } = useAuthStore()
 
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200 bg-white shadow-sm">
+    <header className="sticky top-0 z-30 border-b border-gray-200 bg-white">
       <div className="flex items-center justify-between gap-4 px-6 py-4">
         {/* Title */}
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-2xl font-bold text-slate-900">{title}</h1>
-          {subtitle && <p className="mt-0.5 truncate text-sm text-slate-500">{subtitle}</p>}
+          <h1 className="truncate text-xl font-semibold text-gray-900">{title}</h1>
+          {subtitle && <p className="mt-0.5 truncate text-sm text-gray-500">{subtitle}</p>}
         </div>
 
-        {/* Action */}
+        {/* Actions */}
         {action && (
           <div className="flex flex-wrap items-center gap-2">
             {action}
@@ -27,14 +27,14 @@ export function Header({ title, subtitle, action }: HeaderProps) {
         )}
 
         {/* Right icons */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           <button
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors"
+            className="relative flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
             aria-label="Notifications"
           >
             <Bell className="h-4 w-4" />
           </button>
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-600 text-sm font-bold text-white">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">
             {user?.name?.charAt(0).toUpperCase()}
           </div>
         </div>

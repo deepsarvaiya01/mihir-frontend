@@ -18,6 +18,8 @@ export const templateService = {
     name: string
     code: string
     amount?: number
+    summaryTitle?: string
+    summary?: string
     b2bPrices?: Array<{ b2bLabId: number; amount: number }>
   }): Promise<TestTemplate> => {
     const { data } = await api.post('/tests/templates', payload)
@@ -29,6 +31,8 @@ export const templateService = {
     code?: string
     active?: boolean
     amount?: number
+    summaryTitle?: string
+    summary?: string
     b2bPrices?: Array<{ b2bLabId: number; amount: number }>
   }): Promise<TestTemplate> => {
     const { data } = await api.patch(`/tests/templates/${id}`, payload)
@@ -37,6 +41,24 @@ export const templateService = {
 
   delete: async (id: number): Promise<void> => {
     await api.delete(`/tests/templates/${id}`)
+  },
+
+  updateField: async (
+    templateId: number,
+    fieldId: number,
+    payload: {
+      fieldName: string
+      fieldType: string
+      required: boolean
+      unit?: string
+      options?: string[]
+      formulaJson?: string
+      referenceRange?: string
+      isSectionHeader?: boolean
+    }
+  ): Promise<TestTemplate> => {
+    const { data } = await api.patch(`/tests/templates/${templateId}/fields/${fieldId}`, payload)
+    return data
   },
 
   deleteField: async (templateId: number, fieldId: number): Promise<void> => {
