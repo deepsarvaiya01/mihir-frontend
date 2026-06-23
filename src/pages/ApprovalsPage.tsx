@@ -71,8 +71,7 @@ export default function ApprovalsPage() {
         labSettings,
         signature: activeSignature,
         activeLogo,
-      })
-      toast.success('Report downloaded')
+      }).then(() => toast.success('Report downloaded')).catch(() => toast.error('Failed to generate report'))
     },
     onError: () => toast.error('Failed to generate report'),
   })
