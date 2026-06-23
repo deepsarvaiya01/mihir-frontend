@@ -299,6 +299,7 @@ export default function EnterResultsPage() {
 
   const { order, fields } = form
   const isLocked = order.status === 'APPROVED' || order.status === 'AWAITING_APPROVAL'
+  const inputFields = fields.filter(f => !f.isSectionHeader && f.fieldType !== 'calculated')
   const requiredCount = inputFields.filter(f => f.required).length
   const filledCount = inputFields.filter(f => {
     const v = values[f.id]
