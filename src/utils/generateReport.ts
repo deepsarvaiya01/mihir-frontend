@@ -76,58 +76,62 @@ export function generateLabReport(options: GenerateReportOptions): void {
   const MR = 15          // margin right
   const CW = PAGE_W - ML - MR  // content width
 
-  /* ── Draw page header (logo · lab name · address · dividers) ── */
+  /* ── Draw page header — matches Rameshwar Diagnostic Laboratory format ── */
   function drawPageHeader() {
-    // Top thick rule
-    doc.setDrawColor(60, 60, 60)
-    doc.setLineWidth(0.6)
-    doc.line(ML, 8, PAGE_W - MR, 8)
+    const H = 8  // header top Y
 
     // Logo — prefer active logo from Logo Manager, fall back to lab_logo_base64 from settings
     const logoImageData = activeLogo?.imageData ?? labSettings.lab_logo_base64
+    const labDisplayName = activeLogo?.name ?? labSettings.lab_name ?? 'Diagnostic Laboratory'
+
     let nameX = ML
     if (logoImageData) {
       try {
-        doc.addImage(logoImageData, 'PNG', ML, 10, 18, 18)
-        nameX = ML + 21
+        doc.addImage(logoImageData, 'PNG', ML, H, 20, 20)
+        nameX = ML + 23
       } catch { /* skip invalid logo */ }
     }
 
-    // Lab name — prefer active logo's name, fall back to lab settings name
-    const labDisplayName = activeLogo?.name ?? labSettings.lab_name ?? 'Diagnostic Laboratory'
+    // Lab name — large, bold, blue (matches Rameshwar "Rameshwar" heading)
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(17)
-    doc.setTextColor(10, 10, 10)
-    doc.text(labDisplayName, nameX, 18)
+    doc.setFontSize(20)
+    doc.setTextColor(29, 78, 216)   // blue-700
+    doc.text(labDisplayName, nameX, H + 11)
 
-    // Sub-label
+    // Subtitle — "Diagnostic Laboratory" in gray
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.5)
-    doc.setTextColor(90, 90, 90)
-    doc.text('Diagnostic Laboratory', nameX, 24)
+    doc.setFontSize(9)
+    doc.setTextColor(100, 100, 100)
+    doc.text('Diagnostic Laboratory', nameX, H + 18)
 
-    // Separator
-    doc.setDrawColor(160, 160, 160)
-    doc.setLineWidth(0.3)
-    doc.line(ML, 27, PAGE_W - MR, 27)
+    // Separator 1 — between logo/name block and address block
+    doc.setDrawColor(180, 180, 180)
+    doc.setLineWidth(0.35)
+    doc.line(ML, H + 22, PAGE_W - MR, H + 22)
 
-    // Address | email
+    // Address (left) | Email (right)
     doc.setFontSize(8)
-    doc.setTextColor(30, 30, 30)
-    const addrParts: string[] = []
-    if (labSettings.lab_address) addrParts.push(labSettings.lab_address)
-    if (labSettings.lab_email) addrParts.push(labSettings.lab_email)
-    if (addrParts.length) doc.text(addrParts.join('   |   '), ML, 32)
+    doc.setTextColor(35, 35, 35)
+    if (labSettings.lab_address) {
+      doc.text(`• ${labSettings.lab_address}`, ML, H + 27)
+    }
+    if (labSettings.lab_email) {
+      doc.text(labSettings.lab_email, PAGE_W - MR, H + 27, { align: 'right' })
+    }
 
-    // Timing | phone
+    // Timing + phone (full width)
     const timeParts: string[] = []
-    if (labSettings.lab_timing) timeParts.push(`Time: ${labSettings.lab_timing}`)
+    if (labSettings.lab_timing) timeParts.push(`Time : ${labSettings.lab_timing}`)
     if (labSettings.lab_phone)  timeParts.push(`For Home Collection - ${labSettings.lab_phone}`)
-    if (timeParts.length) doc.text(timeParts.join('   '), ML, 37)
+    if (timeParts.length) {
+      doc.setTextColor(35, 35, 35)
+      doc.text(timeParts.join('   '), ML, H + 33)
+    }
 
-    // Bottom separator
-    doc.setLineWidth(0.3)
-    doc.line(ML, 40, PAGE_W - MR, 40)
+    // Separator 2 — bottom of header block
+    doc.setDrawColor(180, 180, 180)
+    doc.setLineWidth(0.35)
+    doc.line(ML, H + 37, PAGE_W - MR, H + 37)
   }
 
   /* ── Draw patient info block (first page only) ── */
@@ -190,7 +194,7 @@ export function generateLabReport(options: GenerateReportOptions): void {
 
   /* ── Draw page 1 ── */
   drawPageHeader()
-  const patientBottomY = drawPatientInfo(44)
+  const patientBottomY = drawPatientInfo(48)  // header now ends at y=45
 
   // Test name (centred, bold, underlined)
   const testNameY = patientBottomY + 9
@@ -210,7 +214,7 @@ export function generateLabReport(options: GenerateReportOptions): void {
   doc.line(ML, testNameY + 5, PAGE_W - MR, testNameY + 5)
 
   const TABLE_START_Y = testNameY + 8
-  const HEADER_MARGIN_TOP = 45  // continuation pages: table starts below page header
+  const HEADER_MARGIN_TOP = 50  // continuation pages: table starts below page header (header bottom ~y=45)
 
   /* ── Render table ── */
   autoTable(doc, {
@@ -296,29 +300,35 @@ export function generateLabReport(options: GenerateReportOptions): void {
     doc.text(`Page ${i} of ${totalPages}`, PAGE_W - MR, PAGE_H - 8, { align: 'right' })
   }
 
-  /* ── Signature section on last page ── */
-  // Navigate to last page and get final table Y
+  /* ── Signature / authority section on last page (bottom-right) ── */
   doc.setPage(totalPages)
   const finalY: number = ((doc as unknown) as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? 200
 
-  let sigY = finalY + 20
-  // If too close to bottom, push to a new page
-  if (sigY > PAGE_H - 50) {
+  let sigY = finalY + 14
+  if (sigY > PAGE_H - 55) {
     doc.addPage()
     drawPageHeader()
-    sigY = 65
+    sigY = 60
   }
 
-  const sigX = PAGE_W - MR
+  const sigX = PAGE_W - MR   // right edge for right-aligned text
 
-  // Signature image (right-aligned)
+  // Thin horizontal line above signature block
+  doc.setDrawColor(200, 200, 200)
+  doc.setLineWidth(0.3)
+  doc.line(ML, sigY, PAGE_W - MR, sigY)
+
+  sigY += 8
+
+  // Signature image — active signature from Signature Manager (right-aligned)
   if (signature?.imageData) {
     try {
-      doc.addImage(signature.imageData, 'PNG', sigX - 42, sigY - 22, 38, 18)
-    } catch { /* skip if image data invalid */ }
+      doc.addImage(signature.imageData, 'PNG', sigX - 45, sigY, 40, 20)
+      sigY += 22
+    } catch { /* skip invalid signature */ }
   }
 
-  // Doctor name
+  // Doctor name (bold)
   const doctorName = labSettings.doctor_name ?? signature?.name ?? ''
   const doctorQual = labSettings.doctor_qualification ?? ''
 
@@ -328,11 +338,20 @@ export function generateLabReport(options: GenerateReportOptions): void {
     doc.setTextColor(10, 10, 10)
     doc.text(doctorName, sigX, sigY + 2, { align: 'right' })
   }
+
+  // Qualification in parentheses
   if (doctorQual) {
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
+    doc.setFontSize(8.5)
+    doc.setTextColor(60, 60, 60)
     doc.text(`( ${doctorQual} )`, sigX, sigY + 8, { align: 'right' })
   }
+
+  // "Authorized Signatory" label
+  doc.setFont('helvetica', 'italic')
+  doc.setFontSize(7.5)
+  doc.setTextColor(130, 130, 130)
+  doc.text('Authorized Signatory', sigX, sigY + (doctorQual ? 14 : 8), { align: 'right' })
 
   /* ── Save ── */
   const patientSlug = order.patient?.fullName?.replace(/\s+/g, '-') ?? 'patient'
