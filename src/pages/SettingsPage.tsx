@@ -140,100 +140,31 @@ export default function SettingsPage() {
   const strength = passwordStrength(newPassword)
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header
-        title="Settings"
-        subtitle="Manage your account and security preferences"
-      />
+    <div>
+      <Header title="Settings" subtitle="Manage your account and security preferences" />
 
-      {/* MAIN CONTAINER */}
-      <div className="w-full max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
+      <div className="mx-auto max-w-3xl space-y-6 p-6">
 
-        {/* PROFILE CARD */}
+        {/* Profile card */}
         <Card>
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
-            
-            {/* AVATAR */}
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 text-3xl font-bold text-white shadow-lg">
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-2xl font-bold text-white">
               {user?.name?.charAt(0).toUpperCase()}
             </div>
-
-            {/* CONTENT */}
-            <div className="flex-1">
-              
-              {/* TOP */}
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900">
-                    {user?.name}
-                  </h2>
-
-                  <div className="mt-2 flex items-center gap-2 text-sm text-gray-500">
-                    <Mail className="h-4 w-4" />
-                    {user?.email}
-                  </div>
-                </div>
-
-                <Badge
-                  variant={
-                    user?.role === 'SUPER_ADMIN'
-                      ? 'danger'
-                      : 'info'
-                  }
-                  dot
-                >
-                  {user?.role === 'SUPER_ADMIN'
-                    ? 'Super Admin'
-                    : 'Lab User'}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-3 flex-wrap">
+                <h2 className="text-xl font-bold text-gray-900">{user?.name}</h2>
+                <Badge variant={user?.role === 'SUPER_ADMIN' ? 'danger' : 'info'} dot>
+                  {user?.role === 'SUPER_ADMIN' ? 'Super Admin' : 'Lab User'}
                 </Badge>
               </div>
-
-              {/* INFO GRID */}
-              <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                
-                {/* NAME */}
-                <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4">
-                  <div className="mb-2 flex items-center gap-2">
-                    <User className="h-4 w-4 text-gray-400" />
-                    <span className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                      Name
-                    </span>
-                  </div>
-
-                  <p className="text-sm font-semibold text-gray-700 break-words">
-                    {user?.name ?? '—'}
-                  </p>
-                </div>
-
-                {/* EMAIL */}
-                <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4">
-                  <div className="mb-2 flex items-center gap-2">
-                    <Mail className="h-4 w-4 text-gray-400" />
-                    <span className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                      Email
-                    </span>
-                  </div>
-
-                  <p className="text-sm font-semibold text-gray-700 break-all">
-                    {user?.email ?? '—'}
-                  </p>
-                </div>
-
-                {/* ACCESS */}
-                <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4">
-                  <div className="mb-2 flex items-center gap-2">
-                    <Shield className="h-4 w-4 text-gray-400" />
-                    <span className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                      Access Level
-                    </span>
-                  </div>
-
-                  <p className="text-sm font-semibold text-gray-700">
-                    {user?.role === 'SUPER_ADMIN'
-                      ? 'Administrator'
-                      : 'Lab Operator'}
-                  </p>
-                </div>
+              <div className="mt-1 flex items-center gap-1.5 text-sm text-gray-500">
+                <Mail className="h-3.5 w-3.5" />
+                {user?.email}
+              </div>
+              <div className="mt-1 flex items-center gap-1.5 text-sm text-gray-500">
+                <Shield className="h-3.5 w-3.5" />
+                {user?.role === 'SUPER_ADMIN' ? 'Administrator — full system access' : 'Lab Operator — laboratory access'}
               </div>
             </div>
           </div>
@@ -559,3 +490,4 @@ export default function SettingsPage() {
     </div>
   )
 }
+

@@ -143,13 +143,16 @@ export default function LabBranchesPage() {
 
       <div className="p-6 space-y-6">
         {/* Summary cards */}
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
           {[
-            { label: 'Total Branches', value: totalBranches, bg: 'bg-blue-50', text: 'text-blue-600', icon: <MapPin className="h-5 w-5" /> },
-            { label: 'Active Branches', value: activeBranches, bg: 'bg-emerald-50', text: 'text-emerald-600', icon: <MapPin className="h-5 w-5" /> },
-          ].map((s) => (
+            { label: 'Total Branches',    value: totalBranches,                bg: 'bg-blue-50',    text: 'text-blue-600'    },
+            { label: 'Active Branches',   value: activeBranches,               bg: 'bg-emerald-50', text: 'text-emerald-600' },
+            { label: 'Inactive Branches', value: totalBranches - activeBranches, bg: 'bg-gray-50',    text: 'text-gray-500'    },
+          ].map(s => (
             <div key={s.label} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-              <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${s.bg} ${s.text} mb-3`}>{s.icon}</div>
+              <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-xl ${s.bg} ${s.text}`}>
+                <MapPin className="h-4 w-4" />
+              </div>
               <p className="text-2xl font-bold text-gray-900">{s.value}</p>
               <p className="text-sm text-gray-500">{s.label}</p>
             </div>

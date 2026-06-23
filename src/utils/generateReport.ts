@@ -90,7 +90,7 @@ export async function generateLabReport(options: GenerateReportOptions): Promise
 
   // Space reserved at the top of every page for the Rameshwar.pdf header template.
   // The header in report-template.pdf occupies approximately the top 48 mm.
-  const TEMPLATE_HDR = 48
+  const TEMPLATE_HDR = 58
 
   /* ── Draw patient info block (first page only) ── */
   function drawPatientInfo(startY: number): number {

@@ -152,9 +152,12 @@ export default function ApprovalsPage() {
           <>
             {/* ── Pending approvals ── */}
             <div>
-              <h2 className="mb-3 text-sm font-bold uppercase tracking-wider text-gray-500">
-                Pending Review ({pending.length})
-              </h2>
+              <div className="mb-4 flex items-center gap-3">
+                <h2 className="text-base font-bold text-gray-800">Pending Review</h2>
+                {pending.length > 0 && (
+                  <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700">{pending.length}</span>
+                )}
+              </div>
 
               {pending.length === 0 ? (
                 <EmptyState
@@ -165,52 +168,37 @@ export default function ApprovalsPage() {
               ) : (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {pending.map(order => (
-                    <Card key={order.id} className="border-amber-200">
-                      <div className="mb-4 flex flex-row items-start justify-between gap-3">
-                        <div>
+                    <div key={order.id} className="rounded-2xl border border-amber-200 bg-white p-5 shadow-sm">
+                      <div className="mb-4 flex items-start justify-between gap-3">
+                        <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="font-bold text-gray-800">Order #{order.id}</span>
+                            <span className="text-xs font-semibold uppercase tracking-wide text-amber-600">Order #{order.id}</span>
                           </div>
-                          <p className="mt-1 text-sm font-medium text-gray-700">{order.patient?.fullName ?? '—'}</p>
-                          <p className="text-xs text-gray-500">{order.template?.name ?? '—'}</p>
+                          <p className="mt-1 font-semibold text-gray-900">{order.patient?.fullName ?? '—'}</p>
+                          <p className="mt-0.5 text-sm text-gray-500">{order.template?.name ?? '—'}</p>
                           <p className="mt-1 text-xs text-gray-400">
-                            {order.createdAt ? new Date(order.createdAt).toLocaleString() : ''}
+                            {order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}
                           </p>
                         </div>
                         <OrderStatusBadge status={order.status} />
                       </div>
 
-                      <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
-                        {/* Review button opens the modal (needed to see results before deciding) */}
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          icon={<FileText className="h-3.5 w-3.5" />}
+                      <div className="flex flex-wrap gap-2">
+                        <Button size="sm" variant="secondary" icon={<FileText className="h-3.5 w-3.5" />}
                           loading={loadResults.isPending && loadResults.variables === order.id}
-                          onClick={() => loadResults.mutate(order.id)}
-                        >
+                          onClick={() => loadResults.mutate(order.id)}>
                           Review
                         </Button>
-
-                        <Button
-                          size="sm"
-                          variant="success"
-                          icon={<CheckCircle2 className="h-3.5 w-3.5" />}
-                          onClick={() => setConfirmAction({ type: 'approve', order })}
-                        >
+                        <Button size="sm" variant="success" icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+                          onClick={() => setConfirmAction({ type: 'approve', order })}>
                           Approve
                         </Button>
-
-                        <Button
-                          size="sm"
-                          variant="danger"
-                          icon={<XCircle className="h-3.5 w-3.5" />}
-                          onClick={() => setConfirmAction({ type: 'reject', order })}
-                        >
+                        <Button size="sm" variant="danger" icon={<XCircle className="h-3.5 w-3.5" />}
+                          onClick={() => setConfirmAction({ type: 'reject', order })}>
                           Reject
                         </Button>
                       </div>
-                    </Card>
+                    </div>
                   ))}
                 </div>
               )}
@@ -219,9 +207,10 @@ export default function ApprovalsPage() {
             {/* ── Reviewed orders ── */}
             {reviewed.length > 0 && (
               <div>
-                <h2 className="mb-3 text-sm font-bold uppercase tracking-wider text-gray-500">
-                  Recently Reviewed ({reviewed.length})
-                </h2>
+                <div className="mb-4 flex items-center gap-3">
+                  <h2 className="text-base font-bold text-gray-800">Recently Reviewed</h2>
+                  <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600">{reviewed.length}</span>
+                </div>
 
                 <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
                   <div className="w-full overflow-x-auto">

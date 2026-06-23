@@ -1,4 +1,4 @@
-﻿import { useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ImageIcon,
@@ -11,6 +11,9 @@ import {
   ImageOff,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { Header } from '../components/layout/Header'
+import { Button } from '../components/ui/Button'
+import { ConfirmModal } from '../components/ui/Modal'
 import { logoService } from '../services/logos'
 import type { Logo } from '../types'
 
@@ -71,7 +74,6 @@ function UploadModal({ onClose, onSave, saving }: UploadModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl">
-        {/* header */}
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
           <div className="flex items-center gap-2">
             <ImageIcon className="h-5 w-5 text-blue-600" />
@@ -83,7 +85,6 @@ function UploadModal({ onClose, onSave, saving }: UploadModalProps) {
         </div>
 
         <div className="space-y-5 px-6 py-5">
-          {/* Name field */}
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700">Company / Lab Name</label>
             <input
@@ -96,7 +97,6 @@ function UploadModal({ onClose, onSave, saving }: UploadModalProps) {
             <p className="mt-1 text-xs text-gray-400">This name will be shown in the app header and on reports when this logo is active.</p>
           </div>
 
-          {/* Drop zone */}
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-700">Logo Image</label>
             <div
@@ -108,11 +108,7 @@ function UploadModal({ onClose, onSave, saving }: UploadModalProps) {
               onDrop={handleDrop}
             >
               {preview ? (
-                <img
-                  src={preview}
-                  alt="preview"
-                  className="max-h-28 max-w-full rounded-lg object-contain"
-                />
+                <img src={preview} alt="preview" className="max-h-28 max-w-full rounded-lg object-contain" />
               ) : (
                 <>
                   <Upload className="mb-2 h-8 w-8 text-gray-400" />
@@ -139,7 +135,6 @@ function UploadModal({ onClose, onSave, saving }: UploadModalProps) {
           </div>
         </div>
 
-        {/* footer */}
         <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
           <button
             onClick={onClose}
@@ -167,7 +162,7 @@ interface LogoCardProps {
   logo: Logo
   onActivate: (id: number) => void
   onDeactivate: () => void
-  onDelete: (id: number) => void
+  onDelete: (logo: Logo) => void
   busy: boolean
 }
 
@@ -180,21 +175,15 @@ function LogoCard({ logo, onActivate, onDeactivate, onDelete, busy }: LogoCardPr
           : 'border-gray-100 hover:border-gray-200 hover:shadow-md'
         }`}
     >
-      {/* Active badge */}
       {logo.isActive && (
         <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-blue-600 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow">
           <CheckCircle2 className="h-3 w-3" /> Active
         </div>
       )}
 
-      {/* Image area */}
       <div className="flex h-44 items-center justify-center bg-gray-50 p-4">
         {logo.imageData ? (
-          <img
-            src={logo.imageData}
-            alt={logo.name}
-            className="max-h-full max-w-full rounded-lg object-contain"
-          />
+          <img src={logo.imageData} alt={logo.name} className="max-h-full max-w-full rounded-lg object-contain" />
         ) : (
           <div className="flex flex-col items-center gap-2 text-gray-300">
             <ImageOff className="h-10 w-10" />
@@ -203,7 +192,6 @@ function LogoCard({ logo, onActivate, onDeactivate, onDelete, busy }: LogoCardPr
         )}
       </div>
 
-      {/* Info + actions */}
       <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-gray-900">{logo.name}</p>
@@ -234,7 +222,7 @@ function LogoCard({ logo, onActivate, onDeactivate, onDelete, busy }: LogoCardPr
           )}
 
           <button
-            onClick={() => onDelete(logo.id)}
+            onClick={() => onDelete(logo)}
             disabled={busy}
             title="Delete logo"
             className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
@@ -252,6 +240,7 @@ function LogoCard({ logo, onActivate, onDeactivate, onDelete, busy }: LogoCardPr
 export default function LogosPage() {
   const qc = useQueryClient()
   const [showModal, setShowModal] = useState(false)
+  const [deleteLogo, setDeleteLogo] = useState<Logo | null>(null)
 
   const { data: logos = [], isLoading, refetch } = useQuery({
     queryKey: ['logos'],
@@ -292,96 +281,89 @@ export default function LogosPage() {
     onSuccess: () => {
       toast.success('Logo deleted')
       qc.invalidateQueries({ queryKey: ['logos'] })
+      setDeleteLogo(null)
     },
     onError: () => toast.error('Failed to delete logo'),
   })
 
   const busy = createMut.isPending || activateMut.isPending || deactivateMut.isPending || deleteMut.isPending
-
   const activeLogo = logos.find(l => l.isActive)
 
   return (
-    <div className="space-y-6 p-6">
-      {/* Page header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Logo Management</h1>
-          <p className="mt-0.5 text-sm text-gray-500">
-            Upload company logos and activate one to display across the app and on reports.
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <button
-            onClick={() => refetch()}
-            className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
-          >
-            <Upload className="h-4 w-4" />
-            Upload Logo
-          </button>
-        </div>
-      </div>
-
-      {/* Stats bar */}
-      <div className="flex gap-4">
-        <div className="rounded-xl border border-gray-100 bg-white px-5 py-3 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wider text-gray-500">Total</p>
-          <p className="mt-0.5 text-2xl font-bold text-gray-900">{logos.length}</p>
-        </div>
-        <div className={`rounded-xl border px-5 py-3 shadow-sm ${activeLogo ? 'border-blue-100 bg-blue-50' : 'border-gray-100 bg-white'}`}>
-          <p className="text-xs font-medium uppercase tracking-wider text-gray-500">Active</p>
-          <p className={`mt-0.5 text-2xl font-bold ${activeLogo ? 'text-blue-700' : 'text-gray-400'}`}>
-            {activeLogo?.name ?? '—'}
-          </p>
-        </div>
-      </div>
-
-      {/* Content */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="h-64 animate-pulse rounded-2xl bg-gray-100" />
-          ))}
-        </div>
-      ) : logos.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-white py-20 text-center">
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100">
-            <ImageIcon className="h-8 w-8 text-gray-400" />
+    <div>
+      <Header
+        title="Logo Management"
+        subtitle="Upload company logos and activate one to display across the app and on reports"
+        action={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              icon={<RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />}
+              onClick={() => refetch()}
+            >
+              Refresh
+            </Button>
+            <Button icon={<Upload className="h-4 w-4" />} onClick={() => setShowModal(true)}>
+              Upload Logo
+            </Button>
           </div>
-          <h3 className="text-base font-semibold text-gray-900">No logos yet</h3>
-          <p className="mt-1 max-w-xs text-sm text-gray-500">
-            Upload your first logo. The active one will appear in the sidebar header and on all generated reports.
-          </p>
-          <button
-            onClick={() => setShowModal(true)}
-            className="mt-5 flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
-          >
-            <Upload className="h-4 w-4" />
-            Upload First Logo
-          </button>
+        }
+      />
+
+      <div className="space-y-6 p-6">
+        {/* Stats */}
+        <div className="flex gap-4">
+          <div className="rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Total</p>
+            <p className="mt-0.5 text-2xl font-bold text-gray-900">{logos.length}</p>
+          </div>
+          <div className={`rounded-2xl border px-5 py-4 shadow-sm ${activeLogo ? 'border-blue-100 bg-blue-50' : 'border-gray-200 bg-white'}`}>
+            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Active</p>
+            <p className={`mt-0.5 text-lg font-bold ${activeLogo ? 'text-blue-700' : 'text-gray-400'}`}>
+              {activeLogo?.name ?? '—'}
+            </p>
+          </div>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-          {logos.map(logo => (
-            <LogoCard
-              key={logo.id}
-              logo={logo}
-              busy={busy}
-              onActivate={id => activateMut.mutate(id)}
-              onDeactivate={() => deactivateMut.mutate()}
-              onDelete={id => {
-                if (window.confirm(`Delete "${logo.name}"?`)) deleteMut.mutate(logo.id)
-              }}
-            />
-          ))}
-        </div>
-      )}
+
+        {/* Content */}
+        {isLoading ? (
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="h-64 animate-pulse rounded-2xl bg-gray-100" />
+            ))}
+          </div>
+        ) : logos.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 bg-white py-20 text-center">
+            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100">
+              <ImageIcon className="h-8 w-8 text-gray-400" />
+            </div>
+            <h3 className="text-base font-semibold text-gray-900">No logos yet</h3>
+            <p className="mt-1 max-w-xs text-sm text-gray-500">
+              Upload your first logo. The active one will appear in the sidebar header and on all generated reports.
+            </p>
+            <button
+              onClick={() => setShowModal(true)}
+              className="mt-5 flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"
+            >
+              <Upload className="h-4 w-4" />
+              Upload First Logo
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+            {logos.map(logo => (
+              <LogoCard
+                key={logo.id}
+                logo={logo}
+                busy={busy}
+                onActivate={id => activateMut.mutate(id)}
+                onDeactivate={() => deactivateMut.mutate()}
+                onDelete={logo => setDeleteLogo(logo)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
 
       {showModal && (
         <UploadModal
@@ -390,7 +372,17 @@ export default function LogosPage() {
           onSave={(name, imageData) => createMut.mutate({ name, imageData })}
         />
       )}
+
+      <ConfirmModal
+        open={!!deleteLogo}
+        onClose={() => setDeleteLogo(null)}
+        onConfirm={() => deleteLogo && deleteMut.mutate(deleteLogo.id)}
+        title="Delete Logo"
+        message={`Are you sure you want to delete "${deleteLogo?.name}"? This action cannot be undone.`}
+        confirmLabel="Delete Logo"
+        variant="danger"
+        loading={deleteMut.isPending}
+      />
     </div>
   )
 }
-
