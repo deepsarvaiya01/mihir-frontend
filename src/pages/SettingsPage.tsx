@@ -2,7 +2,6 @@
 import {
   Shield,
   Key,
-  User,
   Mail,
   Eye,
   EyeOff,

@@ -1,16 +1,18 @@
 ﻿import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
 } from 'recharts'
 import {
   FlaskConical, Users, ClipboardList, CheckCircle2,
-  Clock, XCircle, UserCog, TrendingUp,
+  Clock, XCircle,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { StatCard } from '../components/ui/StatCard'
 import { Card, CardHeader } from '../components/ui/Card'
 import { PageLoader } from '../components/ui/Spinner'
+import { PageContent } from '../components/ui/PageContent'
 import { OrderStatusBadge } from '../components/ui/Badge'
 import { useAuthStore } from '../store/authStore'
 import { dashboardService } from '../services/dashboard'
@@ -94,7 +96,7 @@ export default function DashboardPage() {
         subtitle={isAdmin ? 'Overview of laboratory operations' : 'Your lab operations at a glance'}
       />
 
-      <div className="space-y-5 p-6">
+      <PageContent className="space-y-5">
         {/* Primary stats */}
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {isAdmin ? (
@@ -113,16 +115,6 @@ export default function DashboardPage() {
             </>
           )}
         </div>
-
-        {/* Admin secondary stats */}
-        {isAdmin && summary && (
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <StatCard title="Super Admins" value={summary.superAdmins} icon={<UserCog className="h-5 w-5" />} color="violet" />
-            <StatCard title="Lab Users" value={summary.labUsers} icon={<TrendingUp className="h-5 w-5" />} color="blue" />
-            <StatCard title="Pending Orders" value={summary.pendingOrders} icon={<Clock className="h-5 w-5" />} color="amber" />
-            <StatCard title="Completed Orders" value={summary.completedOrders} icon={<CheckCircle2 className="h-5 w-5" />} color="emerald" />
-          </div>
-        )}
 
         {/* Charts */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
@@ -174,9 +166,9 @@ export default function DashboardPage() {
               <p className="text-sm font-semibold text-amber-900">{awaitingCount} order{awaitingCount > 1 ? 's' : ''} awaiting approval</p>
               <p className="text-xs text-amber-700 mt-0.5">Review submitted test results in the Approvals section.</p>
             </div>
-            <a href="/approvals" className="shrink-0 rounded-lg bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-700 transition-colors">
+            <Link to="/approvals" className="shrink-0 rounded-lg bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-700 transition-colors">
               Review
-            </a>
+            </Link>
           </div>
         )}
 
@@ -223,7 +215,7 @@ export default function DashboardPage() {
             <p className="py-8 text-center text-sm text-gray-400">No orders yet</p>
           )}
         </Card>
-      </div>
+      </PageContent>
     </div>
   )
 }

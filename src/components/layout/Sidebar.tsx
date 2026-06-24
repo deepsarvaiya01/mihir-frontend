@@ -13,14 +13,19 @@ import { toast } from 'sonner'
 
 interface NavItem { to: string; label: string; icon: React.ReactNode }
 
-const labItems: NavItem[] = [
-  { to: '/dashboard',    label: 'Dashboard',         icon: <LayoutDashboard className="h-4 w-4" /> },
+const labNavItems: NavItem[] = [
   { to: '/patients',     label: 'Patients',           icon: <Users className="h-4 w-4" /> },
   { to: '/orders',       label: 'Orders & Results',   icon: <ClipboardList className="h-4 w-4" /> },
   { to: '/billing',      label: 'Billing & Reports',  icon: <Receipt className="h-4 w-4" /> },
   { to: '/history',      label: 'Result History',     icon: <History className="h-4 w-4" /> },
   { to: '/settings',     label: 'Settings',           icon: <Settings className="h-4 w-4" /> },
 ]
+
+const dashboardItem: NavItem = {
+  to: '/dashboard',
+  label: 'Dashboard',
+  icon: <LayoutDashboard className="h-4 w-4" />,
+}
 
 const adminItems: NavItem[] = [
   { to: '/approvals',    label: 'Approvals',          icon: <CheckSquare className="h-4 w-4" /> },
@@ -154,25 +159,26 @@ export function Sidebar() {
 
         {/* ── Navigation ──────────────────────────────────── */}
         <nav className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-4 space-y-4">
-          {/* Laboratory section */}
-          <div>
-            <SectionLabel label="Laboratory" expanded={expanded} />
-            <div className="space-y-0.5">
-              {labItems.map(item => (
-                <NavItemLink key={item.to} item={item} expanded={expanded} />
-              ))}
-            </div>
-          </div>
-
-          {/* Administration section — admin only */}
-          {isAdmin && (
-            <div>
-              <div className={`overflow-hidden transition-all duration-200 ${expanded ? 'max-h-px opacity-100 mb-3' : 'max-h-0 opacity-0 mb-0'}`}>
-                <div className="border-t border-white/5" />
-              </div>
-              <SectionLabel label="Administration" expanded={expanded} />
+          {isAdmin ? (
+            <>
               <div className="space-y-0.5">
-                {adminItems.map(item => (
+                <NavItemLink item={dashboardItem} expanded={expanded} />
+              </div>
+              <div>
+                <SectionLabel label="Administration" expanded={expanded} />
+                <div className="space-y-0.5">
+                  {adminItems.map(item => (
+                    <NavItemLink key={item.to} item={item} expanded={expanded} />
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div>
+              <SectionLabel label="Laboratory" expanded={expanded} />
+              <div className="space-y-0.5">
+                <NavItemLink item={dashboardItem} expanded={expanded} />
+                {labNavItems.map(item => (
                   <NavItemLink key={item.to} item={item} expanded={expanded} />
                 ))}
               </div>

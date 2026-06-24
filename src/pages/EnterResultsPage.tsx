@@ -19,6 +19,9 @@ import {
 import { toast } from 'sonner'
 import { orderService } from '../services/orders'
 import { OrderStatusBadge } from '../components/ui/Badge'
+import { Header } from '../components/layout/Header'
+import { PageContent } from '../components/ui/PageContent'
+import { PageLoader } from '../components/ui/Spinner'
 import { Input, Select } from '../components/ui/Input'
 import type { TestTemplateField } from '../types'
 
@@ -278,13 +281,7 @@ export default function EnterResultsPage() {
   /* ── Guards ── */
   if (isNaN(orderId)) return <div className="p-8 text-center text-gray-500">Invalid order ID.</div>
 
-  if (isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-      </div>
-    )
-  }
+  if (isLoading) return <PageLoader />
 
   if (isError || !form) {
     return (
@@ -308,25 +305,11 @@ export default function EnterResultsPage() {
 
   return (
     <div>
-      {/* Sticky page header */}
-      <div className="sticky top-0 z-30 border-b border-gray-200 bg-white shadow-sm">
-        <div className="flex items-center gap-4 px-6 py-4">
-          <button
-            onClick={() => navigate('/orders')}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-800"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </button>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-bold text-gray-900">
-              Enter Results — Order #{order.id}
-            </h1>
-            <p className="mt-0.5 text-sm text-gray-500">
-              {order.template?.name} · {order.patient?.fullName}
-            </p>
-          </div>
+      <Header
+        title={`Enter Results — Order #${order.id}`}
+        subtitle={`${order.template?.name} · ${order.patient?.fullName}`}
+        action={
           <div className="flex items-center gap-3">
-            {/* Progress indicator */}
             {inputFields.length > 0 && (
               <span className="hidden text-xs text-gray-400 sm:block">
                 {filledCount} / {inputFields.length} filled
@@ -335,10 +318,10 @@ export default function EnterResultsPage() {
             )}
             <OrderStatusBadge status={order.status} />
           </div>
-        </div>
-      </div>
+        }
+      />
 
-      <div className="mx-auto max-w-4xl space-y-6 p-6">
+      <PageContent maxWidth="4xl" className="space-y-6">
 
         {/* Locked notice */}
         {isLocked && (
@@ -563,7 +546,7 @@ export default function EnterResultsPage() {
             <CheckCircle2 className="h-4 w-4" /> Results submitted! Redirecting…
           </div>
         )}
-      </div>
+      </PageContent>
     </div>
   )
 }

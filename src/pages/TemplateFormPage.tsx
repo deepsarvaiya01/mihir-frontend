@@ -8,6 +8,8 @@ import {
 import { Button } from '../components/ui/Button'
 import { Input, Select } from '../components/ui/Input'
 import { Badge } from '../components/ui/Badge'
+import { Header } from '../components/layout/Header'
+import { PageContent } from '../components/ui/PageContent'
 import { ConfirmModal } from '../components/ui/Modal'
 import { PageLoader } from '../components/ui/Spinner'
 import { templateService } from '../services/templates'
@@ -313,32 +315,31 @@ export default function TemplateFormPage() {
 
   if (isEdit && isLoading) return <PageLoader />
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="sticky top-0 z-10 border-b border-gray-200 bg-white px-6 py-4 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/templates')}
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 transition-colors">
-            <ArrowLeft className="h-4 w-4" />
-          </button>
-          <div>
-            <h1 className="text-lg font-bold text-gray-900">
-              {isEdit ? `Edit Template — ${template?.name ?? ''}` : 'Create Test Template'}
-            </h1>
-            <p className="text-xs text-gray-400">
-              {isEdit ? 'Update info, B2B pricing and fields' : 'Define a new lab test template'}
-            </p>
-          </div>
-        </div>
-        <Button
-          icon={saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          loading={saveMutation.isPending} onClick={handleSave}
-        >
-          {isEdit ? 'Save Changes' : 'Create Template'}
-        </Button>
-      </div>
+  const headerActions = (
+    <div className="flex items-center gap-2">
+      <Button variant="secondary" size="sm" onClick={() => navigate('/templates')} icon={<ArrowLeft className="h-4 w-4" />}>
+        Back
+      </Button>
+      <Button
+        size="sm"
+        icon={saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+        loading={saveMutation.isPending}
+        onClick={handleSave}
+      >
+        {isEdit ? 'Save Changes' : 'Create Template'}
+      </Button>
+    </div>
+  )
 
-      <div className="mx-auto max-w-4xl px-6 py-8 space-y-6">
+  return (
+    <div>
+      <Header
+        title={isEdit ? 'Edit Template' : 'New Template'}
+        subtitle={isEdit ? `Update ${template?.name ?? 'template'} fields and pricing` : 'Define a new lab test template'}
+        action={headerActions}
+      />
+
+      <PageContent maxWidth="4xl" className="space-y-6">
         <FormCard>
           <SectionTitle icon={<FlaskConical className="h-4 w-4" />} title="Basic Information" />
           <div className="grid gap-4 sm:grid-cols-2">
@@ -643,7 +644,7 @@ export default function TemplateFormPage() {
             {isEdit ? 'Save Changes' : 'Create Template'}
           </Button>
         </div>
-      </div>
+      </PageContent>
 
       <ConfirmModal
         open={!!deleteField}

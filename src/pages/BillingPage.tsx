@@ -2,12 +2,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Search, Receipt, ChevronDown, DollarSign,
-  CheckCircle, Clock, FileText, Pencil, X,
+  CheckCircle, Clock, FileText, Pencil,
   RefreshCw, Download,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
+import { Input } from '../components/ui/Input'
+import { Modal } from '../components/ui/Modal'
 import { EmptyState } from '../components/ui/EmptyState'
 import { PageLoader } from '../components/ui/Spinner'
 import { Badge } from '../components/ui/Badge'
@@ -118,132 +120,86 @@ function PaymentModal({ order, onClose, onSave, saving }: PaymentModalProps) {
     setForm(prev => ({ ...prev, [key]: val }))
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl">
-        {/* header */}
-        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-          <div>
-            <h2 className="text-base font-semibold text-gray-900">Update Payment — Order #{order.id}</h2>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {order.patient?.fullName} · {order.template?.name}
-            </p>
-          </div>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
-            <X className="h-4 w-4" />
-          </button>
+    <Modal
+      open
+      onClose={onClose}
+      title={`Update Payment — Order #${order.id}`}
+      subtitle={`${order.patient?.fullName} · ${order.template?.name}`}
+      size="sm"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button loading={saving} onClick={() => onSave(order.id, form)}>Save Changes</Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <Input label="Amount (₹)" type="number" min={0} step="0.01"
+            value={form.amount} onChange={e => set('amount', e.target.value)} />
+          <Input label="Discount (%)" type="number" min={0} max={100} step="0.5"
+            value={form.discount} onChange={e => set('discount', e.target.value)} />
         </div>
 
-        <div className="space-y-4 px-6 py-5">
-          {/* Amount + Discount row */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Amount (₹)
-              </label>
-              <input
-                type="number" min="0" step="0.01"
-                value={form.amount}
-                onChange={e => set('amount', e.target.value)}
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Discount (%)
-              </label>
-              <input
-                type="number" min="0" max="100" step="0.5"
-                value={form.discount}
-                onChange={e => set('discount', e.target.value)}
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
-          </div>
+        <div className="flex items-center justify-between rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
+          <span className="text-sm font-medium text-blue-700">Net Amount</span>
+          <span className="text-xl font-bold text-blue-800">
+            ₹{netAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+          </span>
+        </div>
 
-          {/* Net amount (read-only calculated) */}
-          <div className="flex items-center justify-between rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
-            <span className="text-sm font-medium text-blue-700">Net Amount</span>
-            <span className="text-xl font-bold text-blue-800">
-              ₹{netAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-            </span>
-          </div>
-
-          {/* Payment status */}
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">
-              Payment Status <span className="text-red-500">*</span>
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              {(['PENDING', 'PARTIAL', 'PAID'] as PaymentStatus[]).map(s => (
-                <button
-                  key={s}
-                  onClick={() => set('paymentStatus', s)}
-                  className={`rounded-xl border-2 py-2.5 text-sm font-semibold transition-all ${
-                    form.paymentStatus === s
-                      ? s === 'PAID'
-                        ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                        : s === 'PARTIAL'
-                          ? 'border-blue-400 bg-blue-50 text-blue-700'
-                          : 'border-amber-400 bg-amber-50 text-amber-700'
-                      : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
-                  }`}
-                >
-                  {s.charAt(0) + s.slice(1).toLowerCase()}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Payment method */}
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">
-              Payment Method
-            </label>
-            <div className="grid grid-cols-4 gap-2">
-              {(['', 'CASH', 'CHEQUE', 'ONLINE'] as const).map(m => (
-                <button
-                  key={m}
-                  onClick={() => set('paymentType', m)}
-                  className={`rounded-xl border-2 py-2.5 text-sm font-semibold transition-all ${
-                    form.paymentType === m
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
-                  }`}
-                >
-                  {m === '' ? 'None' : m.charAt(0) + m.slice(1).toLowerCase()}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Receipt number info */}
-          <div className="flex items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-            <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">Receipt #</span>
-            <span className="font-mono text-sm text-gray-600">
-              {order.receiptNumber ?? <span className="italic text-gray-400">Auto-generated on save</span>}
-            </span>
+        <div>
+          <p className="mb-2 text-xs font-medium text-gray-500">Payment Status</p>
+          <div className="grid grid-cols-3 gap-2">
+            {(['PENDING', 'PARTIAL', 'PAID'] as PaymentStatus[]).map(s => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => set('paymentStatus', s)}
+                className={`rounded-lg border py-2 text-sm font-medium transition-all ${
+                  form.paymentStatus === s
+                    ? s === 'PAID'
+                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                      : s === 'PARTIAL'
+                        ? 'border-blue-400 bg-blue-50 text-blue-700'
+                        : 'border-amber-400 bg-amber-50 text-amber-700'
+                    : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                }`}
+              >
+                {s.charAt(0) + s.slice(1).toLowerCase()}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* footer */}
-        <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
-          <button
-            onClick={onClose}
-            className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => onSave(order.id, form)}
-            disabled={saving}
-            className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-          >
-            {saving && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
-            Save Changes
-          </button>
+        <div>
+          <p className="mb-2 text-xs font-medium text-gray-500">Payment Method</p>
+          <div className="grid grid-cols-4 gap-2">
+            {(['', 'CASH', 'CHEQUE', 'ONLINE'] as const).map(m => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => set('paymentType', m)}
+                className={`rounded-lg border py-2 text-sm font-medium transition-all ${
+                  form.paymentType === m
+                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                    : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                }`}
+              >
+                {m === '' ? 'None' : m.charAt(0) + m.slice(1).toLowerCase()}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+          <span className="text-xs font-medium text-gray-400">Receipt #</span>
+          <span className="font-mono text-sm text-gray-600">
+            {order.receiptNumber ?? <span className="italic text-gray-400">Auto-generated on save</span>}
+          </span>
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }
 

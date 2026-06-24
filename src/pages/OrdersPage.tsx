@@ -298,7 +298,7 @@ export default function OrdersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {tableRows.map((row, idx) => {
+                {tableRows.map((row) => {
                   if (row.kind === 'group') {
                     const ready = canSubmitBatch(row.receipt)
                     return (

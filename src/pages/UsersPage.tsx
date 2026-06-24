@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, UserCog, Mail, Shield, Pencil, Trash2, Users, CheckCircle2 } from 'lucide-react'
+import { Plus, UserCog, Mail, Shield, Pencil, Trash2, Users } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
 import { Input, Select } from '../components/ui/Input'
@@ -8,6 +8,9 @@ import { Badge } from '../components/ui/Badge'
 import { Modal, ConfirmModal } from '../components/ui/Modal'
 import { EmptyState } from '../components/ui/EmptyState'
 import { PageLoader } from '../components/ui/Spinner'
+import { PageContent } from '../components/ui/PageContent'
+import { StatSummaryGrid } from '../components/ui/StatSummaryGrid'
+import { DataTable, DataTableHead, DataTableTh, DataTableBody, DataTableRow, DataTableTd } from '../components/ui/DataTable'
 import { userService, type UserRecord, type CreateUserDto, type UpdateUserDto } from '../services/users'
 import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
@@ -84,87 +87,70 @@ export default function UsersPage() {
         action={<Button icon={<Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>New User</Button>}
       />
 
-      <div className="space-y-6 p-6">
-        {/* Stats */}
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          {[
-            { label: 'Total Users',  value: users.length, icon: <Users className="h-5 w-5" />,       bg: 'bg-blue-50',    text: 'text-blue-600'    },
-            { label: 'Super Admins', value: admins,       icon: <Shield className="h-5 w-5" />,      bg: 'bg-violet-50',  text: 'text-violet-600'  },
-            { label: 'Lab Users',    value: labUsers,     icon: <UserCog className="h-5 w-5" />,     bg: 'bg-emerald-50', text: 'text-emerald-600' },
-            { label: 'Active',       value: users.length, icon: <CheckCircle2 className="h-5 w-5" />, bg: 'bg-green-50',   text: 'text-green-600'   },
-          ].map(s => (
-            <div key={s.label} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-              <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl ${s.bg} ${s.text}`}>{s.icon}</div>
-              <p className="text-2xl font-bold text-gray-900">{s.value}</p>
-              <p className="text-sm text-gray-500">{s.label}</p>
-            </div>
-          ))}
-        </div>
+      <PageContent className="space-y-6">
+        <StatSummaryGrid
+          columns={3}
+          stats={[
+            { title: 'Total Users', value: users.length, icon: <Users className="h-5 w-5" />, color: 'blue' },
+            { title: 'Super Admins', value: admins, icon: <Shield className="h-5 w-5" />, color: 'violet' },
+            { title: 'Lab Users', value: labUsers, icon: <UserCog className="h-5 w-5" />, color: 'emerald' },
+          ]}
+        />
 
         {isLoading ? (
           <PageLoader />
         ) : users.length === 0 ? (
           <EmptyState icon={<UserCog className="h-12 w-12" />} title="No users found" description="Create your first user to get started" />
         ) : (
-          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-100 bg-gray-50 px-6 py-4">
-              <h3 className="text-sm font-semibold text-gray-700">All Users ({users.length})</h3>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="min-w-[600px] w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">User</th>
-                    <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Email</th>
-                    <th className="px-6 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Role</th>
-                    <th className="px-6 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-400">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {users.map(u => (
-                    <tr key={u.id} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">
-                            {u.name.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <p className="font-semibold text-gray-800">{u.name}</p>
-                            <p className="text-xs text-gray-400">ID #{u.id}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2 text-gray-600">
-                          <Mail className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-                          {u.email}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <Badge variant={u.role === 'SUPER_ADMIN' ? 'danger' : 'info'} dot>
-                          {ROLE_LABELS[u.role]}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex justify-end gap-2">
-                          <Button size="sm" variant="ghost" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => openEdit(u)}>Edit</Button>
-                          {u.id !== currentUser?.id && (
-                            <Button size="sm" variant="ghost" icon={<Trash2 className="h-3.5 w-3.5 text-red-500" />}
-                              className="text-red-500 hover:bg-red-50" onClick={() => setDeleteUser(u)}>
-                              Delete
-                            </Button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <DataTable title="All Users" count={users.length}>
+            <DataTableHead>
+              <DataTableTh>User</DataTableTh>
+              <DataTableTh>Email</DataTableTh>
+              <DataTableTh>Role</DataTableTh>
+              <DataTableTh align="right">Actions</DataTableTh>
+            </DataTableHead>
+            <DataTableBody>
+              {users.map(u => (
+                <DataTableRow key={u.id}>
+                  <DataTableTd>
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">
+                        {u.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-800">{u.name}</p>
+                        <p className="text-xs text-gray-400">ID #{u.id}</p>
+                      </div>
+                    </div>
+                  </DataTableTd>
+                  <DataTableTd>
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <Mail className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                      {u.email}
+                    </div>
+                  </DataTableTd>
+                  <DataTableTd>
+                    <Badge variant={u.role === 'SUPER_ADMIN' ? 'danger' : 'info'} dot>
+                      {ROLE_LABELS[u.role]}
+                    </Badge>
+                  </DataTableTd>
+                  <DataTableTd align="right">
+                    <div className="flex justify-end gap-2">
+                      <Button size="sm" variant="ghost" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => openEdit(u)}>Edit</Button>
+                      {u.id !== currentUser?.id && (
+                        <Button size="sm" variant="ghost" icon={<Trash2 className="h-3.5 w-3.5 text-red-500" />}
+                          className="text-red-500 hover:bg-red-50" onClick={() => setDeleteUser(u)}>
+                          Delete
+                        </Button>
+                      )}
+                    </div>
+                  </DataTableTd>
+                </DataTableRow>
+              ))}
+            </DataTableBody>
+          </DataTable>
         )}
-      </div>
+      </PageContent>
 
       {/* Create Modal */}
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Create User" size="sm"
@@ -200,6 +186,10 @@ export default function UsersPage() {
           <Input label="Email" value={editForm.email ?? ''} onChange={e => setEditForm(p => ({ ...p, email: e.target.value }))} />
           <Input label="New Password" type="password" value={editForm.password} placeholder="Leave blank to keep current"
             onChange={e => setEditForm(p => ({ ...p, password: e.target.value }))} />
+          <Select label="Role" value={editForm.role ?? 'LAB_USER'} onChange={e => setEditForm(p => ({ ...p, role: e.target.value as UserRole }))}>
+            <option value="LAB_USER">Lab User</option>
+            <option value="SUPER_ADMIN">Super Admin</option>
+          </Select>
         </div>
       </Modal>
 

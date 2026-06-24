@@ -12,6 +12,8 @@ import { Badge } from '../components/ui/Badge'
 import { ConfirmModal } from '../components/ui/Modal'
 import { EmptyState } from '../components/ui/EmptyState'
 import { PageLoader } from '../components/ui/Spinner'
+import { PageContent } from '../components/ui/PageContent'
+import { FilterBar } from '../components/ui/FilterBar'
 import { templateService } from '../services/templates'
 import { b2bLabService } from '../services/b2bLabs'
 import type { FieldType, TestTemplate } from '../types'
@@ -29,6 +31,7 @@ export default function TemplatesPage() {
   const navigate = useNavigate()
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [deleteTemplate, setDeleteTemplate] = useState<TestTemplate | null>(null)
+  const [search, setSearch] = useState('')
 
   const { data: templates = [], isLoading } = useQuery({ queryKey: ['templates'], queryFn: templateService.getAll })
   const { data: b2bLabs = [] } = useQuery({ queryKey: ['b2b-labs'], queryFn: b2bLabService.getAll })
@@ -52,6 +55,11 @@ export default function TemplatesPage() {
       toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to delete'),
   })
 
+  const filtered = templates.filter(t => {
+    const q = search.toLowerCase()
+    return !q || t.name.toLowerCase().includes(q) || t.code.toLowerCase().includes(q)
+  })
+
   return (
     <div>
       <Header
@@ -59,12 +67,23 @@ export default function TemplatesPage() {
         subtitle="Manage test templates, fields and B2B pricing"
         action={<Button icon={<Plus className="h-4 w-4" />} onClick={() => navigate('/templates/new')}>New Template</Button>}
       />
-      <div className="p-6 space-y-4">
+      <PageContent className="space-y-4">
         {isLoading ? <PageLoader /> : templates.length === 0 ? (
           <EmptyState icon={<FlaskConical className="h-12 w-12" />} title="No templates yet"
             description="Create your first test template"
             action={<Button icon={<Plus className="h-4 w-4" />} onClick={() => navigate('/templates/new')}>Create Template</Button>} />
-        ) : templates.map(template => (
+        ) : (
+          <>
+            <FilterBar
+              search={search}
+              onSearchChange={setSearch}
+              searchPlaceholder="Search by name or code…"
+              count={filtered.length}
+              countLabel={`template${filtered.length !== 1 ? 's' : ''}`}
+            />
+            {filtered.length === 0 ? (
+              <EmptyState icon={<FlaskConical className="h-10 w-10" />} title="No results" description="Try a different search term" />
+            ) : filtered.map(template => (
           <Card key={template.id} hover>
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-4">
@@ -158,8 +177,10 @@ export default function TemplatesPage() {
               </div>
             )}
           </Card>
-        ))}
-      </div>
+            ))}
+          </>
+        )}
+      </PageContent>
       <ConfirmModal
         open={!!deleteTemplate} onClose={() => setDeleteTemplate(null)}
         onConfirm={() => deleteTemplate && removeTemplate.mutate(deleteTemplate.id)}

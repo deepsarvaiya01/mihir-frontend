@@ -2,7 +2,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, XCircle, FileText, Download, RefreshCw, RotateCcw, Undo2 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
-import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Modal, ConfirmModal } from '../components/ui/Modal'
 import { EmptyState } from '../components/ui/EmptyState'

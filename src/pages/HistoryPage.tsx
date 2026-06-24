@@ -1,12 +1,12 @@
-﻿import { useState } from 'react'
+﻿import { useState, useMemo } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { History, Printer, ChevronDown, ChevronUp, Calendar, FileCheck } from 'lucide-react'
+import { History, Printer, ChevronDown, ChevronUp, Calendar, FileCheck, Search } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
-import { Select } from '../components/ui/Input'
 import { EmptyState } from '../components/ui/EmptyState'
 import { PageLoader } from '../components/ui/Spinner'
+import { PageContent } from '../components/ui/PageContent'
 import { Badge } from '../components/ui/Badge'
 import { patientService } from '../services/patients'
 import type { PatientHistory } from '../types'
@@ -14,6 +14,7 @@ import { toast } from 'sonner'
 
 export default function HistoryPage() {
   const [selectedPatientId, setSelectedPatientId] = useState('')
+  const [patientSearch, setPatientSearch] = useState('')
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null)
   const [history, setHistory] = useState<PatientHistory | null>(null)
 
@@ -30,6 +31,16 @@ export default function HistoryPage() {
     },
     onError: () => toast.error('Failed to load patient history'),
   })
+
+  const filteredPatients = useMemo(() => {
+    const q = patientSearch.toLowerCase()
+    if (!q) return patients.slice(0, 50)
+    return patients.filter(p =>
+      p.fullName.toLowerCase().includes(q) ||
+      p.patientCode.toLowerCase().includes(q) ||
+      (p.phoneNumber ?? '').includes(q)
+    ).slice(0, 50)
+  }, [patients, patientSearch])
 
   const handleLoad = () => {
     if (!selectedPatientId) {
@@ -97,42 +108,41 @@ export default function HistoryPage() {
         subtitle="View complete diagnostic history and generate patient reports"
       />
 
-      <div className="space-y-6 p-4 sm:p-6">
-        {/* Patient selector */}
+      <PageContent className="space-y-6">
         <Card>
-          <h3 className="mb-4 text-sm font-bold text-gray-700">Select Patient</h3>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <div className="flex-1">
+          <h3 className="mb-4 text-sm font-semibold text-gray-900">Select Patient</h3>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+            <div className="flex-1 space-y-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  value={patientSearch}
+                  onChange={e => setPatientSearch(e.target.value)}
+                  placeholder="Search by name, code, or phone…"
+                  className="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-9 pr-4 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
               {patientsLoading ? (
-                <div className="h-10 w-full animate-pulse rounded-xl bg-gray-100" />
+                <div className="h-10 w-full animate-pulse rounded-lg bg-gray-100" />
               ) : (
-                <Select
-                  label="Patient"
+                <select
                   value={selectedPatientId}
                   onChange={e => setSelectedPatientId(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                 >
                   <option value="">Select a patient</option>
-                  {patients.map(p => (
+                  {filteredPatients.map(p => (
                     <option key={p.id} value={p.id}>{p.fullName} ({p.patientCode})</option>
                   ))}
-                </Select>
+                </select>
               )}
             </div>
-            <Button
-              loading={loadHistory.isPending}
-              onClick={handleLoad}
-              className="sm:self-end"
-            >
+            <Button loading={loadHistory.isPending} onClick={handleLoad}>
               Load History
             </Button>
             {history?.patient && (
-              <Button
-                variant="secondary"
-                icon={<Printer className="h-4 w-4" />}
-                onClick={printReport}
-                className="sm:self-end"
-              >
-                Export PDF / Print
+              <Button variant="secondary" icon={<Printer className="h-4 w-4" />} onClick={printReport}>
+                Export / Print
               </Button>
             )}
           </div>
@@ -234,7 +244,7 @@ export default function HistoryPage() {
             description="Select a patient above and click 'Load History' to view their diagnostic reports."
           />
         )}
-      </div>
+      </PageContent>
     </div>
   )
 }
