@@ -1,5 +1,6 @@
-import { Bell } from 'lucide-react'
+import { Bell, Sun, Moon } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
+import { useThemeStore } from '../../store/themeStore'
 
 interface HeaderProps {
   title: string
@@ -10,14 +11,15 @@ interface HeaderProps {
 export function Header({ title, subtitle, action }: HeaderProps) {
   const { user } = useAuthStore()
   const isAdmin = user?.role === 'SUPER_ADMIN'
+  const { theme, toggleTheme } = useThemeStore()
 
   return (
-    <header className="sticky top-0 z-30 border-b border-gray-200 bg-white">
+    <header className="sticky top-0 z-30 border-b border-gray-200 bg-white dark:bg-gray-800 dark:border-gray-700">
       <div className="flex items-center justify-between gap-4 px-6 py-4">
         {/* Title */}
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-xl font-semibold text-gray-900">{title}</h1>
-          {subtitle && <p className="mt-0.5 truncate text-sm text-gray-500">{subtitle}</p>}
+          <h1 className="truncate text-xl font-semibold text-gray-900 dark:text-white">{title}</h1>
+          {subtitle && <p className="mt-0.5 truncate text-sm text-gray-500 dark:text-gray-400">{subtitle}</p>}
         </div>
 
         {/* Actions */}
@@ -31,7 +33,14 @@ export function Header({ title, subtitle, action }: HeaderProps) {
         {!isAdmin && (
           <div className="flex items-center gap-2 shrink-0">
             <button
-              className="relative flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              className="relative flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-200 transition-colors"
+            >
+              {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
+            <button
+              className="relative flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-200 transition-colors"
               aria-label="Notifications"
             >
               <Bell className="h-4 w-4" />

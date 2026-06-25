@@ -25,11 +25,23 @@ export interface CreatePatientDto {
 }
 
 export const patientService = {
-  getAll: async (search?: string): Promise<Patient[]> => {
-    const { data } = await api.get('/patients', { params: search ? { search } : undefined })
+  getAll: async (search?: string, page?: number, limit?: number): Promise<Patient[]> => {
+    const params: Record<string, unknown> = {}
+    if (search) params.search = search
+    if (page) params.page = page
+    if (limit) params.limit = limit
+    const { data } = await api.get('/patients', { params })
     if (Array.isArray(data)) return data
-    if (Array.isArray(data.patients)) return data.patients
+    if (Array.isArray(data.data)) return data.data
     return []
+  },
+
+  getPaginated: async (search?: string, page = 1, limit = 20): Promise<{ data: Patient[]; total: number; page: number; limit: number }> => {
+    const params: Record<string, unknown> = { page, limit }
+    if (search) params.search = search
+    const { data } = await api.get('/patients', { params })
+    if (Array.isArray(data)) return { data, total: data.length, page: 1, limit: data.length }
+    return { data: data.data ?? [], total: data.total ?? 0, page: data.page ?? 1, limit: data.limit ?? limit }
   },
 
   create: async (payload: CreatePatientDto): Promise<Patient> => {

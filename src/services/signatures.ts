@@ -3,7 +3,7 @@ import { api } from '../lib/api'
 export interface Signature {
   id: number
   name: string
-  imageData: string
+  imageUrl: string
   isActive: boolean
   createdAt: string
 }

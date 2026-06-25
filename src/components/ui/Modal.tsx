@@ -36,16 +36,16 @@ export function Modal({ open, onClose, title, subtitle, children, footer, size =
         onClick={onClose}
       />
       {/* Panel */}
-      <div className={`relative w-full ${sizes[size]} max-h-[90vh] overflow-hidden rounded-xl bg-white shadow-xl flex flex-col ring-1 ring-black/5`}>
+      <div className={`relative w-full ${sizes[size]} max-h-[90vh] overflow-hidden rounded-xl bg-white shadow-xl flex flex-col ring-1 ring-black/5 dark:bg-gray-800 dark:ring-white/5`}>
         {/* Header */}
-        <div className="flex items-start justify-between border-b border-gray-100 px-6 py-4">
+        <div className="flex items-start justify-between border-b border-gray-100 dark:border-gray-700 px-6 py-4">
           <div>
-            <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-            {subtitle && <p className="mt-0.5 text-sm text-gray-500">{subtitle}</p>}
+            <h2 className="text-base font-semibold text-gray-900 dark:text-white">{title}</h2>
+            {subtitle && <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">{subtitle}</p>}
           </div>
           <button
             onClick={onClose}
-            className="ml-4 -mr-1 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+            className="ml-4 -mr-1 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors dark:hover:bg-gray-700 dark:hover:text-gray-200"
           >
             <X className="h-4 w-4" />
           </button>
@@ -56,7 +56,7 @@ export function Modal({ open, onClose, title, subtitle, children, footer, size =
 
         {/* Footer */}
         {footer && (
-          <div className="flex items-center justify-end gap-2 border-t border-gray-100 bg-gray-50 px-6 py-3">
+          <div className="flex items-center justify-end gap-2 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-6 py-3">
             {footer}
           </div>
         )}
@@ -93,7 +93,7 @@ export function ConfirmModal({
         </>
       }
     >
-      <p className="text-sm text-gray-600 leading-relaxed">{message}</p>
+      <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed">{message}</p>
     </Modal>
   )
 }

@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'sonner'
@@ -19,7 +20,10 @@ import BillingPage from './pages/BillingPage'
 import SignaturesPage from './pages/SignaturesPage'
 import LogosPage from './pages/LogosPage'
 import EnterResultsPage from './pages/EnterResultsPage'
+import AuditLogPage from './pages/AuditLogPage'
+import PublicReportPage from './pages/PublicReportPage'
 import { useAuthStore } from './store/authStore'
+import { useThemeStore } from './store/themeStore'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,11 +47,18 @@ function RoleRoute({ roles, children }: { roles: ('SUPER_ADMIN' | 'LAB_USER')[];
 }
 
 export default function App() {
+  const { theme } = useThemeStore()
+  useEffect(() => {
+    const root = document.documentElement
+    root.classList.toggle('dark', theme === 'dark')
+  }, [theme])
+
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<AuthRoute><LoginPage /></AuthRoute>} />
+          <Route path="/r/:token" element={<PublicReportPage />} />
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/templates" element={<RoleRoute roles={['SUPER_ADMIN']}><TemplatesPage /></RoleRoute>} />
@@ -66,6 +77,7 @@ export default function App() {
             <Route path="/lab-branches" element={<RoleRoute roles={['SUPER_ADMIN']}><LabBranchesPage /></RoleRoute>} />
             <Route path="/signatures" element={<RoleRoute roles={['SUPER_ADMIN']}><SignaturesPage /></RoleRoute>} />
             <Route path="/logos" element={<RoleRoute roles={['SUPER_ADMIN']}><LogosPage /></RoleRoute>} />
+            <Route path="/audit" element={<RoleRoute roles={['SUPER_ADMIN']}><AuditLogPage /></RoleRoute>} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

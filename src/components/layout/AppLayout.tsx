@@ -22,7 +22,7 @@ export function AppLayout() {
 
   if (!isAuthenticated) return <Navigate to="/login" replace />
   if (isLoading) return (
-    <div className="flex h-screen items-center justify-center bg-gray-50">
+    <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
       <PageLoader />
     </div>
   )
@@ -30,7 +30,7 @@ export function AppLayout() {
   const isAdmin = user?.role === 'SUPER_ADMIN'
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50">
+    <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gray-900">
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
         {isAdmin && <TopNavbar />}

@@ -6,6 +6,7 @@ export interface UserRecord {
   name: string
   email: string
   role: UserRole
+  isActive: boolean
 }
 
 export interface CreateUserDto {
@@ -40,5 +41,15 @@ export const userService = {
 
   delete: async (id: number): Promise<void> => {
     await api.delete(`/users/${id}`)
+  },
+
+  deactivate: async (id: number): Promise<UserRecord> => {
+    const { data } = await api.patch(`/users/${id}/deactivate`)
+    return data
+  },
+
+  activate: async (id: number): Promise<UserRecord> => {
+    const { data } = await api.patch(`/users/${id}/activate`)
+    return data
   },
 }

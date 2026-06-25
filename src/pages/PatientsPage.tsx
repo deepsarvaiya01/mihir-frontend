@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Users, Search, Pencil, Trash2,
-  Building2,
+  Building2, History,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
@@ -20,11 +20,11 @@ import { toast } from 'sonner'
 // ── Status badge ─────────────────────────────────────────────────────────────
 function TypeBadge({ isB2b }: { isB2b: boolean }) {
   return isB2b ? (
-    <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-700">
+    <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">
       <Building2 className="h-3 w-3" /> B2B
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
+    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
       <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Individual
     </span>
   )
@@ -132,25 +132,25 @@ export default function PatientsPage() {
           <EmptyState icon={<Search className="h-10 w-10" />} title="No results" description="Try adjusting your search or filters" />
         ) : (
           <>
-            <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
               <table className="min-w-[780px] w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50 text-left">
-                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400">#</th>
-                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Patient</th>
-                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Age / Gender</th>
-                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Contact</th>
-                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400">City</th>
-                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Status</th>
-                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400">Report Date</th>
-                    <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-400">Actions</th>
+                  <tr className="border-b border-gray-100 bg-gray-50 text-left dark:border-gray-700 dark:bg-gray-900/50">
+                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">#</th>
+                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Patient</th>
+                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Age / Gender</th>
+                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Contact</th>
+                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">City</th>
+                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Status</th>
+                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Report Date</th>
+                    <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50">
+                <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
                   {paginated.map((patient, idx) => (
-                    <tr key={patient.id} className="group hover:bg-gray-50/60 transition-colors">
+                    <tr key={patient.id} className="group hover:bg-gray-50/60 transition-colors dark:hover:bg-gray-700/40">
                       {/* # */}
-                      <td className="px-5 py-3.5 text-xs text-gray-400 font-mono">
+                      <td className="px-5 py-3.5 text-xs text-gray-400 font-mono dark:text-gray-500">
                         {(safePage - 1) * pageSize + idx + 1}
                       </td>
 
@@ -161,14 +161,17 @@ export default function PatientsPage() {
                             {patient.fullName.charAt(0).toUpperCase()}
                           </div>
                           <div>
-                            <p className="font-semibold text-gray-800">{patient.fullName}</p>
-                            <p className="text-xs font-mono text-gray-400">{patient.patientCode}</p>
+                            <p
+                              className="font-semibold text-gray-800 cursor-pointer hover:text-blue-600 transition-colors dark:text-white"
+                              onClick={() => navigate(`/history?patientId=${patient.id}`)}
+                            >{patient.fullName}</p>
+                            <p className="text-xs font-mono text-gray-400 dark:text-gray-500">{patient.patientCode}</p>
                           </div>
                         </div>
                       </td>
 
                       {/* Age / Gender */}
-                      <td className="px-5 py-3.5 text-gray-600">
+                      <td className="px-5 py-3.5 text-gray-600 dark:text-gray-300">
                         {patient.age || patient.gender ? (
                           <span>
                             {patient.age ? `${patient.age} yrs` : '—'}
@@ -178,12 +181,12 @@ export default function PatientsPage() {
                       </td>
 
                       {/* Contact */}
-                      <td className="px-5 py-3.5 text-gray-600">
+                      <td className="px-5 py-3.5 text-gray-600 dark:text-gray-300">
                         {patient.phoneNumber ?? <span className="text-gray-300">—</span>}
                       </td>
 
                       {/* City */}
-                      <td className="px-5 py-3.5 text-gray-600 max-w-[140px] truncate">
+                      <td className="px-5 py-3.5 text-gray-600 max-w-[140px] truncate dark:text-gray-300">
                         {patient.city
                           ? [patient.city, patient.state].filter(Boolean).join(', ')
                           : <span className="text-gray-300">—</span>}
@@ -195,7 +198,7 @@ export default function PatientsPage() {
                       </td>
 
                       {/* Report Date */}
-                      <td className="px-5 py-3.5 text-xs text-gray-500">
+                      <td className="px-5 py-3.5 text-xs text-gray-500 dark:text-gray-400">
                         {patient.reportDate
                           ? new Date(patient.reportDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
                           : <span className="text-gray-300">—</span>}
@@ -204,6 +207,13 @@ export default function PatientsPage() {
                       {/* Actions */}
                       <td className="px-5 py-3.5">
                         <div className="flex justify-end gap-1">
+                          <button
+                            onClick={() => navigate(`/history?patientId=${patient.id}`)}
+                            className="rounded-lg p-1.5 text-gray-400 hover:bg-purple-50 hover:text-purple-600 transition-colors"
+                            title="View History"
+                          >
+                            <History className="h-3.5 w-3.5" />
+                          </button>
                           <button
                             onClick={() => navigate(`/patients/${patient.id}/edit`)}
                             className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"

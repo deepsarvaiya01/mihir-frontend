@@ -2,19 +2,21 @@
 import { Link } from 'react-router-dom'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend,
+  PieChart, Pie, Cell, Legend, AreaChart, Area,
 } from 'recharts'
 import {
   FlaskConical, Users, ClipboardList, CheckCircle2,
-  Clock, XCircle,
+  Clock, XCircle, Download,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
+import { Button } from '../components/ui/Button'
 import { StatCard } from '../components/ui/StatCard'
 import { Card, CardHeader } from '../components/ui/Card'
 import { PageLoader } from '../components/ui/Spinner'
 import { PageContent } from '../components/ui/PageContent'
 import { OrderStatusBadge } from '../components/ui/Badge'
 import { useAuthStore } from '../store/authStore'
+import { useThemeStore } from '../store/themeStore'
 import { dashboardService } from '../services/dashboard'
 import { orderService } from '../services/orders'
 import { patientService } from '../services/patients'
@@ -33,6 +35,7 @@ const PIE_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6']
 export default function DashboardPage() {
   const { user } = useAuthStore()
   const isAdmin = user?.role === 'SUPER_ADMIN'
+  const { theme } = useThemeStore()
 
   const { data: summary, isLoading: summaryLoading } = useQuery({
     queryKey: ['dashboard-summary'],
@@ -54,6 +57,12 @@ export default function DashboardPage() {
   const { data: templates = [] } = useQuery({
     queryKey: ['templates'],
     queryFn: templateService.getAll,
+  })
+
+  const { data: trends = [] } = useQuery({
+    queryKey: ['dashboard-trends'],
+    queryFn: dashboardService.getTrends,
+    enabled: isAdmin,
   })
 
   const isLoading = isAdmin ? summaryLoading : ordersLoading
@@ -89,11 +98,32 @@ export default function DashboardPage() {
   const awaitingCount = orders.filter(o => o.status === 'AWAITING_APPROVAL').length
   const rejectedCount = orders.filter(o => o.status === 'REJECTED').length
 
+  const exportCsv = () => {
+    if (!trends.length) return
+    const rows = [
+      ['Month', 'Orders', 'Approved', 'Revenue (₹)'],
+      ...trends.map(t => [t.month, String(t.orders), String(t.approved), String(t.revenue)]),
+    ]
+    const csv = rows.map(r => r.join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'lab-revenue-report.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div>
       <Header
         title="Dashboard"
         subtitle={isAdmin ? 'Overview of laboratory operations' : 'Your lab operations at a glance'}
+        action={isAdmin && trends.length > 0 ? (
+          <Button variant="secondary" icon={<Download className="h-4 w-4" />} onClick={exportCsv} size="sm">
+            Export CSV
+          </Button>
+        ) : undefined}
       />
 
       <PageContent className="space-y-5">
@@ -116,27 +146,28 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Charts */}
+        {/* Charts row 1: Orders trend + Pie */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
           <Card className="lg:col-span-2">
-            <CardHeader title="Orders by Status" subtitle="Current distribution of all orders" />
-            {barData.length > 0 ? (
+            <CardHeader title="Monthly Orders Trend" subtitle="Order volume over the last months" />
+            {trends.length > 0 ? (
               <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={barData} barSize={32} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} allowDecimals={false} />
-                  <Tooltip
-                    contentStyle={{ borderRadius: 8, border: '1px solid #E5E7EB', fontSize: 12, boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    cursor={{ fill: '#F9FAFB' }}
-                  />
-                  <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                    {barData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-                  </Bar>
-                </BarChart>
+                <AreaChart data={trends} margin={{ top: 5, right: 5, bottom: 0, left: -20 }}>
+                  <defs>
+                    <linearGradient id="ordersGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#374151' : '#F3F4F6'} vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: theme === 'dark' ? '#6B7280' : '#9CA3AF' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: theme === 'dark' ? '#6B7280' : '#9CA3AF' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip contentStyle={{ borderRadius: 8, border: `1px solid ${theme === 'dark' ? '#374151' : '#E5E7EB'}`, fontSize: 12, background: theme === 'dark' ? '#1F2937' : '#fff', color: theme === 'dark' ? '#F9FAFB' : '#111' }} />
+                  <Area type="monotone" dataKey="orders" stroke="#3B82F6" strokeWidth={2} fill="url(#ordersGrad)" dot={{ r: 3, fill: '#3B82F6' }} />
+                </AreaChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex h-52 items-center justify-center text-sm text-gray-400">No orders yet</div>
+              <div className="flex h-52 items-center justify-center text-sm text-gray-400">No trend data yet</div>
             )}
           </Card>
 
@@ -148,12 +179,58 @@ export default function DashboardPage() {
                   <Pie data={pieData} cx="50%" cy="43%" innerRadius={38} outerRadius={65} paddingAngle={3} dataKey="value">
                     {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                   </Pie>
-                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #E5E7EB', fontSize: 12 }} />
+                  <Tooltip contentStyle={{ borderRadius: 8, border: `1px solid ${theme === 'dark' ? '#374151' : '#E5E7EB'}`, fontSize: 12, background: theme === 'dark' ? '#1F2937' : '#fff', color: theme === 'dark' ? '#F9FAFB' : '#111' }} />
                   <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 11 }} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
               <div className="flex h-52 items-center justify-center text-sm text-gray-400">No data yet</div>
+            )}
+          </Card>
+        </div>
+
+        {/* Charts row 2: Revenue trend + Orders by status */}
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+          <Card className="lg:col-span-2">
+            <CardHeader title="Monthly Revenue Trend" subtitle="Revenue generated over the last months" />
+            {trends.length > 0 ? (
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={trends} barSize={28} margin={{ top: 5, right: 5, bottom: 0, left: -20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#374151' : '#F3F4F6'} vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: theme === 'dark' ? '#6B7280' : '#9CA3AF' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: theme === 'dark' ? '#6B7280' : '#9CA3AF' }} axisLine={false} tickLine={false} allowDecimals={false}
+                    tickFormatter={(v) => v >= 1000 ? `₹${(v/1000).toFixed(0)}k` : `₹${v}`} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: 8, border: `1px solid ${theme === 'dark' ? '#374151' : '#E5E7EB'}`, fontSize: 12, background: theme === 'dark' ? '#1F2937' : '#fff', color: theme === 'dark' ? '#F9FAFB' : '#111' }}
+                    formatter={(value: number) => [`₹${value.toLocaleString()}`, 'Revenue']}
+                  />
+                  <Bar dataKey="revenue" fill="#F59E0B" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-52 items-center justify-center text-sm text-gray-400">No revenue data yet</div>
+            )}
+          </Card>
+
+          <Card>
+            <CardHeader title="Orders by Status" subtitle="Current distribution" />
+            {barData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={barData} barSize={24} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#374151' : '#F3F4F6'} vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 9, fill: theme === 'dark' ? '#6B7280' : '#9CA3AF' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: theme === 'dark' ? '#6B7280' : '#9CA3AF' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: 8, border: `1px solid ${theme === 'dark' ? '#374151' : '#E5E7EB'}`, fontSize: 12, background: theme === 'dark' ? '#1F2937' : '#fff', color: theme === 'dark' ? '#F9FAFB' : '#111' }}
+                    cursor={{ fill: theme === 'dark' ? '#374151' : '#F9FAFB' }}
+                  />
+                  <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                    {barData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-52 items-center justify-center text-sm text-gray-400">No orders yet</div>
             )}
           </Card>
         </div>

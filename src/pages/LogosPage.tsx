@@ -182,8 +182,8 @@ function LogoCard({ logo, onActivate, onDeactivate, onDelete, busy }: LogoCardPr
       )}
 
       <div className="flex h-44 items-center justify-center bg-gray-50 p-4">
-        {logo.imageData ? (
-          <img src={logo.imageData} alt={logo.name} className="max-h-full max-w-full rounded-lg object-contain" />
+        {logo.imageUrl ? (
+          <img src={logo.imageUrl} alt={logo.name} className="max-h-full max-w-full rounded-lg object-contain" />
         ) : (
           <div className="flex flex-col items-center gap-2 text-gray-300">
             <ImageOff className="h-10 w-10" />

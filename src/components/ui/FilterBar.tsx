@@ -31,7 +31,7 @@ export function FilterBar({
             value={search ?? ''}
             onChange={e => onSearchChange(e.target.value)}
             placeholder={searchPlaceholder}
-            className="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-9 pr-4 text-sm outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+            className="w-full rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 py-2.5 pl-9 pr-4 text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 outline-none transition-colors focus:border-blue-400 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
           />
         </div>
       )}
@@ -43,7 +43,7 @@ export function FilterBar({
           type="button"
           onClick={onRefresh}
           title="Refresh"
-          className={`flex h-[42px] w-[42px] items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 hover:text-blue-600 ${isRefreshing ? 'animate-spin text-blue-500' : ''}`}
+          className={`flex h-[42px] w-[42px] items-center justify-center rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 transition-colors hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-blue-600 dark:hover:text-blue-400 ${isRefreshing ? 'animate-spin text-blue-500' : ''}`}
         >
           <RefreshCw className="h-4 w-4" />
         </button>
@@ -71,7 +71,7 @@ export function FilterSelect({ value, onChange, children, className = '' }: Filt
       <select
         value={value}
         onChange={e => onChange(e.target.value)}
-        className="appearance-none rounded-lg border border-gray-200 bg-white py-2.5 pl-4 pr-9 text-sm text-gray-700 outline-none transition-colors focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+        className="appearance-none rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 py-2.5 pl-4 pr-9 text-sm text-gray-700 dark:text-gray-200 outline-none transition-colors focus:border-blue-400 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
       >
         {children}
       </select>

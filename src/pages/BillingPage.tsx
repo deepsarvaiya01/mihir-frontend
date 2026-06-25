@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Search, Receipt, ChevronDown, DollarSign,
   CheckCircle, Clock, FileText, Pencil,
-  RefreshCw, Download,
+  RefreshCw, Download, Share2,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Card } from '../components/ui/Card'
@@ -14,6 +14,7 @@ import { EmptyState } from '../components/ui/EmptyState'
 import { PageLoader } from '../components/ui/Spinner'
 import { Badge } from '../components/ui/Badge'
 import { orderService } from '../services/orders'
+import { reportShareService } from '../services/reportShares'
 import { labSettingsService } from '../services/labSettings'
 import { signatureService } from '../services/signatures'
 import { logoService } from '../services/logos'
@@ -31,58 +32,109 @@ const PAYMENT_VARIANTS: Record<PaymentStatus, 'success' | 'warning' | 'info'> = 
 
 /* ─── Receipt print helper ───────────────────────────────── */
 function printReceipt(order: Order) {
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${order.receiptNumber ?? ''}</title>
+  const amount = Number(order.amount ?? 0)
+  const discount = Number(order.discount ?? 0)
+  const net = Number(order.netAmount ?? 0)
+  const discountAmt = amount - net
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Tax Invoice ${order.receiptNumber ?? ''}</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:40px;color:#111;max-width:480px;margin:0 auto}
-    .header{text-align:center;border-bottom:2px solid #e5e7eb;padding-bottom:20px;margin-bottom:24px}
-    .logo{font-size:22px;font-weight:800;color:#4f46e5;letter-spacing:-0.5px}
-    .subtitle{font-size:12px;color:#6b7280;margin-top:4px}
-    .receipt-title{font-size:18px;font-weight:700;margin:16px 0 4px}
-    .receipt-num{font-size:13px;color:#6b7280}
-    .section{margin-bottom:16px}
-    .section-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;margin-bottom:8px}
-    .row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid #f1f5f9;font-size:13px;color:#374151}
-    .row:last-child{border-bottom:none}
-    .row .label{color:#6b7280}
-    .total-row{display:flex;justify-content:space-between;align-items:center;padding:12px 0 0;font-size:16px;font-weight:800;color:#111;border-top:2px solid #e5e7eb;margin-top:8px}
-    .badge{display:inline-block;padding:3px 10px;border-radius:9999px;font-size:11px;font-weight:600}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:32px;color:#111;max-width:620px;margin:0 auto;font-size:12px}
+    .inv-header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:16px;margin-bottom:16px;border-bottom:2px solid #111}
+    .lab-name{font-size:20px;font-weight:800;color:#1d4ed8;letter-spacing:-0.5px}
+    .lab-sub{font-size:11px;color:#6b7280;margin-top:2px}
+    .inv-title{text-align:right}
+    .inv-title h2{font-size:18px;font-weight:700;color:#111;letter-spacing:1px}
+    .inv-title p{font-size:11px;color:#6b7280;margin-top:3px}
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:16px 0}
+    .info-block h4{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#9ca3af;margin-bottom:6px}
+    .info-block p{font-size:12px;color:#374151;line-height:1.6}
+    .info-block strong{color:#111}
+    table{width:100%;border-collapse:collapse;margin:16px 0;font-size:11px}
+    th{background:#f8fafc;padding:8px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#6b7280;border-bottom:1px solid #e5e7eb}
+    td{padding:8px 10px;border-bottom:1px solid #f1f5f9;color:#374151}
+    .text-right{text-align:right}
+    .totals{margin-left:auto;width:260px;margin-top:8px}
+    .total-row{display:flex;justify-content:space-between;padding:5px 0;font-size:12px;color:#374151;border-bottom:1px solid #f1f5f9}
+    .total-row.grand{font-size:15px;font-weight:800;color:#111;border-top:2px solid #111;border-bottom:none;padding-top:10px;margin-top:4px}
+    .badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700}
     .badge-paid{background:#dcfce7;color:#166534}
     .badge-pending{background:#fef9c3;color:#854d0e}
     .badge-partial{background:#dbeafe;color:#1e40af}
-    .footer{text-align:center;margin-top:32px;font-size:11px;color:#9ca3af;border-top:1px solid #f1f5f9;padding-top:16px}
-    @media print{body{padding:20px}.no-print{display:none}}
+    .exempt-note{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 12px;font-size:10px;color:#166534;margin:8px 0}
+    .footer{margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:10px;color:#9ca3af;text-align:center}
+    @media print{body{padding:16px}.no-print{display:none}}
   </style></head><body>
-  <div class="header">
-    <div class="logo">LabOps</div>
-    <div class="subtitle">Laboratory Information System</div>
-    <div class="receipt-title">Payment Receipt</div>
-    <div class="receipt-num">Receipt # ${order.receiptNumber ?? '—'}</div>
-  </div>
-  <div class="section">
-    <div class="section-title">Patient Info</div>
-    <div class="row"><span class="label">Patient</span><span>${order.patient?.fullName ?? '—'}</span></div>
-    <div class="row"><span class="label">Patient Code</span><span>${order.patient?.patientCode ?? '—'}</span></div>
-    ${order.patient?.doctorName ? `<div class="row"><span class="label">Doctor</span><span>${order.patient.doctorName}</span></div>` : ''}
-    <div class="row"><span class="label">Date</span><span>${order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</span></div>
-  </div>
-  <div class="section">
-    <div class="section-title">Test Details</div>
-    <div class="row"><span class="label">Test</span><span>${order.template?.name ?? '—'}</span></div>
-    <div class="row"><span class="label">Code</span><span>${order.template?.code ?? '—'}</span></div>
-  </div>
-  <div class="section">
-    <div class="section-title">Payment Details</div>
-    <div class="row"><span class="label">Amount</span><span>₹${Number(order.amount ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
-    ${(order.discount ?? 0) > 0 ? `<div class="row"><span class="label">Discount (${order.discount}%)</span><span style="color:#16a34a">−₹${Math.round(Number(order.amount ?? 0) * (order.discount ?? 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>` : ''}
-    <div class="total-row"><span>Net Amount</span><span>₹${Number(order.netAmount ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
-    <div class="row" style="margin-top:12px"><span class="label">Payment Method</span><span>${order.paymentType ? order.paymentType.charAt(0) + order.paymentType.slice(1).toLowerCase() : '—'}</span></div>
-    <div class="row"><span class="label">Status</span>
-      <span class="badge badge-${(order.paymentStatus ?? 'pending').toLowerCase()}">${order.paymentStatus ?? '—'}</span>
+  <div class="inv-header">
+    <div>
+      <div class="lab-name">LabOps Laboratory</div>
+      <div class="lab-sub">Diagnostic & Pathology Services</div>
+    </div>
+    <div class="inv-title">
+      <h2>TAX INVOICE</h2>
+      <p>Invoice #: <strong>${order.receiptNumber ?? 'PENDING'}</strong></p>
+      <p>Date: <strong>${order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</strong></p>
     </div>
   </div>
-  <div class="footer">Thank you for choosing our laboratory services.<br>This is a computer-generated receipt.</div>
+
+  <div class="two-col">
+    <div class="info-block">
+      <h4>Bill To</h4>
+      <p><strong>${order.patient?.fullName ?? '—'}</strong></p>
+      <p>Code: ${order.patient?.patientCode ?? '—'}</p>
+      ${order.patient?.doctorName ? `<p>Ref: ${order.patient.doctorName}</p>` : ''}
+    </div>
+    <div class="info-block">
+      <h4>Payment Info</h4>
+      <p>Method: <strong>${order.paymentType ? order.paymentType.charAt(0) + order.paymentType.slice(1).toLowerCase() : '—'}</strong></p>
+      <p>Status: <span class="badge badge-${(order.paymentStatus ?? 'pending').toLowerCase()}">${order.paymentStatus ?? '—'}</span></p>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Description of Service</th>
+        <th>SAC Code</th>
+        <th class="text-right">Amount (₹)</th>
+        <th class="text-right">Disc%</th>
+        <th class="text-right">Taxable (₹)</th>
+        <th class="text-right">GST</th>
+        <th class="text-right">Total (₹)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>${order.template?.name ?? 'Diagnostic Test'}</strong></td>
+        <td>998319</td>
+        <td class="text-right">${amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+        <td class="text-right">${discount > 0 ? discount + '%' : '—'}</td>
+        <td class="text-right">${net.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+        <td class="text-right">0%</td>
+        <td class="text-right"><strong>${net.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="exempt-note">
+    ✓ Medical diagnostic services are exempt from GST under Notification No. 12/2017-Central Tax (Rate) — SAC 998319
+  </div>
+
+  <div class="totals">
+    ${discount > 0 ? `<div class="total-row"><span>Gross Amount</span><span>₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
+    <div class="total-row"><span>Discount (${discount}%)</span><span style="color:#16a34a">−₹${discountAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>` : ''}
+    <div class="total-row"><span>Taxable Value</span><span>₹${net.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
+    <div class="total-row"><span>GST Amount</span><span>₹0.00</span></div>
+    <div class="total-row grand"><span>Total Amount</span><span>₹${net.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></div>
+  </div>
+
+  <div class="footer">
+    This is a computer-generated Tax Invoice. SAC 998319 — Pathology and Diagnostic Testing Services.<br>
+    For queries, contact the laboratory directly.
+  </div>
   </body></html>`
+
   const w = window.open('', '_blank')
   if (!w) { toast.error('Pop-up blocked. Please allow pop-ups and try again.'); return }
   w.document.write(html); w.document.close(); w.focus()
@@ -265,6 +317,15 @@ export default function BillingPage() {
       }).then(() => toast.success('Report downloaded')).catch(() => toast.error('Failed to generate report'))
     },
     onError: () => toast.error('Failed to generate report'),
+  })
+
+  const shareReport = useMutation({
+    mutationFn: (orderId: number) => reportShareService.createToken(orderId),
+    onSuccess: (data) => {
+      const url = `${window.location.origin}/r/${data.token}`
+      navigator.clipboard.writeText(url).then(() => toast.success('Report link copied to clipboard!'))
+    },
+    onError: () => toast.error('Failed to create share link'),
   })
 
   const filtered = orders.filter(o => {
@@ -466,6 +527,13 @@ export default function BillingPage() {
                             onClick={() => downloadReport.mutate(order.id)}
                           >
                             Report
+                          </Button>
+                        )}
+                        {order.status === 'APPROVED' && (
+                          <Button size="sm" variant="secondary" icon={<Share2 className="h-3.5 w-3.5" />}
+                            loading={shareReport.isPending && shareReport.variables === order.id}
+                            onClick={() => shareReport.mutate(order.id)}>
+                            Share
                           </Button>
                         )}
                       </div>

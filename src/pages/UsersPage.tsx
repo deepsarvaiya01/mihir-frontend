@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, UserCog, Mail, Shield, Pencil, Trash2, Users } from 'lucide-react'
+import { Plus, UserCog, Mail, Shield, Pencil, Trash2, Users, UserX, UserCheck } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
 import { Input, Select } from '../components/ui/Input'
@@ -64,6 +64,18 @@ export default function UsersPage() {
     },
   })
 
+  const deactivate = useMutation({
+    mutationFn: (id: number) => userService.deactivate(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['users'] }); toast.success('User deactivated') },
+    onError: () => toast.error('Failed to deactivate user'),
+  })
+
+  const activate = useMutation({
+    mutationFn: (id: number) => userService.activate(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['users'] }); toast.success('User activated') },
+    onError: () => toast.error('Failed to activate user'),
+  })
+
   const openEdit = (u: UserRecord) => {
     setEditUser(u)
     setEditForm({ name: u.name, email: u.email, password: '', role: u.role })
@@ -107,6 +119,7 @@ export default function UsersPage() {
               <DataTableTh>User</DataTableTh>
               <DataTableTh>Email</DataTableTh>
               <DataTableTh>Role</DataTableTh>
+              <DataTableTh>Status</DataTableTh>
               <DataTableTh align="right">Actions</DataTableTh>
             </DataTableHead>
             <DataTableBody>
@@ -134,14 +147,38 @@ export default function UsersPage() {
                       {ROLE_LABELS[u.role]}
                     </Badge>
                   </DataTableTd>
+                  <DataTableTd>
+                    <Badge variant={u.isActive !== false ? 'success' : 'default'} dot>
+                      {u.isActive !== false ? 'Active' : 'Inactive'}
+                    </Badge>
+                  </DataTableTd>
                   <DataTableTd align="right">
                     <div className="flex justify-end gap-2">
                       <Button size="sm" variant="ghost" icon={<Pencil className="h-3.5 w-3.5" />} onClick={() => openEdit(u)}>Edit</Button>
                       {u.id !== currentUser?.id && (
-                        <Button size="sm" variant="ghost" icon={<Trash2 className="h-3.5 w-3.5 text-red-500" />}
-                          className="text-red-500 hover:bg-red-50" onClick={() => setDeleteUser(u)}>
-                          Delete
-                        </Button>
+                        <>
+                          {u.isActive !== false ? (
+                            <Button size="sm" variant="ghost"
+                              icon={<UserX className="h-3.5 w-3.5 text-amber-500" />}
+                              className="text-amber-600 hover:bg-amber-50"
+                              loading={deactivate.isPending && deactivate.variables === u.id}
+                              onClick={() => deactivate.mutate(u.id)}>
+                              Deactivate
+                            </Button>
+                          ) : (
+                            <Button size="sm" variant="ghost"
+                              icon={<UserCheck className="h-3.5 w-3.5 text-emerald-500" />}
+                              className="text-emerald-600 hover:bg-emerald-50"
+                              loading={activate.isPending && activate.variables === u.id}
+                              onClick={() => activate.mutate(u.id)}>
+                              Activate
+                            </Button>
+                          )}
+                          <Button size="sm" variant="ghost" icon={<Trash2 className="h-3.5 w-3.5 text-red-500" />}
+                            className="text-red-500 hover:bg-red-50" onClick={() => setDeleteUser(u)}>
+                            Delete
+                          </Button>
+                        </>
                       )}
                     </div>
                   </DataTableTd>

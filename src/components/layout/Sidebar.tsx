@@ -4,7 +4,7 @@ import {
   LayoutDashboard, FlaskConical, Users, ClipboardList,
   CheckSquare, History, LogOut, FlaskRound, ChevronRight,
   UserCog, Settings, Building2, MapPin, Receipt, PanelLeft,
-  PenLine, ImageIcon,
+  PenLine, ImageIcon, Shield,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '../../store/authStore'
@@ -35,6 +35,7 @@ const adminItems: NavItem[] = [
   { to: '/lab-branches', label: 'Lab Branches',       icon: <MapPin className="h-4 w-4" /> },
   { to: '/signatures',   label: 'Signatures',         icon: <PenLine className="h-4 w-4" /> },
   { to: '/logos',        label: 'Logo Manager',       icon: <ImageIcon className="h-4 w-4" /> },
+  { to: '/audit',        label: 'Audit Log',          icon: <Shield className="h-4 w-4" /> },
 ]
 
 const W_COLLAPSED = 'w-[56px]'
@@ -130,8 +131,8 @@ export function Sidebar() {
         <div className="flex h-14 shrink-0 items-center border-b border-white/5 px-3 gap-2.5">
           {/* Logo / icon */}
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-600 overflow-hidden">
-            {activeLogo?.imageData
-              ? <img src={activeLogo.imageData} alt={activeLogo.name} className="h-full w-full object-contain" />
+            {activeLogo?.imageUrl
+              ? <img src={activeLogo.imageUrl} alt={activeLogo.name} className="h-full w-full object-contain" />
               : <FlaskRound className="h-4 w-4 text-white" />
             }
           </div>

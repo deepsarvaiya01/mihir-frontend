@@ -1,4 +1,5 @@
-﻿import { useState, useMemo } from 'react'
+﻿import { useState, useMemo, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { History, Printer, ChevronDown, ChevronUp, Calendar, FileCheck, Search } from 'lucide-react'
 import { Header } from '../components/layout/Header'
@@ -17,6 +18,7 @@ export default function HistoryPage() {
   const [patientSearch, setPatientSearch] = useState('')
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null)
   const [history, setHistory] = useState<PatientHistory | null>(null)
+  const [searchParams] = useSearchParams()
 
   const { data: patients = [], isLoading: patientsLoading } = useQuery({
     queryKey: ['patients'],
@@ -31,6 +33,15 @@ export default function HistoryPage() {
     },
     onError: () => toast.error('Failed to load patient history'),
   })
+
+  useEffect(() => {
+    const pid = searchParams.get('patientId')
+    if (pid) {
+      setSelectedPatientId(pid)
+      loadHistory.mutate(Number(pid))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const filteredPatients = useMemo(() => {
     const q = patientSearch.toLowerCase()
@@ -110,7 +121,7 @@ export default function HistoryPage() {
 
       <PageContent className="space-y-6">
         <Card>
-          <h3 className="mb-4 text-sm font-semibold text-gray-900">Select Patient</h3>
+          <h3 className="mb-4 text-sm font-semibold text-gray-900 dark:text-gray-100">Select Patient</h3>
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
             <div className="flex-1 space-y-3">
               <div className="relative">
@@ -119,7 +130,7 @@ export default function HistoryPage() {
                   value={patientSearch}
                   onChange={e => setPatientSearch(e.target.value)}
                   placeholder="Search by name, code, or phone…"
-                  className="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-9 pr-4 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full rounded-lg border border-gray-200 bg-white py-2.5 pl-9 pr-4 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500"
                 />
               </div>
               {patientsLoading ? (
@@ -128,7 +139,7 @@ export default function HistoryPage() {
                 <select
                   value={selectedPatientId}
                   onChange={e => setSelectedPatientId(e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                 >
                   <option value="">Select a patient</option>
                   {filteredPatients.map(p => (
@@ -154,15 +165,15 @@ export default function HistoryPage() {
         ) : history ? (
           <div className="space-y-4">
             {/* Patient header */}
-            <Card className="border-blue-200 bg-blue-50/30">
+            <Card className="border-blue-200 bg-blue-50/30 dark:border-blue-800 dark:bg-blue-900/10">
               <div className="flex items-center justify-between">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                   <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-lg font-bold text-white">
                     {history.patient.fullName.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-gray-800">{history.patient.fullName}</h3>
-                    <div className="flex flex-wrap gap-3 mt-1 text-sm text-gray-500">
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-white">{history.patient.fullName}</h3>
+                    <div className="flex flex-wrap gap-3 mt-1 text-sm text-gray-500 dark:text-gray-400">
                       <span className="font-mono">{history.patient.patientCode}</span>
                       {history.patient.gender && <span>{history.patient.gender}</span>}
                       {history.patient.bloodGroup && <span>Blood: {history.patient.bloodGroup}</span>}
@@ -194,11 +205,11 @@ export default function HistoryPage() {
                         <FileCheck className="h-5 w-5 text-gray-500" />
                       </div>
                       <div>
-                        <p className="font-bold text-gray-800">
+                        <p className="font-bold text-gray-800 dark:text-white">
                           {item.testName}
                           <span className="ml-2 font-mono text-xs text-gray-400">({item.testCode})</span>
                         </p>
-                        <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-500">
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
                           <Calendar className="h-3.5 w-3.5" />
                           <span>{new Date(item.createdAt).toLocaleString()}</span>
                           <span className="text-gray-300">·</span>
@@ -222,9 +233,9 @@ export default function HistoryPage() {
                     <div className="mt-4 border-t border-gray-100 pt-4">
                       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                         {item.results.map((result, idx) => (
-                          <div key={idx} className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 hover:border-blue-200 hover:bg-white transition-colors">
+                          <div key={idx} className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 hover:border-blue-200 hover:bg-white transition-colors dark:border-gray-700 dark:bg-gray-700/50">
                             <p className="text-xs text-gray-400 uppercase tracking-wide">{result.fieldName}</p>
-                            <p className="mt-1 text-base font-bold text-gray-900">
+                            <p className="mt-1 text-base font-bold text-gray-900 dark:text-white">
                               {String(result.value)}
                               {result.unit && <span className="ml-1.5 text-sm font-normal text-gray-400">{result.unit}</span>}
                             </p>

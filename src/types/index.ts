@@ -26,16 +26,16 @@ export interface Order {
   amount: number; discount: number; netAmount: number
   paymentStatus: PaymentStatus; paymentType: PaymentType | null
   receiptNumber: string | null
-  attachmentBase64: string | null
+  attachmentUrl: string | null
   attachmentName: string | null
   revertRemark: string | null
 }
 
 export interface OrderFormData { order: Order; fields: TestTemplateField[] }
 export interface HistoryResult { fieldId?: number; fieldName: string; fieldType: FieldType; value: string | number | boolean | null; unit?: string | null; referenceRange?: string | null; isSectionHeader?: boolean }
-export interface LabSettings { lab_name?: string; lab_address?: string; lab_email?: string; lab_phone?: string; lab_timing?: string; lab_logo_base64?: string; doctor_name?: string; doctor_qualification?: string }
-export interface ActiveSignature { id: number; name: string; imageData: string; isActive: boolean }
-export interface Logo { id: number; name: string; imageData: string; isActive: boolean; createdAt: string }
+export interface LabSettings { lab_name?: string; lab_address?: string; lab_email?: string; lab_phone?: string; lab_timing?: string; lab_logo_base64?: string; doctor_name?: string; doctor_qualification?: string; lab_gstin?: string; lab_hsn_code?: string }
+export interface ActiveSignature { id: number; name: string; imageUrl: string; isActive: boolean }
+export interface Logo { id: number; name: string; imageUrl: string; isActive: boolean; createdAt: string }
 export interface OrderResult { order: Order; results: HistoryResult[] }
 export interface HistoryItem { orderId: number; testName: string; testCode: string; status: string; createdAt: string; results: HistoryResult[] }
 export interface PatientHistory { patient: Patient; history: HistoryItem[] }

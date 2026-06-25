@@ -46,6 +46,9 @@ export default function OrdersPage() {
   const [reopenOrder, setReopenOrder] = useState<Order | null>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo]     = useState('')
+  const [templateFilter, setTemplateFilter] = useState('')
   const [selectedResults, setSelectedResults] = useState<OrderResult | null>(null)
 
   // Create modal state
@@ -177,7 +180,11 @@ export default function OrdersPage() {
       (o.patient?.fullName ?? '').toLowerCase().includes(search.toLowerCase()) ||
       (o.template?.name ?? '').toLowerCase().includes(search.toLowerCase())
     const matchStatus = statusFilter === 'ALL' || o.status === statusFilter
-    return matchSearch && matchStatus
+    const matchTemplate = !templateFilter || String(o.template?.id) === templateFilter
+    const orderDate = o.createdAt ? new Date(o.createdAt) : null
+    const matchFrom = !dateFrom || (orderDate && orderDate >= new Date(dateFrom))
+    const matchTo   = !dateTo   || (orderDate && orderDate <= new Date(dateTo + 'T23:59:59'))
+    return matchSearch && matchStatus && matchTemplate && matchFrom && matchTo
   })
 
   // Map receipt → all active orders in that receipt (used for batch-submit eligibility)
@@ -252,13 +259,13 @@ export default function OrdersPage() {
             <input
               value={search} onChange={e => setSearch(e.target.value)}
               placeholder="Search by order #, patient, or test..."
-              className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-4 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+              className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-4 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-500"
             />
           </div>
           <div className="relative">
             <select
               value={statusFilter} onChange={e => setStatusFilter(e.target.value as StatusFilter)}
-              className="appearance-none rounded-xl border border-gray-200 bg-white py-2.5 pl-4 pr-9 text-sm text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+              className="appearance-none rounded-xl border border-gray-200 bg-white py-2.5 pl-4 pr-9 text-sm text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
             >
               <option value="ALL">All Statuses</option>
               <option value="PENDING">Pending</option>
@@ -268,6 +275,24 @@ export default function OrdersPage() {
             </select>
             <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           </div>
+          <div className="relative">
+            <select value={templateFilter} onChange={e => setTemplateFilter(e.target.value)}
+              className="appearance-none rounded-xl border border-gray-200 bg-white py-2.5 pl-4 pr-9 text-sm text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200">
+              <option value="">All Tests</option>
+              {activeTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          </div>
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+            className="rounded-xl border border-gray-200 bg-white py-2.5 px-3 text-sm text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200" />
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+            className="rounded-xl border border-gray-200 bg-white py-2.5 px-3 text-sm text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200" />
+          {(search || statusFilter !== 'ALL' || templateFilter || dateFrom || dateTo) && (
+            <button onClick={() => { setSearch(''); setStatusFilter('ALL'); setTemplateFilter(''); setDateFrom(''); setDateTo('') }}
+              className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+              <X className="h-3.5 w-3.5" /> Clear
+            </button>
+          )}
           <span className="self-center text-sm text-gray-500 ml-auto">
             {filtered.length} order{filtered.length !== 1 ? 's' : ''}
           </span>
@@ -285,33 +310,33 @@ export default function OrdersPage() {
         ) : filtered.length === 0 ? (
           <EmptyState icon={<Search className="h-10 w-10" />} title="No orders found" description="Try adjusting your search or filter" />
         ) : (
-          <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <table className="min-w-[720px] w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Order</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Patient</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Test</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Status</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Date</th>
-                  <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-400">Actions</th>
+                <tr className="border-b border-gray-100 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/50">
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Order</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Patient</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Test</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Status</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Date</th>
+                  <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
                 {tableRows.map((row) => {
                   if (row.kind === 'group') {
                     const ready = canSubmitBatch(row.receipt)
                     return (
-                      <tr key={`grp-${row.receipt}`} className="bg-blue-50/60 border-y border-blue-100">
+                      <tr key={`grp-${row.receipt}`} className="bg-blue-50/60 border-y border-blue-100 dark:bg-blue-900/20 dark:border-blue-900">
                         <td colSpan={5} className="px-5 py-3">
                           <div className="flex items-center gap-2 text-sm">
                             <Receipt className="h-3.5 w-3.5 text-blue-400 shrink-0" />
-                            <span className="font-semibold text-blue-700 font-mono">{row.receipt}</span>
-                            <span className="text-gray-500">·</span>
-                            <span className="font-medium text-gray-700">{row.patient}</span>
-                            <span className="text-gray-400 text-xs">({row.totalTests} tests)</span>
+                            <span className="font-semibold text-blue-700 font-mono dark:text-blue-400">{row.receipt}</span>
+                            <span className="text-gray-500 dark:text-gray-400">·</span>
+                            <span className="font-medium text-gray-700 dark:text-gray-200">{row.patient}</span>
+                            <span className="text-gray-400 text-xs dark:text-gray-500">({row.totalTests} tests)</span>
                             {!ready && (
-                              <span className="ml-2 text-xs text-gray-400 italic">Enter results for all tests, then submit</span>
+                              <span className="ml-2 text-xs text-gray-400 italic dark:text-gray-500">Enter results for all tests, then submit</span>
                             )}
                           </div>
                         </td>
@@ -333,24 +358,24 @@ export default function OrdersPage() {
 
                   const order = row.order
                   return (
-                    <tr key={order.id} className={`hover:bg-gray-50/50 transition-colors ${row.grouped ? 'bg-white' : ''}`}>
+                    <tr key={order.id} className={`hover:bg-gray-50/50 transition-colors dark:hover:bg-gray-700/30 ${row.grouped ? 'bg-white dark:bg-gray-800' : ''}`}>
                       <td className={`px-5 py-4 ${row.grouped ? 'pl-9' : ''}`}>
-                        <span className="font-bold text-gray-700">#{order.id}</span>
+                        <span className="font-bold text-gray-700 dark:text-gray-200">#{order.id}</span>
                       </td>
                       <td className="px-5 py-4">
                         {!row.grouped && (
                           <>
-                            <p className="font-medium text-gray-800">{order.patient?.fullName ?? '—'}</p>
-                            <p className="text-xs text-gray-400">{order.patient?.patientCode ?? ''}</p>
+                            <p className="font-medium text-gray-800 dark:text-gray-200">{order.patient?.fullName ?? '—'}</p>
+                            <p className="text-xs text-gray-400 dark:text-gray-500">{order.patient?.patientCode ?? ''}</p>
                           </>
                         )}
                         {row.grouped && (
-                          <p className="text-xs text-gray-400">{order.patient?.patientCode ?? ''}</p>
+                          <p className="text-xs text-gray-400 dark:text-gray-500">{order.patient?.patientCode ?? ''}</p>
                         )}
                       </td>
-                      <td className="px-5 py-4 text-gray-600 max-w-[180px] truncate">{order.template?.name ?? '—'}</td>
+                      <td className="px-5 py-4 text-gray-600 max-w-[180px] truncate dark:text-gray-300">{order.template?.name ?? '—'}</td>
                       <td className="px-5 py-4"><OrderStatusBadge status={order.status} /></td>
-                      <td className="px-5 py-4 text-xs text-gray-400">
+                      <td className="px-5 py-4 text-xs text-gray-400 dark:text-gray-500">
                         {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : '—'}
                       </td>
                       <td className="px-5 py-4">
@@ -647,14 +672,14 @@ export default function OrdersPage() {
                 </div>
               ))}
             </div>
-            {selectedResults.order.attachmentName && selectedResults.order.attachmentBase64 && (
+            {selectedResults.order.attachmentName && selectedResults.order.attachmentUrl && (
               <div className="mt-4 flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
                 <Paperclip className="h-4 w-4 shrink-0 text-blue-600" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-gray-800">{selectedResults.order.attachmentName}</p>
                   <p className="text-xs text-gray-500">Attached PDF document</p>
                 </div>
-                <a href={selectedResults.order.attachmentBase64} download={selectedResults.order.attachmentName}
+                <a href={selectedResults.order.attachmentUrl} target="_blank" rel="noopener noreferrer"
                   className="shrink-0 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100">
                   Download
                 </a>

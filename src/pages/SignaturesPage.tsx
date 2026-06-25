@@ -180,8 +180,8 @@ function SigCard({ sig, onActivate, onDeactivate, onDelete, busy }: SigCardProps
       )}
 
       <div className="flex h-44 items-center justify-center bg-gray-50 p-4">
-        {sig.imageData ? (
-          <img src={sig.imageData} alt={sig.name} className="max-h-full max-w-full rounded-lg object-contain" />
+        {sig.imageUrl ? (
+          <img src={sig.imageUrl} alt={sig.name} className="max-h-full max-w-full rounded-lg object-contain" />
         ) : (
           <div className="flex flex-col items-center gap-2 text-gray-300">
             <ImageOff className="h-10 w-10" />

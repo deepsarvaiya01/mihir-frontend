@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { PDFDocument } from 'pdf-lib'
+import QRCode from 'qrcode'
 import type { LabSettings, ActiveSignature, Logo } from '../types'
 
 /* ─── Types ─────────────────────────────────────────────── */
@@ -34,9 +35,27 @@ export interface GenerateReportOptions {
   signature: ActiveSignature | null
   /** Active logo from the Logo Manager — takes precedence over lab_logo_base64 in labSettings */
   activeLogo?: Logo | null
+  shareUrl?: string
+  attachmentUrl?: string | null
 }
 
 /* ─── Helpers ───────────────────────────────────────────── */
+async function fetchImageAsDataUri(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url)
+    if (!res.ok) return null
+    const blob = await res.blob()
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(blob)
+    })
+  } catch {
+    return null
+  }
+}
+
 function isOutOfRange(value: string | number | boolean | null, range: string | null): boolean {
   if (!range || value === null || value === undefined) return false
   const num = typeof value === 'number' ? value : parseFloat(String(value))
@@ -259,11 +278,14 @@ export async function generateLabReport(options: GenerateReportOptions): Promise
   doc.line(ML, sigY, PAGE_W - MR, sigY)
   sigY += 8
 
-  if (signature?.imageData) {
+  if (signature?.imageUrl) {
     try {
-      doc.addImage(signature.imageData, 'PNG', sigX - 45, sigY, 40, 20)
-      sigY += 22
-    } catch { /* skip invalid signature */ }
+      const imgData = await fetchImageAsDataUri(signature.imageUrl)
+      if (imgData) {
+        doc.addImage(imgData, 'PNG', sigX - 45, sigY, 40, 20)
+        sigY += 22
+      }
+    } catch { /* skip on CORS or fetch error */ }
   }
 
   const doctorName = labSettings.doctor_name ?? signature?.name ?? ''
@@ -285,6 +307,17 @@ export async function generateLabReport(options: GenerateReportOptions): Promise
   doc.setFontSize(7.5)
   doc.setTextColor(130, 130, 130)
   doc.text('Authorized Signatory', sigX, sigY + (doctorQual ? 14 : 8), { align: 'right' })
+
+  if (options.shareUrl) {
+    try {
+      const qrDataUrl = await QRCode.toDataURL(options.shareUrl, { width: 60, margin: 1 })
+      doc.addImage(qrDataUrl, 'PNG', ML, sigY, 20, 20)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(6.5)
+      doc.setTextColor(130, 130, 130)
+      doc.text('Scan to view report online', ML + 10, sigY + 22, { align: 'center' })
+    } catch { /* skip */ }
+  }
 
   /* ── Merge content PDF with Rameshwar.pdf template using pdf-lib ── */
   const patientSlug = order.patient?.fullName?.replace(/\s+/g, '-') ?? 'patient'
@@ -317,6 +350,19 @@ export async function generateLabReport(options: GenerateReportOptions): Promise
       // 2. Draw the jsPDF content on top (patient info, results, signature)
       //    The top TEMPLATE_HDR mm of the content page is empty, so the template header shows through
       newPage.drawPage(embeddedContent, { x: 0, y: 0, width, height })
+    }
+
+    // Merge attachment PDF if present
+    if (options.attachmentUrl) {
+      try {
+        const attachmentRes = await fetch(options.attachmentUrl)
+        if (attachmentRes.ok) {
+          const attachmentBytes = await attachmentRes.arrayBuffer()
+          const attachmentPdf = await PDFDocument.load(attachmentBytes)
+          const copiedPages = await mergedPdf.copyPages(attachmentPdf, attachmentPdf.getPageIndices())
+          copiedPages.forEach(p => mergedPdf.addPage(p))
+        }
+      } catch { /* skip attachment on error */ }
     }
 
     const mergedBytes = await mergedPdf.save()

@@ -81,6 +81,11 @@ export const orderService = {
     return data
   },
 
+  bulkApprove: async (orderIds: number[]): Promise<{ approved: number[]; failed: number[] }> => {
+    const { data } = await api.post('/orders/bulk-approve', { orderIds })
+    return data
+  },
+
   revert: async (orderId: number, remark: string): Promise<Order> => {
     const { data } = await api.patch(`/orders/revert/${orderId}`, { remark })
     return data
