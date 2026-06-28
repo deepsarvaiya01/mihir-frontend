@@ -100,7 +100,7 @@ export default function TemplatesPage() {
         action={
           <div className="flex items-center gap-2">
             <Button
-              variant={showArchived ? 'secondary' : 'outline'}
+              variant={showArchived ? 'secondary' : 'ghost'}
               icon={<Archive className="h-4 w-4" />}
               onClick={() => setShowArchived(v => !v)}
             >

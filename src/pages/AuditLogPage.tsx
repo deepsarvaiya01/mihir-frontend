@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Shield, Search, User, Box, ChevronRight } from 'lucide-react'
+import { Shield, Search, User, Box } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { PageContent } from '../components/ui/PageContent'
 import { Pagination } from '../components/ui/Pagination'
@@ -162,7 +162,7 @@ export default function AuditLogPage() {
 
         {totalPages > 1 && (
           <div className="mt-4">
-            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+            <Pagination page={page} totalPages={totalPages} total={data?.total ?? 0} pageSize={PAGE_SIZE} onPage={setPage} onPageSize={() => {}} />
           </div>
         )}
       </PageContent>

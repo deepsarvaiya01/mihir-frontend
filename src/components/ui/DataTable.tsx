@@ -48,10 +48,10 @@ export function DataTableBody({ children }: { children: ReactNode }) {
   return <tbody className="divide-y divide-gray-50 dark:divide-gray-700">{children}</tbody>
 }
 
-export function DataTableRow({ children, onClick }: { children: ReactNode; onClick?: () => void }) {
+export function DataTableRow({ children, onClick, className = '' }: { children: ReactNode; onClick?: () => void; className?: string }) {
   return (
     <tr
-      className={`transition-colors hover:bg-gray-50/60 dark:hover:bg-gray-700/40 ${onClick ? 'cursor-pointer' : ''}`}
+      className={`transition-colors hover:bg-gray-50/60 dark:hover:bg-gray-700/40 ${onClick ? 'cursor-pointer' : ''} ${className}`}
       onClick={onClick}
     >
       {children}
@@ -59,9 +59,9 @@ export function DataTableRow({ children, onClick }: { children: ReactNode; onCli
   )
 }
 
-export function DataTableTd({ children, align = 'left', className = '' }: { children: ReactNode; align?: 'left' | 'right'; className?: string }) {
+export function DataTableTd({ children, align = 'left', className = '', colSpan }: { children: ReactNode; align?: 'left' | 'right'; className?: string; colSpan?: number }) {
   return (
-    <td className={`px-5 py-3.5 ${align === 'right' ? 'text-right' : 'text-left'} ${className}`}>
+    <td colSpan={colSpan} className={`px-5 py-3.5 ${align === 'right' ? 'text-right' : 'text-left'} ${className}`}>
       {children}
     </td>
   )

@@ -202,7 +202,7 @@ export default function DashboardPage() {
                     tickFormatter={(v) => v >= 1000 ? `₹${(v/1000).toFixed(0)}k` : `₹${v}`} />
                   <Tooltip
                     contentStyle={{ borderRadius: 8, border: `1px solid ${theme === 'dark' ? '#374151' : '#E5E7EB'}`, fontSize: 12, background: theme === 'dark' ? '#1F2937' : '#fff', color: theme === 'dark' ? '#F9FAFB' : '#111' }}
-                    formatter={(value: number) => [`₹${value.toLocaleString()}`, 'Revenue']}
+                    formatter={(value) => [`₹${Number(value).toLocaleString()}`, 'Revenue']}
                   />
                   <Bar dataKey="revenue" fill="#F59E0B" radius={[4, 4, 0, 0]} />
                 </BarChart>

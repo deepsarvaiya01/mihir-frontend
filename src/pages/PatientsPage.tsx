@@ -59,7 +59,7 @@ export default function PatientsPage() {
     onError: () => toast.error('Failed to delete patient'),
   })
 
-  const { data: archivedPatients = [], refetch: refetchArchived } = useQuery({
+  const { data: archivedPatients = [] } = useQuery({
     queryKey: ['patients', 'archived'],
     queryFn: patientService.getArchived,
     enabled: showArchived,

@@ -852,7 +852,7 @@ export async function generatePlainReport(options: GenerateReportOptions): Promi
         3: { cellWidth: CW - 70 - 28 - 28 },
       },
       didDrawPage(data) {
-        if (data.pageCount > 1) drawCompactHeader()
+        if ((data as any).pageCount > 1) drawCompactHeader()
       },
       willDrawCell(data) {
         if (data.section !== 'body') return
