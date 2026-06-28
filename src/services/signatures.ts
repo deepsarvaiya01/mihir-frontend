@@ -6,6 +6,7 @@ export interface Signature {
   imageUrl: string
   isActive: boolean
   createdAt: string
+  deletedAt?: string | null
 }
 
 export interface CreateSignatureDto {
@@ -40,5 +41,16 @@ export const signatureService = {
 
   delete: async (id: number): Promise<void> => {
     await api.delete(`/signatures/${id}`)
+  },
+  getArchived: async (): Promise<Signature[]> => {
+    const { data } = await api.get('/signatures/archived')
+    return Array.isArray(data) ? data : []
+  },
+  restore: async (id: number): Promise<Signature> => {
+    const { data } = await api.patch(`/signatures/${id}/restore`)
+    return data
+  },
+  permanentDelete: async (id: number): Promise<void> => {
+    await api.delete(`/signatures/${id}/permanent`)
   },
 }

@@ -36,12 +36,12 @@ function NotifItem({ notif, isNew, onClick }: { notif: AppNotification; isNew: b
         ${isNew ? 'bg-blue-50/60 dark:bg-blue-900/20' : ''}`}
     >
       <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full
-        ${isNew ? 'bg-white shadow-sm ring-1 ring-gray-100' : 'bg-gray-100 dark:bg-gray-700'}`}>
+        ${isNew ? 'bg-white dark:bg-gray-600 shadow-sm ring-1 ring-gray-100 dark:ring-gray-600' : 'bg-gray-100 dark:bg-gray-700'}`}>
         {TYPE_ICON[notif.type] ?? <FlaskConical className="h-4 w-4 text-gray-400" />}
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <p className={`truncate text-[13px] font-semibold ${isNew ? 'text-gray-900' : 'text-gray-700'}`}>
+          <p className={`truncate text-[13px] font-semibold ${isNew ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'}`}>
             {notif.title}
           </p>
           {isNew && <span className="h-2 w-2 shrink-0 rounded-full bg-blue-500" />}
@@ -153,7 +153,7 @@ export function NavbarUserActions() {
             </div>
 
             {/* List */}
-            <div className="max-h-96 overflow-y-auto divide-y divide-gray-50">
+            <div className="max-h-96 overflow-y-auto divide-y divide-gray-50 dark:divide-gray-700/50">
               {notifications.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 py-10 text-center">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-700">

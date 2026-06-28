@@ -52,4 +52,18 @@ export const userService = {
     const { data } = await api.patch(`/users/${id}/activate`)
     return data
   },
+
+  getArchived: async (): Promise<UserRecord[]> => {
+    const { data } = await api.get('/users/archived')
+    return Array.isArray(data) ? data : []
+  },
+
+  restore: async (id: number): Promise<{ message: string }> => {
+    const { data } = await api.patch(`/users/${id}/restore`)
+    return data
+  },
+
+  permanentDelete: async (id: number): Promise<void> => {
+    await api.delete(`/users/${id}/permanent`)
+  },
 }

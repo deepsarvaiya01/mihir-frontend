@@ -65,10 +65,10 @@ function formatBytes(bytes: number): string {
 /* ─── card wrapper ───────────────────────────────────────── */
 function FormCard({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-      <div className="flex items-center gap-2 border-b border-gray-100 px-6 py-4">
+    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+      <div className="flex items-center gap-2 border-b border-gray-100 px-6 py-4 dark:border-gray-700">
         <span className="text-blue-600">{icon}</span>
-        <h2 className="text-sm font-semibold text-gray-800">{title}</h2>
+        <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100">{title}</h2>
       </div>
       <div className="px-6 py-5">{children}</div>
     </div>
@@ -92,9 +92,9 @@ function ResultField({
         <Calculator className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-amber-500" />
         <input
           type="number" value={computed} readOnly
-          className="w-full cursor-not-allowed rounded-xl border border-amber-200 bg-amber-50 py-2.5 pl-10 pr-14 text-sm font-semibold text-amber-800 outline-none"
+          className="w-full cursor-not-allowed rounded-xl border border-amber-200 bg-amber-50 py-2.5 pl-10 pr-14 text-sm font-semibold text-amber-800 outline-none dark:border-amber-700/60 dark:bg-amber-900/30 dark:text-amber-300"
         />
-        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-amber-500">auto</span>
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-amber-500 dark:text-amber-400">auto</span>
       </div>
     )
   }
@@ -103,14 +103,14 @@ function ResultField({
 
   if (field.fieldType === 'checkbox') {
     return (
-      <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 hover:bg-gray-100">
+      <label className="flex cursor-pointer items-center gap-2.5 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-700/40 dark:hover:bg-gray-700">
         <input
           type="checkbox"
           checked={Boolean(value)}
           onChange={e => onChange(field.id, e.target.checked)}
-          className="h-4 w-4 rounded border-gray-300 accent-blue-600"
+          className="h-4 w-4 rounded border-gray-300 accent-blue-600 dark:border-gray-600"
         />
-        <span className="text-sm text-gray-700">{Boolean(value) ? 'Yes' : 'No'}</span>
+        <span className="text-sm text-gray-700 dark:text-gray-300">{Boolean(value) ? 'Yes' : 'No'}</span>
       </label>
     )
   }
@@ -279,15 +279,15 @@ export default function EnterResultsPage() {
   }
 
   /* ── Guards ── */
-  if (isNaN(orderId)) return <div className="p-8 text-center text-gray-500">Invalid order ID.</div>
+  if (isNaN(orderId)) return <div className="p-8 text-center text-gray-500 dark:text-gray-400">Invalid order ID.</div>
 
   if (isLoading) return <PageLoader />
 
   if (isError || !form) {
     return (
       <div className="p-8 text-center">
-        <p className="text-gray-500">Could not load order form.</p>
-        <button onClick={() => navigate('/orders')} className="mt-3 text-sm text-blue-600 hover:underline">
+        <p className="text-gray-500 dark:text-gray-400">Could not load order form.</p>
+        <button onClick={() => navigate('/orders')} className="mt-3 text-sm text-blue-600 hover:underline dark:text-blue-400">
           ← Back to Orders
         </button>
       </div>
@@ -327,15 +327,15 @@ export default function EnterResultsPage() {
         {isLocked && (
           <div className={`flex items-start gap-3 rounded-2xl border px-5 py-4 ${
             order.status === 'APPROVED'
-              ? 'border-emerald-200 bg-emerald-50'
-              : 'border-amber-200 bg-amber-50'
+              ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-800/60 dark:bg-emerald-900/20'
+              : 'border-amber-200 bg-amber-50 dark:border-amber-800/60 dark:bg-amber-900/20'
           }`}>
-            <Lock className={`mt-0.5 h-5 w-5 shrink-0 ${order.status === 'APPROVED' ? 'text-emerald-600' : 'text-amber-600'}`} />
+            <Lock className={`mt-0.5 h-5 w-5 shrink-0 ${order.status === 'APPROVED' ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`} />
             <div className="flex-1 min-w-0">
-              <p className={`text-sm font-semibold ${order.status === 'APPROVED' ? 'text-emerald-800' : 'text-amber-800'}`}>
+              <p className={`text-sm font-semibold ${order.status === 'APPROVED' ? 'text-emerald-800 dark:text-emerald-300' : 'text-amber-800 dark:text-amber-300'}`}>
                 {order.status === 'APPROVED' ? 'Results Approved — Read Only' : 'Awaiting Approval — Read Only'}
               </p>
-              <p className={`mt-0.5 text-xs ${order.status === 'APPROVED' ? 'text-emerald-700' : 'text-amber-700'}`}>
+              <p className={`mt-0.5 text-xs ${order.status === 'APPROVED' ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'}`}>
                 {order.status === 'APPROVED'
                   ? 'These results have been approved and are locked. A SUPER_ADMIN can revert the order from the Approvals page if a correction is needed.'
                   : 'This order has been submitted and is pending review. Results cannot be changed until it is approved or rejected.'}
@@ -346,11 +346,11 @@ export default function EnterResultsPage() {
 
         {/* Revert remark notice (shown when order was previously approved & reverted) */}
         {order.revertRemark && order.status === 'IN_PROGRESS' && (
-          <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-4">
-            <Undo2 className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+          <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 dark:border-red-800/60 dark:bg-red-900/20">
+            <Undo2 className="mt-0.5 h-5 w-5 shrink-0 text-red-500 dark:text-red-400" />
             <div>
-              <p className="text-sm font-semibold text-red-800">Reverted for Correction</p>
-              <p className="mt-0.5 text-xs text-red-700">{order.revertRemark}</p>
+              <p className="text-sm font-semibold text-red-800 dark:text-red-300">Reverted for Correction</p>
+              <p className="mt-0.5 text-xs text-red-700 dark:text-red-400">{order.revertRemark}</p>
             </div>
           </div>
         )}
@@ -359,20 +359,20 @@ export default function EnterResultsPage() {
         <FormCard title="Patient Information" icon={<User className="h-4 w-4" />}>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Patient</p>
-              <p className="mt-0.5 font-semibold text-gray-800">{order.patient?.fullName ?? '—'}</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">Patient</p>
+              <p className="mt-0.5 font-semibold text-gray-800 dark:text-gray-100">{order.patient?.fullName ?? '—'}</p>
             </div>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Code</p>
-              <p className="mt-0.5 font-mono text-sm text-gray-700">{order.patient?.patientCode ?? '—'}</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">Code</p>
+              <p className="mt-0.5 font-mono text-sm text-gray-700 dark:text-gray-300">{order.patient?.patientCode ?? '—'}</p>
             </div>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Test</p>
-              <p className="mt-0.5 font-semibold text-gray-800">{order.template?.name ?? '—'}</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">Test</p>
+              <p className="mt-0.5 font-semibold text-gray-800 dark:text-gray-100">{order.template?.name ?? '—'}</p>
             </div>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Order Date</p>
-              <p className="mt-0.5 text-sm text-gray-700">
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">Order Date</p>
+              <p className="mt-0.5 text-sm text-gray-700 dark:text-gray-300">
                 {order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
               </p>
             </div>
@@ -390,8 +390,8 @@ export default function EnterResultsPage() {
                 if (field.isSectionHeader) {
                   return (
                     <div key={field.id} className="sm:col-span-2 pt-2">
-                      <div className="border-b-2 border-gray-200 pb-1.5">
-                        <span className="text-sm font-bold text-gray-700 underline underline-offset-2">
+                      <div className="border-b-2 border-gray-200 pb-1.5 dark:border-gray-600">
+                        <span className="text-sm font-bold text-gray-700 underline underline-offset-2 dark:text-gray-200">
                           {field.fieldName}
                         </span>
                       </div>
@@ -403,13 +403,13 @@ export default function EnterResultsPage() {
                     key={field.id}
                     className={field.fieldType === 'text' && !field.optionsJson ? 'sm:col-span-2' : ''}
                   >
-                    <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                       {field.fieldName}
                       {field.unit && (
-                        <span className="ml-1 normal-case font-normal text-gray-400">({field.unit})</span>
+                        <span className="ml-1 normal-case font-normal text-gray-400 dark:text-gray-500">({field.unit})</span>
                       )}
                       {field.referenceRange && (
-                        <span className="ml-1 normal-case font-normal text-gray-400">Ref: {field.referenceRange}</span>
+                        <span className="ml-1 normal-case font-normal text-gray-400 dark:text-gray-500">Ref: {field.referenceRange}</span>
                       )}
                       {field.required && <span className="ml-1 text-red-500">*</span>}
                     </label>
@@ -427,33 +427,33 @@ export default function EnterResultsPage() {
 
         {/* PDF attachment */}
         <FormCard title="Attach Document (optional)" icon={<Paperclip className="h-4 w-4" />}>
-          <p className="mb-4 text-xs text-gray-500">
+          <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
             Attach a PDF document (e.g. external lab report). It will be merged with the final report.
           </p>
 
           {/* Show existing attachment notice */}
           {!attachment && order.attachmentName && (
-            <div className="mb-3 flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-xs text-gray-500">
+            <div className="mb-3 flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-xs text-gray-500 dark:border-gray-700 dark:bg-gray-700/40 dark:text-gray-400">
               <Paperclip className="h-3.5 w-3.5 shrink-0 text-blue-400" />
-              Existing attachment: <span className="font-semibold text-gray-700">{order.attachmentName}</span>
-              <span className="ml-1 text-gray-400">(upload a new file to replace)</span>
+              Existing attachment: <span className="font-semibold text-gray-700 dark:text-gray-200">{order.attachmentName}</span>
+              <span className="ml-1 text-gray-400 dark:text-gray-500">(upload a new file to replace)</span>
             </div>
           )}
 
           {attachment ? (
-            <div className="flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+            <div className="flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800/60 dark:bg-blue-900/20">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-100">
-                  <FileText className="h-5 w-5 text-red-600" />
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-100 dark:bg-red-900/40">
+                  <FileText className="h-5 w-5 text-red-600 dark:text-red-400" />
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-gray-800">{attachment.name}</p>
-                  <p className="text-xs text-gray-500">{formatBytes(attachment.size)} · PDF</p>
+                  <p className="truncate text-sm font-semibold text-gray-800 dark:text-gray-100">{attachment.name}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{formatBytes(attachment.size)} · PDF</p>
                 </div>
               </div>
               <button
                 onClick={() => { setAttachment(null); if (fileInputRef.current) fileInputRef.current.value = '' }}
-                className="ml-3 shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                className="ml-3 shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 dark:text-gray-500 dark:hover:bg-red-900/30 dark:hover:text-red-400"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -461,17 +461,17 @@ export default function EnterResultsPage() {
           ) : (
             <div
               className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 transition-colors
-                ${dragOver ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-gray-50 hover:border-blue-300 hover:bg-blue-50/40'}`}
+                ${dragOver ? 'border-blue-400 bg-blue-50 dark:border-blue-500 dark:bg-blue-900/20' : 'border-gray-200 bg-gray-50 hover:border-blue-300 hover:bg-blue-50/40 dark:border-gray-700 dark:bg-gray-700/30 dark:hover:border-blue-600 dark:hover:bg-blue-900/10'}`}
               onClick={() => fileInputRef.current?.click()}
               onDragOver={e => { e.preventDefault(); setDragOver(true) }}
               onDragLeave={() => setDragOver(false)}
               onDrop={handleDrop}
             >
-              <Upload className="mb-3 h-8 w-8 text-gray-400" />
-              <p className="text-sm font-medium text-gray-600">
-                Drop PDF here or <span className="text-blue-600">browse</span>
+              <Upload className="mb-3 h-8 w-8 text-gray-400 dark:text-gray-500" />
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                Drop PDF here or <span className="text-blue-600 dark:text-blue-400">browse</span>
               </p>
-              <p className="mt-1 text-xs text-gray-400">PDF only · max 15 MB</p>
+              <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">PDF only · max 15 MB</p>
               <input
                 ref={fileInputRef} type="file" accept="application/pdf" className="hidden"
                 onChange={e => { const f = e.target.files?.[0]; if (f) handlePdfFile(f) }}
@@ -481,23 +481,23 @@ export default function EnterResultsPage() {
         </FormCard>
 
         {/* Footer actions */}
-        <div className={`flex items-center justify-between rounded-2xl border px-6 py-4 shadow-sm ${isLocked ? 'border-gray-100 bg-gray-50' : 'border-gray-200 bg-white'}`}>
+        <div className={`flex items-center justify-between rounded-2xl border px-6 py-4 shadow-sm ${isLocked ? 'border-gray-100 bg-gray-50 dark:border-gray-700 dark:bg-gray-800' : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800'}`}>
           <button
             onClick={() => navigate('/orders')}
-            className="flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
+            className="flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-700"
           >
             <ArrowLeft className="h-4 w-4" /> Cancel
           </button>
 
           <div className="flex items-center gap-3">
             {isLocked ? (
-              <div className="flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-500">
+              <div className="flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-500 dark:bg-gray-700 dark:text-gray-400">
                 <Lock className="h-3.5 w-3.5" /> Results locked
               </div>
             ) : (
               <>
                 {attachment && (
-                  <div className="flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+                  <div className="flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                     <Paperclip className="h-3.5 w-3.5" /> PDF attached
                   </div>
                 )}
@@ -506,10 +506,10 @@ export default function EnterResultsPage() {
                 <button
                   onClick={() => saveMut.mutate(true)}
                   disabled={saveMut.isPending || fields.length === 0}
-                  className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
                 >
                   {saveMut.isPending && saveMut.variables === true ? (
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" />
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-400 border-t-transparent dark:border-gray-500" />
                   ) : (
                     <Save className="h-4 w-4" />
                   )}
@@ -518,7 +518,7 @@ export default function EnterResultsPage() {
 
                 {/* Batch notice vs individual submit */}
                 {isBatchOrder ? (
-                  <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800">
+                  <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800 dark:border-amber-800/60 dark:bg-amber-900/20 dark:text-amber-300">
                     <Info className="h-4 w-4 shrink-0" />
                     Save each test, then go to <button onClick={() => navigate('/orders')} className="underline font-semibold">Orders</button> to submit all for approval
                   </div>
@@ -542,7 +542,7 @@ export default function EnterResultsPage() {
         </div>
 
         {saveMut.isSuccess && saveMut.variables === false && (
-          <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+          <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
             <CheckCircle2 className="h-4 w-4" /> Results submitted! Redirecting…
           </div>
         )}

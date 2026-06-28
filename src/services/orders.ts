@@ -99,4 +99,20 @@ export const orderService = {
   delete: async (orderId: number): Promise<void> => {
     await api.delete(`/orders/${orderId}`)
   },
+
+  getArchived: async (): Promise<Order[]> => {
+    const { data } = await api.get('/orders/archived')
+    if (Array.isArray(data)) return data
+    if (Array.isArray(data.orders)) return data.orders
+    return []
+  },
+
+  restore: async (orderId: number): Promise<{ message: string }> => {
+    const { data } = await api.patch(`/orders/${orderId}/restore`)
+    return data
+  },
+
+  permanentDelete: async (orderId: number): Promise<void> => {
+    await api.delete(`/orders/${orderId}/permanent`)
+  },
 }

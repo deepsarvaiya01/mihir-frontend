@@ -17,4 +17,13 @@ export const labBranchService = {
     const { data } = await api.patch(`/lab-branches/${id}`, dto); return data
   },
   delete: async (id: number): Promise<void> => { await api.delete(`/lab-branches/${id}`) },
+  getArchived: async (): Promise<LabBranch[]> => {
+    const { data } = await api.get('/lab-branches/archived')
+    return Array.isArray(data) ? data : []
+  },
+  restore: async (id: number): Promise<LabBranch> => {
+    const { data } = await api.patch(`/lab-branches/${id}/restore`)
+    return data
+  },
+  permanentDelete: async (id: number): Promise<void> => { await api.delete(`/lab-branches/${id}/permanent`) },
 }

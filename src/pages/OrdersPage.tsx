@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, ClipboardList, Search, FileText, ChevronDown,
   Trash2, RotateCcw, ExternalLink, Paperclip, FlaskConical,
-  X, CheckSquare, SendHorizonal, Receipt,
+  X, CheckSquare, SendHorizonal, Receipt, Archive,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
@@ -44,6 +44,8 @@ export default function OrdersPage() {
   const [viewResultsOpen, setViewResultsOpen] = useState(false)
   const [deleteOrder, setDeleteOrder] = useState<Order | null>(null)
   const [reopenOrder, setReopenOrder] = useState<Order | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
+  const [permanentDeleteOrder, setPermanentDeleteOrder] = useState<Order | null>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
   const [dateFrom, setDateFrom] = useState('')
@@ -59,6 +61,12 @@ export default function OrdersPage() {
   const { data: orders = [], isLoading } = useQuery({ queryKey: ['orders'], queryFn: orderService.getAll })
   const { data: patients = [] } = useQuery({ queryKey: ['patients'], queryFn: () => patientService.getAll() })
   const { data: templates = [] } = useQuery({ queryKey: ['templates'], queryFn: templateService.getAll })
+
+  const { data: archivedOrders = [] } = useQuery({
+    queryKey: ['orders', 'archived'],
+    queryFn: orderService.getArchived,
+    enabled: showArchived,
+  })
 
   const activeTemplates = templates.filter(t => t.active)
 
@@ -173,6 +181,26 @@ export default function OrdersPage() {
     },
   })
 
+  const restoreOrder = useMutation({
+    mutationFn: (id: number) => orderService.restore(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['orders'] })
+      qc.invalidateQueries({ queryKey: ['orders', 'archived'] })
+      toast.success('Order restored')
+    },
+    onError: () => toast.error('Failed to restore order'),
+  })
+
+  const permanentDeleteMut = useMutation({
+    mutationFn: (id: number) => orderService.permanentDelete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['orders', 'archived'] })
+      setPermanentDeleteOrder(null)
+      toast.success('Order permanently deleted')
+    },
+    onError: () => toast.error('Failed to permanently delete'),
+  })
+
   const activeOrders = orders.filter(o => o.status !== 'APPROVED')
   const filtered = activeOrders.filter(o => {
     const matchSearch = !search ||
@@ -248,7 +276,16 @@ export default function OrdersPage() {
       <Header
         title="Orders & Results"
         subtitle="Create diagnostic orders and enter test results for approval"
-        action={<Button icon={<Plus className="h-4 w-4" />} onClick={openCreate}>New Order</Button>}
+        action={
+          <div className="flex items-center gap-2">
+            <Button variant={showArchived ? 'secondary' : 'ghost'} size="sm"
+              icon={<Archive className="h-4 w-4" />}
+              onClick={() => setShowArchived(p => !p)}>
+              {showArchived ? 'Hide Archived' : 'Archived'}
+            </Button>
+            <Button icon={<Plus className="h-4 w-4" />} onClick={openCreate}>New Order</Button>
+          </div>
+        }
       />
 
       <div className="p-6 space-y-5">
@@ -416,6 +453,74 @@ export default function OrdersPage() {
             </table>
           </div>
         )}
+
+        {/* ── Archived Orders Section ─────────────────────────── */}
+        {showArchived && (
+          <div className="mt-2">
+            <div className="mb-3 flex items-center gap-2">
+              <Archive className="h-4 w-4 text-amber-500" />
+              <h3 className="text-sm font-semibold text-amber-700 dark:text-amber-400">
+                Archived Orders
+              </h3>
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
+                {archivedOrders.length}
+              </span>
+            </div>
+            {archivedOrders.length === 0 ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50/50 dark:border-amber-800/50 dark:bg-amber-900/10 px-6 py-10 text-center">
+                <Archive className="mx-auto mb-2 h-8 w-8 text-amber-300 dark:text-amber-700" />
+                <p className="text-sm text-amber-600 dark:text-amber-500">No archived orders</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-2xl border border-amber-200 bg-white shadow-sm dark:border-amber-800/50 dark:bg-gray-800">
+                <table className="min-w-[640px] w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-amber-100 bg-amber-50/60 dark:border-amber-800/40 dark:bg-amber-900/20">
+                      <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-amber-500 dark:text-amber-500">Order</th>
+                      <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-amber-500 dark:text-amber-500">Patient</th>
+                      <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-amber-500 dark:text-amber-500">Test</th>
+                      <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-amber-500 dark:text-amber-500">Status</th>
+                      <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-amber-500 dark:text-amber-500">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-amber-50 dark:divide-amber-800/20">
+                    {archivedOrders.map(order => (
+                      <tr key={order.id} className="hover:bg-amber-50/40 transition-colors dark:hover:bg-amber-900/10">
+                        <td className="px-5 py-4">
+                          <span className="font-bold text-gray-700 dark:text-gray-200">#{order.id}</span>
+                        </td>
+                        <td className="px-5 py-4">
+                          <p className="font-medium text-gray-800 dark:text-gray-200">{order.patient?.fullName ?? '—'}</p>
+                          <p className="text-xs text-gray-400 dark:text-gray-500">{order.patient?.patientCode ?? ''}</p>
+                        </td>
+                        <td className="px-5 py-4 text-gray-600 max-w-[180px] truncate dark:text-gray-300">
+                          {order.template?.name ?? '—'}
+                        </td>
+                        <td className="px-5 py-4"><OrderStatusBadge status={order.status} /></td>
+                        <td className="px-5 py-4">
+                          <div className="flex justify-end gap-2">
+                            <Button size="sm" variant="secondary"
+                              icon={<RotateCcw className="h-3.5 w-3.5" />}
+                              loading={restoreOrder.isPending && restoreOrder.variables === order.id}
+                              onClick={() => restoreOrder.mutate(order.id)}>
+                              Restore
+                            </Button>
+                            <Button size="sm" variant="ghost"
+                              icon={<Trash2 className="h-3.5 w-3.5 text-red-500" />}
+                              className="text-red-500 hover:bg-red-50"
+                              onClick={() => setPermanentDeleteOrder(order)}>
+                              Delete Forever
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Create Order Modal (multi-test batch) ────────────── */}
@@ -450,13 +555,13 @@ export default function OrdersPage() {
               <input
                 value={patientSearch} onChange={e => setPatientSearch(e.target.value)}
                 placeholder="Search by name, code or phone..."
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2 pl-8 pr-3 text-sm outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2 pl-8 pr-3 text-sm outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700/50 dark:text-gray-200 dark:placeholder-gray-500 dark:focus:bg-gray-700"
               />
             </div>
             <select
               value={batchForm.patientId}
               onChange={e => setBatchForm(p => ({ ...p, patientId: e.target.value }))}
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
               size={Math.min(5, Math.max(2, filteredPatients.length))}
             >
               {filteredPatients.length === 0
@@ -483,10 +588,10 @@ export default function OrdersPage() {
                 <input
                   value={testSearch} onChange={e => setTestSearch(e.target.value)}
                   placeholder="Search tests..."
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2 pl-8 pr-3 text-sm outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2 pl-8 pr-3 text-sm outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700/50 dark:text-gray-200 dark:placeholder-gray-500 dark:focus:bg-gray-700"
                 />
               </div>
-              <div className="max-h-64 overflow-y-auto rounded-xl border border-gray-200 divide-y divide-gray-100">
+              <div className="max-h-64 overflow-y-auto rounded-xl border border-gray-200 divide-y divide-gray-100 dark:border-gray-600 dark:divide-gray-700">
                 {filteredTests.length === 0 ? (
                   <div className="px-4 py-8 text-center text-sm text-gray-400">No active tests found</div>
                 ) : filteredTests.map(t => {
@@ -495,7 +600,7 @@ export default function OrdersPage() {
                     <label
                       key={t.id}
                       className={`flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors ${
-                        checked ? 'bg-blue-50' : 'hover:bg-gray-50'
+                        checked ? 'bg-blue-50 dark:bg-blue-900/30' : 'hover:bg-gray-50 dark:hover:bg-gray-700/40'
                       }`}
                     >
                       <input
@@ -504,11 +609,11 @@ export default function OrdersPage() {
                         className="h-4 w-4 rounded accent-blue-600 shrink-0"
                       />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-gray-800">{t.name}</p>
-                        <p className="text-xs text-gray-400">{t.code}</p>
+                        <p className="truncate text-sm font-semibold text-gray-800 dark:text-gray-200">{t.name}</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">{t.code}</p>
                       </div>
                       {Number(t.amount) > 0 && (
-                        <span className="shrink-0 text-sm font-semibold text-gray-700">
+                        <span className="shrink-0 text-sm font-semibold text-gray-700 dark:text-gray-300">
                           ₹{Number(t.amount).toLocaleString()}
                         </span>
                       )}
@@ -533,21 +638,21 @@ export default function OrdersPage() {
               </label>
 
               {batchForm.selectedIds.length === 0 ? (
-                <div className="flex flex-1 flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 px-4 py-10 text-center">
+                <div className="flex flex-1 flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 px-4 py-10 text-center dark:border-gray-600">
                   <FlaskConical className="mb-2 h-8 w-8 text-gray-300" />
                   <p className="text-sm text-gray-400">Select tests on the left</p>
                 </div>
               ) : (
                 <div className="flex flex-col gap-3">
                   {/* Selected tests list */}
-                  <div className="rounded-xl border border-gray-200 divide-y divide-gray-100 overflow-hidden">
+                  <div className="rounded-xl border border-gray-200 divide-y divide-gray-100 overflow-hidden dark:border-gray-600 dark:divide-gray-700">
                     {selectedTemplates.map(t => (
                       <div key={t.id} className="flex items-center gap-3 px-4 py-2.5">
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-gray-800">{t.name}</p>
-                          <p className="text-xs text-gray-400">{t.code}</p>
+                          <p className="truncate text-sm font-medium text-gray-800 dark:text-gray-200">{t.name}</p>
+                          <p className="text-xs text-gray-400 dark:text-gray-500">{t.code}</p>
                         </div>
-                        <span className="shrink-0 text-sm text-gray-600">
+                        <span className="shrink-0 text-sm text-gray-600 dark:text-gray-300">
                           ₹{Number(t.amount).toLocaleString()}
                         </span>
                         <button onClick={() => toggleTest(t.id)} className="shrink-0 text-gray-300 hover:text-red-400">
@@ -566,19 +671,19 @@ export default function OrdersPage() {
                       type="number" min="0" max="100" step="1" placeholder="0"
                       value={batchForm.discount}
                       onChange={e => setBatchForm(p => ({ ...p, discount: e.target.value }))}
-                      className="w-20 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-right outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20"
+                      className="w-20 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-right outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700/50 dark:text-gray-200"
                     />
                   </div>
 
                   {/* Total */}
-                  <div className="flex items-center justify-between rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+                  <div className="flex items-center justify-between rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 dark:border-blue-900/50 dark:bg-blue-900/20">
                     <div>
                       {discountPct > 0 && (
                         <p className="text-xs text-gray-400 line-through">₹{subtotal.toLocaleString()}</p>
                       )}
-                      <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">Total</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">Total</p>
                     </div>
-                    <span className="text-xl font-bold text-blue-800">₹{total.toLocaleString()}</span>
+                    <span className="text-xl font-bold text-blue-800 dark:text-blue-300">₹{total.toLocaleString()}</span>
                   </div>
 
                   {/* Payment status */}
@@ -591,9 +696,9 @@ export default function OrdersPage() {
                           className={`rounded-xl border py-2 text-xs font-semibold transition-all ${
                             batchForm.paymentStatus === s
                               ? s === 'PAID'
-                                ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
-                                : 'border-blue-400 bg-blue-50 text-blue-700'
-                              : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                                ? 'border-emerald-400 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:border-emerald-700 dark:text-emerald-400'
+                                : 'border-blue-400 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-400'
+                              : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400 dark:hover:border-gray-500'
                           }`}
                         >
                           {s === '' ? 'Default' : s.charAt(0) + s.slice(1).toLowerCase()}
@@ -611,8 +716,8 @@ export default function OrdersPage() {
                           onClick={() => setBatchForm(p => ({ ...p, paymentType: m as PaymentType | '' }))}
                           className={`rounded-xl border py-2 text-xs font-semibold transition-all ${
                             batchForm.paymentType === m
-                              ? 'border-blue-400 bg-blue-50 text-blue-700'
-                              : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'
+                              ? 'border-blue-400 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-400'
+                              : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400 dark:hover:border-gray-500'
                           }`}
                         >
                           {m === '' ? 'None' : m.charAt(0) + m.slice(1).toLowerCase()}
@@ -638,49 +743,49 @@ export default function OrdersPage() {
       >
         {selectedResults && (
           <div>
-            <div className="mb-5 grid grid-cols-2 gap-3 rounded-xl bg-gray-50 p-4 text-sm">
+            <div className="mb-5 grid grid-cols-2 gap-3 rounded-xl bg-gray-50 p-4 text-sm dark:bg-gray-700/50">
               <div>
-                <span className="text-gray-400 text-xs uppercase tracking-wide">Patient</span>
-                <p className="font-semibold text-gray-800 mt-0.5">{selectedResults.order.patient?.fullName ?? '—'}</p>
+                <span className="text-gray-400 text-xs uppercase tracking-wide dark:text-gray-500">Patient</span>
+                <p className="font-semibold text-gray-800 mt-0.5 dark:text-gray-200">{selectedResults.order.patient?.fullName ?? '—'}</p>
               </div>
               <div>
-                <span className="text-gray-400 text-xs uppercase tracking-wide">Test</span>
-                <p className="font-semibold text-gray-800 mt-0.5">{selectedResults.order.template?.name ?? '—'}</p>
+                <span className="text-gray-400 text-xs uppercase tracking-wide dark:text-gray-500">Test</span>
+                <p className="font-semibold text-gray-800 mt-0.5 dark:text-gray-200">{selectedResults.order.template?.name ?? '—'}</p>
               </div>
               <div>
-                <span className="text-gray-400 text-xs uppercase tracking-wide">Status</span>
+                <span className="text-gray-400 text-xs uppercase tracking-wide dark:text-gray-500">Status</span>
                 <div className="mt-0.5"><OrderStatusBadge status={selectedResults.order.status} /></div>
               </div>
               <div>
-                <span className="text-gray-400 text-xs uppercase tracking-wide">Date</span>
-                <p className="font-medium text-gray-700 mt-0.5">
+                <span className="text-gray-400 text-xs uppercase tracking-wide dark:text-gray-500">Date</span>
+                <p className="font-medium text-gray-700 mt-0.5 dark:text-gray-300">
                   {selectedResults.order.createdAt ? new Date(selectedResults.order.createdAt).toLocaleDateString() : '—'}
                 </p>
               </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               {selectedResults.results.filter(r => !r.isSectionHeader).map((result, i) => (
-                <div key={i} className="rounded-xl border border-gray-200 bg-white p-4">
-                  <p className="text-xs text-gray-400 uppercase tracking-wide">{result.fieldName}</p>
-                  <p className="mt-1 text-xl font-bold text-gray-900">
+                <div key={i} className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+                  <p className="text-xs text-gray-400 uppercase tracking-wide dark:text-gray-500">{result.fieldName}</p>
+                  <p className="mt-1 text-xl font-bold text-gray-900 dark:text-white">
                     {String(result.value ?? '—')}
-                    {result.unit && <span className="ml-1.5 text-sm font-normal text-gray-400">{result.unit}</span>}
+                    {result.unit && <span className="ml-1.5 text-sm font-normal text-gray-400 dark:text-gray-500">{result.unit}</span>}
                   </p>
                   {result.referenceRange && (
-                    <p className="mt-0.5 text-xs text-gray-400">Ref: {result.referenceRange}</p>
+                    <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">Ref: {result.referenceRange}</p>
                   )}
                 </div>
               ))}
             </div>
             {selectedResults.order.attachmentName && selectedResults.order.attachmentUrl && (
-              <div className="mt-4 flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
-                <Paperclip className="h-4 w-4 shrink-0 text-blue-600" />
+              <div className="mt-4 flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-900/50 dark:bg-blue-900/20">
+                <Paperclip className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-gray-800">{selectedResults.order.attachmentName}</p>
-                  <p className="text-xs text-gray-500">Attached PDF document</p>
+                  <p className="truncate text-sm font-semibold text-gray-800 dark:text-gray-200">{selectedResults.order.attachmentName}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Attached PDF document</p>
                 </div>
                 <a href={selectedResults.order.attachmentUrl} target="_blank" rel="noopener noreferrer"
-                  className="shrink-0 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100">
+                  className="shrink-0 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-gray-800 dark:text-blue-400 dark:hover:bg-gray-700">
                   Download
                 </a>
               </div>
@@ -698,13 +803,22 @@ export default function OrdersPage() {
         confirmLabel="Re-open Order" variant="primary" loading={reopenMutation.isPending}
       />
 
-      {/* Delete Confirm */}
+      {/* Archive Confirm */}
       <ConfirmModal
         open={!!deleteOrder} onClose={() => setDeleteOrder(null)}
         onConfirm={() => deleteOrder && removeOrder.mutate(deleteOrder.id)}
-        title="Delete Order"
-        message={`Delete Order #${deleteOrder?.id}? This will permanently remove the order and all submitted results.`}
-        confirmLabel="Delete Order" variant="danger" loading={removeOrder.isPending}
+        title="Archive Order"
+        message={`Archive Order #${deleteOrder?.id}? The order will be moved to the archive and can be restored later.`}
+        confirmLabel="Archive Order" variant="danger" loading={removeOrder.isPending}
+      />
+
+      {/* Permanent Delete Confirm */}
+      <ConfirmModal
+        open={!!permanentDeleteOrder} onClose={() => setPermanentDeleteOrder(null)}
+        onConfirm={() => permanentDeleteOrder && permanentDeleteMut.mutate(permanentDeleteOrder.id)}
+        title="Permanently Delete Order"
+        message={`Permanently delete Order #${permanentDeleteOrder?.id}? This cannot be undone and all data will be lost.`}
+        confirmLabel="Delete Forever" variant="danger" loading={permanentDeleteMut.isPending}
       />
     </div>
   )

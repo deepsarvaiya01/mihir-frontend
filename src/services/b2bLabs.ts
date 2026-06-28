@@ -17,4 +17,13 @@ export const b2bLabService = {
     const { data } = await api.patch(`/b2b-labs/${id}`, dto); return data
   },
   delete: async (id: number): Promise<void> => { await api.delete(`/b2b-labs/${id}`) },
+  getArchived: async (): Promise<B2bLab[]> => {
+    const { data } = await api.get('/b2b-labs/archived')
+    return Array.isArray(data) ? data : []
+  },
+  restore: async (id: number): Promise<B2bLab> => {
+    const { data } = await api.patch(`/b2b-labs/${id}/restore`)
+    return data
+  },
+  permanentDelete: async (id: number): Promise<void> => { await api.delete(`/b2b-labs/${id}/permanent`) },
 }

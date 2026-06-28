@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, UserCog, Mail, Shield, Pencil, Trash2, Users, UserX, UserCheck } from 'lucide-react'
+import { Plus, UserCog, Mail, Shield, Pencil, Trash2, Users, UserX, UserCheck, Archive, RotateCcw } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
 import { Input, Select } from '../components/ui/Input'
@@ -30,10 +30,17 @@ export default function UsersPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [editUser, setEditUser] = useState<UserRecord | null>(null)
   const [deleteUser, setDeleteUser] = useState<UserRecord | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
+  const [permanentDeleteUser, setPermanentDeleteUser] = useState<UserRecord | null>(null)
   const [createForm, setCreateForm] = useState<CreateUserDto>(emptyCreate)
   const [editForm, setEditForm] = useState<UpdateUserDto & { password: string }>({ name: '', email: '', password: '', role: 'LAB_USER' })
 
   const { data: users = [], isLoading } = useQuery({ queryKey: ['users'], queryFn: userService.getAll })
+  const { data: archivedUsers = [], isLoading: isLoadingArchived } = useQuery({
+    queryKey: ['users', 'archived'],
+    queryFn: userService.getArchived,
+    enabled: showArchived,
+  })
 
   const create = useMutation({
     mutationFn: userService.create,
@@ -62,6 +69,26 @@ export default function UsersPage() {
       setDeleteUser(null)
       toast.success('User deleted')
     },
+  })
+
+  const restoreUser = useMutation({
+    mutationFn: (id: number) => userService.restore(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['users'] })
+      qc.invalidateQueries({ queryKey: ['users', 'archived'] })
+      toast.success('User restored')
+    },
+    onError: () => toast.error('Failed to restore user'),
+  })
+
+  const permDelete = useMutation({
+    mutationFn: (id: number) => userService.permanentDelete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['users', 'archived'] })
+      setPermanentDeleteUser(null)
+      toast.success('User permanently deleted')
+    },
+    onError: () => toast.error('Failed to permanently delete user'),
   })
 
   const deactivate = useMutation({
@@ -96,7 +123,21 @@ export default function UsersPage() {
       <Header
         title="User Management"
         subtitle="Manage system users and access roles"
-        action={<Button icon={<Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>New User</Button>}
+        action={
+          <div className="flex items-center gap-2">
+            <Button
+              variant={showArchived ? 'secondary' : 'ghost'}
+              icon={<Archive className="h-4 w-4" />}
+              onClick={() => setShowArchived(v => !v)}
+              className={showArchived ? 'text-amber-700 border-amber-300 bg-amber-50 hover:bg-amber-100' : ''}
+            >
+              {showArchived ? 'Hide Archived' : 'View Archived'}
+            </Button>
+            {users.length > 0 && (
+              <Button icon={<Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>New User</Button>
+            )}
+          </div>
+        }
       />
 
       <PageContent className="space-y-6">
@@ -187,6 +228,74 @@ export default function UsersPage() {
             </DataTableBody>
           </DataTable>
         )}
+
+        {showArchived && (
+          isLoadingArchived ? (
+            <PageLoader />
+          ) : archivedUsers.length === 0 ? (
+            <EmptyState icon={<Archive className="h-12 w-12" />} title="No archived users" description="Archived users will appear here" />
+          ) : (
+            <DataTable title="Archived Users" count={archivedUsers.length}>
+              <DataTableHead>
+                <DataTableTh>User</DataTableTh>
+                <DataTableTh>Email</DataTableTh>
+                <DataTableTh>Role</DataTableTh>
+                <DataTableTh align="right">Actions</DataTableTh>
+              </DataTableHead>
+              <DataTableBody>
+                {archivedUsers.map(u => (
+                  <DataTableRow key={u.id} className="bg-amber-50/40">
+                    <DataTableTd>
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-400 text-sm font-bold text-white">
+                          {u.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-gray-700">{u.name}</p>
+                          <p className="text-xs text-gray-400">ID #{u.id}</p>
+                        </div>
+                      </div>
+                    </DataTableTd>
+                    <DataTableTd>
+                      <div className="flex items-center gap-2 text-gray-500">
+                        <Mail className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                        {u.email}
+                      </div>
+                    </DataTableTd>
+                    <DataTableTd>
+                      <Badge variant={u.role === 'SUPER_ADMIN' ? 'danger' : 'info'} dot>
+                        {ROLE_LABELS[u.role]}
+                      </Badge>
+                    </DataTableTd>
+                    <DataTableTd align="right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon={<RotateCcw className="h-3.5 w-3.5 text-emerald-500" />}
+                          className="text-emerald-600 hover:bg-emerald-50"
+                          loading={restoreUser.isPending && restoreUser.variables === u.id}
+                          onClick={() => restoreUser.mutate(u.id)}
+                        >
+                          Restore
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon={<Trash2 className="h-3.5 w-3.5 text-red-500" />}
+                          className="text-red-500 hover:bg-red-50"
+                          onClick={() => setPermanentDeleteUser(u)}
+                        >
+                          Delete Forever
+                        </Button>
+                      </div>
+                    </DataTableTd>
+                  </DataTableRow>
+                ))}
+              </DataTableBody>
+            </DataTable>
+          )
+        )}
       </PageContent>
 
       {/* Create Modal */}
@@ -232,8 +341,14 @@ export default function UsersPage() {
 
       <ConfirmModal open={!!deleteUser} onClose={() => setDeleteUser(null)}
         onConfirm={() => deleteUser && remove.mutate(deleteUser.id)}
-        title="Delete User" message={`Delete "${deleteUser?.name}"? This cannot be undone.`}
-        confirmLabel="Delete" variant="danger" loading={remove.isPending}
+        title="Archive User" message={`Archive "${deleteUser?.name}"? They will be moved to the archived users list.`}
+        confirmLabel="Archive" variant="danger" loading={remove.isPending}
+      />
+
+      <ConfirmModal open={!!permanentDeleteUser} onClose={() => setPermanentDeleteUser(null)}
+        onConfirm={() => permanentDeleteUser && permDelete.mutate(permanentDeleteUser.id)}
+        title="Permanently Delete User" message={`Permanently delete "${permanentDeleteUser?.name}"? This cannot be undone.`}
+        confirmLabel="Delete Forever" variant="danger" loading={permDelete.isPending}
       />
     </div>
   )

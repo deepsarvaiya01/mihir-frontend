@@ -9,10 +9,10 @@ interface DataTableProps {
 
 export function DataTable({ title, count, children, minWidth = '600px' }: DataTableProps) {
   return (
-    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
       {title && (
-        <div className="border-b border-gray-100 bg-gray-50 px-6 py-3.5">
-          <h3 className="text-sm font-semibold text-gray-700">
+        <div className="border-b border-gray-100 bg-gray-50 px-6 py-3.5 dark:border-gray-700 dark:bg-gray-900/50">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200">
             {title}{count !== undefined ? ` (${count})` : ''}
           </h3>
         </div>
@@ -29,7 +29,7 @@ export function DataTable({ title, count, children, minWidth = '600px' }: DataTa
 export function DataTableHead({ children }: { children: ReactNode }) {
   return (
     <thead>
-      <tr className="border-b border-gray-100 bg-gray-50/50 text-left">
+      <tr className="border-b border-gray-100 bg-gray-50/50 text-left dark:border-gray-700 dark:bg-gray-900/30">
         {children}
       </tr>
     </thead>
@@ -38,20 +38,20 @@ export function DataTableHead({ children }: { children: ReactNode }) {
 
 export function DataTableTh({ children, align = 'left' }: { children: ReactNode; align?: 'left' | 'right' }) {
   return (
-    <th className={`px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400 ${align === 'right' ? 'text-right' : 'text-left'}`}>
+    <th className={`px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 ${align === 'right' ? 'text-right' : 'text-left'}`}>
       {children}
     </th>
   )
 }
 
 export function DataTableBody({ children }: { children: ReactNode }) {
-  return <tbody className="divide-y divide-gray-50">{children}</tbody>
+  return <tbody className="divide-y divide-gray-50 dark:divide-gray-700">{children}</tbody>
 }
 
 export function DataTableRow({ children, onClick }: { children: ReactNode; onClick?: () => void }) {
   return (
     <tr
-      className={`transition-colors hover:bg-gray-50/60 ${onClick ? 'cursor-pointer' : ''}`}
+      className={`transition-colors hover:bg-gray-50/60 dark:hover:bg-gray-700/40 ${onClick ? 'cursor-pointer' : ''}`}
       onClick={onClick}
     >
       {children}

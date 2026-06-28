@@ -30,4 +30,15 @@ export const logoService = {
   delete: async (id: number): Promise<void> => {
     await api.delete(`/logos/${id}`)
   },
+  getArchived: async (): Promise<Logo[]> => {
+    const { data } = await api.get('/logos/archived')
+    return Array.isArray(data) ? data : []
+  },
+  restore: async (id: number): Promise<Logo> => {
+    const { data } = await api.patch(`/logos/${id}/restore`)
+    return data
+  },
+  permanentDelete: async (id: number): Promise<void> => {
+    await api.delete(`/logos/${id}/permanent`)
+  },
 }

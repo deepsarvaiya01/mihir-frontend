@@ -237,11 +237,11 @@ export default function DashboardPage() {
 
         {/* Alert banners */}
         {isAdmin && awaitingCount > 0 && (
-          <div className="flex items-center gap-4 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4">
-            <Clock className="h-5 w-5 shrink-0 text-amber-600" />
+          <div className="flex items-center gap-4 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 dark:border-amber-800/50 dark:bg-amber-900/20">
+            <Clock className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
             <div className="flex-1">
-              <p className="text-sm font-semibold text-amber-900">{awaitingCount} order{awaitingCount > 1 ? 's' : ''} awaiting approval</p>
-              <p className="text-xs text-amber-700 mt-0.5">Review submitted test results in the Approvals section.</p>
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-300">{awaitingCount} order{awaitingCount > 1 ? 's' : ''} awaiting approval</p>
+              <p className="text-xs text-amber-700 mt-0.5 dark:text-amber-400">Review submitted test results in the Approvals section.</p>
             </div>
             <Link to="/approvals" className="shrink-0 rounded-lg bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-700 transition-colors">
               Review
@@ -250,9 +250,9 @@ export default function DashboardPage() {
         )}
 
         {rejectedCount > 0 && (
-          <div className="flex items-center gap-4 rounded-xl border border-red-200 bg-red-50 px-5 py-4">
-            <XCircle className="h-5 w-5 shrink-0 text-red-500" />
-            <p className="text-sm font-semibold text-red-800">{rejectedCount} order{rejectedCount > 1 ? 's' : ''} rejected — check the Orders section for details.</p>
+          <div className="flex items-center gap-4 rounded-xl border border-red-200 bg-red-50 px-5 py-4 dark:border-red-800/50 dark:bg-red-900/20">
+            <XCircle className="h-5 w-5 shrink-0 text-red-500 dark:text-red-400" />
+            <p className="text-sm font-semibold text-red-800 dark:text-red-300">{rejectedCount} order{rejectedCount > 1 ? 's' : ''} rejected — check the Orders section for details.</p>
           </div>
         )}
 
@@ -261,26 +261,26 @@ export default function DashboardPage() {
           <CardHeader
             title="Recent Orders"
             subtitle="Latest diagnostic orders"
-            badge={<span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">{orders.length} total</span>}
+            badge={<span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-300">{orders.length} total</span>}
           />
           {recentOrders.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="min-w-[600px] w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-100">
+                  <tr className="border-b border-gray-100 dark:border-gray-700">
                     {['Order', 'Patient', 'Test', 'Status', 'Date'].map(h => (
-                      <th key={h} className="pb-3 text-left text-xs font-semibold text-gray-400">{h}</th>
+                      <th key={h} className="pb-3 text-left text-xs font-semibold text-gray-400 dark:text-gray-500">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {recentOrders.map(order => (
-                    <tr key={order.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                      <td className="py-3 font-semibold text-gray-900">#{order.id}</td>
-                      <td className="py-3 text-gray-600">{order.patient?.fullName ?? '—'}</td>
-                      <td className="py-3 text-gray-500 text-xs">{order.template?.name ?? '—'}</td>
+                    <tr key={order.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors dark:border-gray-700/50 dark:hover:bg-gray-700/30">
+                      <td className="py-3 font-semibold text-gray-900 dark:text-gray-200">#{order.id}</td>
+                      <td className="py-3 text-gray-600 dark:text-gray-300">{order.patient?.fullName ?? '—'}</td>
+                      <td className="py-3 text-gray-500 text-xs dark:text-gray-400">{order.template?.name ?? '—'}</td>
                       <td className="py-3"><OrderStatusBadge status={order.status} /></td>
-                      <td className="py-3 text-xs text-gray-400">
+                      <td className="py-3 text-xs text-gray-400 dark:text-gray-500">
                         {order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-IN') : '—'}
                       </td>
                     </tr>

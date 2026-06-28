@@ -11,12 +11,12 @@ interface StatCardProps {
 }
 
 const colorMap = {
-  blue:    { icon: 'bg-blue-50 text-blue-600',    border: 'border-blue-100' },
-  emerald: { icon: 'bg-emerald-50 text-emerald-600', border: 'border-emerald-100' },
-  amber:   { icon: 'bg-amber-50 text-amber-600',  border: 'border-amber-100' },
-  red:     { icon: 'bg-red-50 text-red-600',      border: 'border-red-100' },
-  violet:  { icon: 'bg-violet-50 text-violet-600', border: 'border-violet-100' },
-  gray:    { icon: 'bg-gray-100 text-gray-600',   border: 'border-gray-200' },
+  blue:    { icon: 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',       border: 'border-blue-100 dark:border-blue-800/40' },
+  emerald: { icon: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400', border: 'border-emerald-100 dark:border-emerald-800/40' },
+  amber:   { icon: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400',   border: 'border-amber-100 dark:border-amber-800/40' },
+  red:     { icon: 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400',           border: 'border-red-100 dark:border-red-800/40' },
+  violet:  { icon: 'bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400', border: 'border-violet-100 dark:border-violet-800/40' },
+  gray:    { icon: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',         border: 'border-gray-200 dark:border-gray-600' },
 }
 
 export function StatCard({ title, value, subtitle, icon, trend, color = 'blue' }: StatCardProps) {

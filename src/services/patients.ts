@@ -67,4 +67,20 @@ export const patientService = {
     const { data } = await api.get(`/patients/${patientId}/results-history`)
     return data
   },
+
+  getArchived: async (): Promise<Patient[]> => {
+    const { data } = await api.get('/patients/archived')
+    if (Array.isArray(data)) return data
+    if (Array.isArray(data.data)) return data.data
+    return []
+  },
+
+  restore: async (id: number): Promise<{ message: string }> => {
+    const { data } = await api.patch(`/patients/${id}/restore`)
+    return data
+  },
+
+  permanentDelete: async (id: number): Promise<void> => {
+    await api.delete(`/patients/${id}/permanent`)
+  },
 }

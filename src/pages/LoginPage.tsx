@@ -76,25 +76,25 @@ export default function LoginPage() {
       </div>
 
       {/* ── Right form panel ─────────────────────────────── */}
-      <div className="flex flex-1 flex-col bg-gray-50">
+      <div className="flex flex-1 flex-col bg-gray-50 dark:bg-gray-900">
         {/* Mobile brand bar */}
-        <div className="flex lg:hidden items-center gap-2 px-6 py-5 border-b border-gray-200 bg-white">
+        <div className="flex lg:hidden items-center gap-2 px-6 py-5 border-b border-gray-200 bg-white dark:bg-gray-800 dark:border-gray-700">
           <FlaskConical className="h-5 w-5 text-blue-600" />
-          <span className="text-sm font-semibold text-gray-900">Mihir Laboratory</span>
+          <span className="text-sm font-semibold text-gray-900 dark:text-white">Mihir Laboratory</span>
         </div>
 
         {/* Form area — vertically centered but pushed up slightly */}
         <div className="flex flex-1 items-center justify-center px-6 py-10">
           <div className="w-full max-w-sm">
             <div className="mb-8">
-              <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Sign in</h2>
-              <p className="mt-1.5 text-sm text-gray-500">Enter your credentials to continue</p>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Sign in</h2>
+              <p className="mt-1.5 text-sm text-gray-500 dark:text-gray-400">Enter your credentials to continue</p>
             </div>
 
             <form onSubmit={handleLogin} className="space-y-5">
               {/* Email */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Email address
                 </label>
                 <input
@@ -104,13 +104,13 @@ export default function LoginPage() {
                   placeholder="you@laboratory.com"
                   required
                   autoComplete="email"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 text-sm text-gray-900 placeholder-gray-400 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500"
                 />
               </div>
 
               {/* Password */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Password
                 </label>
                 <div className="relative">
@@ -121,12 +121,12 @@ export default function LoginPage() {
                     placeholder="Enter your password"
                     required
                     autoComplete="current-password"
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 pr-10 text-sm text-gray-900 placeholder-gray-400 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3.5 py-2.5 pr-10 text-sm text-gray-900 placeholder-gray-400 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(p => !p)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -143,7 +143,7 @@ export default function LoginPage() {
             </form>
 
             {/* Security note */}
-            <p className="mt-5 text-center text-xs text-gray-400">
+            <p className="mt-5 text-center text-xs text-gray-400 dark:text-gray-500">
               Protected by JWT · Role-based access control
             </p>
           </div>
@@ -151,19 +151,19 @@ export default function LoginPage() {
 
         {/* ── Demo credentials — bottom right ────────────── */}
         <div className="flex justify-end px-6 pb-6">
-          <div className="w-72 rounded-xl border border-gray-200 bg-white shadow-sm p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-3">
+          <div className="w-72 rounded-xl border border-gray-200 bg-white shadow-sm p-4 dark:bg-gray-800 dark:border-gray-700">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-3">
               Demo credentials
             </p>
             <div className="space-y-2">
               <button
                 type="button"
                 onClick={() => { setEmail('admin@lab.com'); setPassword('admin123') }}
-                className="w-full flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2.5 text-left transition hover:border-blue-300 hover:bg-blue-50 group"
+                className="w-full flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2.5 text-left transition hover:border-blue-300 hover:bg-blue-50 group dark:border-gray-600 dark:hover:border-blue-500 dark:hover:bg-blue-900/20"
               >
                 <div>
-                  <p className="text-xs font-semibold text-gray-800 group-hover:text-blue-700">Super Admin</p>
-                  <p className="mt-0.5 font-mono text-[11px] text-gray-400">admin@lab.com · admin123</p>
+                  <p className="text-xs font-semibold text-gray-800 dark:text-gray-200 group-hover:text-blue-700 dark:group-hover:text-blue-400">Super Admin</p>
+                  <p className="mt-0.5 font-mono text-[11px] text-gray-400 dark:text-gray-500">admin@lab.com · admin123</p>
                 </div>
                 <span className="text-[10px] font-medium text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
                   Fill →
@@ -172,11 +172,11 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => { setEmail('lab@lab.com'); setPassword('lab12345') }}
-                className="w-full flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2.5 text-left transition hover:border-blue-300 hover:bg-blue-50 group"
+                className="w-full flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2.5 text-left transition hover:border-blue-300 hover:bg-blue-50 group dark:border-gray-600 dark:hover:border-blue-500 dark:hover:bg-blue-900/20"
               >
                 <div>
-                  <p className="text-xs font-semibold text-gray-800 group-hover:text-blue-700">Lab User</p>
-                  <p className="mt-0.5 font-mono text-[11px] text-gray-400">lab@lab.com · lab12345</p>
+                  <p className="text-xs font-semibold text-gray-800 dark:text-gray-200 group-hover:text-blue-700 dark:group-hover:text-blue-400">Lab User</p>
+                  <p className="mt-0.5 font-mono text-[11px] text-gray-400 dark:text-gray-500">lab@lab.com · lab12345</p>
                 </div>
                 <span className="text-[10px] font-medium text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
                   Fill →
