@@ -263,7 +263,11 @@ export default function SignaturesPage() {
       qc.invalidateQueries({ queryKey: ['signatures'] })
       setShowModal(false)
     },
-    onError: () => toast.error('Failed to upload signature'),
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message
+      const text = Array.isArray(msg) ? msg[0] : msg
+      toast.error(text || 'Failed to upload signature')
+    },
   })
 
   const activateMut = useMutation({

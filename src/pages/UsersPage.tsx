@@ -50,7 +50,11 @@ export default function UsersPage() {
       setCreateOpen(false)
       toast.success(`User "${user.name}" created`)
     },
-    onError: () => toast.error('Failed to create user'),
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message
+      const text = Array.isArray(msg) ? msg[0] : msg
+      toast.error(text || 'Failed to create user')
+    },
   })
 
   const update = useMutation({
@@ -59,6 +63,11 @@ export default function UsersPage() {
       qc.invalidateQueries({ queryKey: ['users'] })
       setEditUser(null)
       toast.success('User updated')
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message
+      const text = Array.isArray(msg) ? msg[0] : msg
+      toast.error(text || 'Failed to update user')
     },
   })
 
@@ -299,18 +308,27 @@ export default function UsersPage() {
       </PageContent>
 
       {/* Create Modal */}
-      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Create User" size="sm"
+      <Modal open={createOpen} onClose={() => { setCreateOpen(false); setCreateForm(emptyCreate) }} title="Create User" size="sm"
         footer={
           <>
-            <Button variant="secondary" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button loading={create.isPending} onClick={() => create.mutate(createForm)}>Create User</Button>
+            <Button variant="secondary" onClick={() => { setCreateOpen(false); setCreateForm(emptyCreate) }}>Cancel</Button>
+            <Button loading={create.isPending} onClick={() => {
+              if (!createForm.name.trim()) { toast.error('Full name is required'); return }
+              if (!createForm.email.trim()) { toast.error('Email is required'); return }
+              if (createForm.password.length < 6) { toast.error('Password must be at least 6 characters'); return }
+              create.mutate(createForm)
+            }}>Create User</Button>
           </>
         }
       >
         <div className="space-y-4">
-          <Input label="Full Name" value={createForm.name} onChange={e => setCreateForm(p => ({ ...p, name: e.target.value }))} />
-          <Input label="Email" type="email" value={createForm.email} onChange={e => setCreateForm(p => ({ ...p, email: e.target.value }))} />
-          <Input label="Password" type="password" value={createForm.password} onChange={e => setCreateForm(p => ({ ...p, password: e.target.value }))} />
+          <Input label="Full Name" placeholder="e.g. Dr. Ramesh Shah" value={createForm.name}
+            onChange={e => setCreateForm(p => ({ ...p, name: e.target.value }))} required />
+          <Input label="Email" type="email" placeholder="user@lab.com" value={createForm.email}
+            onChange={e => setCreateForm(p => ({ ...p, email: e.target.value }))} required />
+          <Input label="Password" type="password" placeholder="Minimum 6 characters" value={createForm.password}
+            hint="At least 6 characters"
+            onChange={e => setCreateForm(p => ({ ...p, password: e.target.value }))} required />
           <Select label="Role" value={createForm.role} onChange={e => setCreateForm(p => ({ ...p, role: e.target.value as UserRole }))}>
             <option value="LAB_USER">Lab User</option>
             <option value="SUPER_ADMIN">Super Admin</option>

@@ -19,6 +19,72 @@ const emptyForm: CreateB2bLabDto = {
   name: '', contactPerson: '', phone: '', email: '', address: '', city: '', active: true,
 }
 
+function LabForm({
+  form,
+  setForm,
+}: {
+  form: CreateB2bLabDto
+  setForm: React.Dispatch<React.SetStateAction<CreateB2bLabDto>>
+}) {
+  return (
+    <div className="space-y-4">
+      <Input
+        label="Lab Name"
+        placeholder="e.g. City Diagnostics Centre"
+        value={form.name}
+        onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+        required
+      />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Input
+          label="Contact Person"
+          placeholder="Dr. John Smith"
+          value={form.contactPerson ?? ''}
+          onChange={e => setForm(p => ({ ...p, contactPerson: e.target.value }))}
+        />
+        <Input
+          label="Phone"
+          placeholder="+91 98765 43210"
+          value={form.phone ?? ''}
+          onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
+        />
+        <Input
+          label="Email"
+          type="email"
+          placeholder="lab@example.com"
+          value={form.email ?? ''}
+          onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+        />
+        <Input
+          label="City"
+          placeholder="Mumbai"
+          value={form.city ?? ''}
+          onChange={e => setForm(p => ({ ...p, city: e.target.value }))}
+        />
+      </div>
+      <Input
+        label="Address"
+        placeholder="Full address"
+        value={form.address ?? ''}
+        onChange={e => setForm(p => ({ ...p, address: e.target.value }))}
+      />
+      <label className="flex cursor-pointer items-center gap-3">
+        <button
+          type="button"
+          onClick={() => setForm(p => ({ ...p, active: !p.active }))}
+          className="text-gray-400 dark:text-gray-500 hover:text-blue-600 transition-colors"
+        >
+          {form.active
+            ? <ToggleRight className="h-6 w-6 text-blue-600" />
+            : <ToggleLeft className="h-6 w-6" />
+          }
+        </button>
+        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Active partner</span>
+      </label>
+    </div>
+  )
+}
+
 export default function B2bLabsPage() {
   const qc = useQueryClient()
   const [createOpen, setCreateOpen] = useState(false)
@@ -124,70 +190,6 @@ export default function B2bLabsPage() {
 
   const totalLabs = labs.length
   const activeLabs = labs.filter(l => l.active).length
-
-  const LabForm = ({
-    form,
-    setForm,
-  }: {
-    form: CreateB2bLabDto
-    setForm: React.Dispatch<React.SetStateAction<CreateB2bLabDto>>
-  }) => (
-    <div className="space-y-4">
-      <Input
-        label="Lab Name"
-        placeholder="e.g. City Diagnostics Centre"
-        value={form.name}
-        onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-        required
-      />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Input
-          label="Contact Person"
-          placeholder="Dr. John Smith"
-          value={form.contactPerson ?? ''}
-          onChange={e => setForm(p => ({ ...p, contactPerson: e.target.value }))}
-        />
-        <Input
-          label="Phone"
-          placeholder="+91 98765 43210"
-          value={form.phone ?? ''}
-          onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
-        />
-        <Input
-          label="Email"
-          type="email"
-          placeholder="lab@example.com"
-          value={form.email ?? ''}
-          onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
-        />
-        <Input
-          label="City"
-          placeholder="Mumbai"
-          value={form.city ?? ''}
-          onChange={e => setForm(p => ({ ...p, city: e.target.value }))}
-        />
-      </div>
-      <Input
-        label="Address"
-        placeholder="Full address"
-        value={form.address ?? ''}
-        onChange={e => setForm(p => ({ ...p, address: e.target.value }))}
-      />
-      <label className="flex cursor-pointer items-center gap-3">
-        <button
-          type="button"
-          onClick={() => setForm(p => ({ ...p, active: !p.active }))}
-          className="text-gray-400 dark:text-gray-500 hover:text-blue-600 transition-colors"
-        >
-          {form.active
-            ? <ToggleRight className="h-6 w-6 text-blue-600" />
-            : <ToggleLeft className="h-6 w-6" />
-          }
-        </button>
-        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Active partner</span>
-      </label>
-    </div>
-  )
 
   return (
     <div>
