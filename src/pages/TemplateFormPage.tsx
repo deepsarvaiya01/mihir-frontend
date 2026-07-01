@@ -16,6 +16,7 @@ import { templateService } from '../services/templates'
 import { b2bLabService } from '../services/b2bLabs'
 import type { FieldType, TestTemplateField } from '../types'
 import { toast } from 'sonner'
+import { toastError } from '../lib/errors'
 
 const OP_LABELS: Record<string, string> = { '+': 'Add (+)', '-': 'Subtract (−)', '*': 'Multiply (×)', '/': 'Divide (÷)' }
 const OP_SYMBOLS: Record<string, string> = { '+': '+', '-': '−', '*': '×', '/': '÷' }
@@ -78,7 +79,7 @@ function FormCard({ children }: { children: React.ReactNode }) {
 
 const emptyFieldForm = {
   fieldName: '', fieldType: 'text' as FieldType, required: false,
-  options: '', unit: '', referenceRange: '', isSectionHeader: false,
+  options: '', unit: '', referenceRangeMale: '', referenceRangeFemale: '', isSectionHeader: false,
   formulaFirstKind: 'field' as FormulaOperandKind,
   formulaFirstFieldId: '', formulaFirstValue: '',
   formulaPairs: [] as FormulaPair[],
@@ -88,7 +89,7 @@ function fieldToForm(field: TestTemplateField): typeof emptyFieldForm {
   if (field.isSectionHeader) {
     return { ...emptyFieldForm, fieldName: field.fieldName, isSectionHeader: true }
   }
-  const base = { ...emptyFieldForm, fieldName: field.fieldName, fieldType: field.fieldType, required: field.required, unit: field.unit ?? '', referenceRange: field.referenceRange ?? '' }
+  const base = { ...emptyFieldForm, fieldName: field.fieldName, fieldType: field.fieldType, required: field.required, unit: field.unit ?? '', referenceRangeMale: field.referenceRangeMale ?? '', referenceRangeFemale: field.referenceRangeFemale ?? '' }
   if (field.fieldType === 'select' && field.optionsJson) {
     try { base.options = (JSON.parse(field.optionsJson) as string[]).join(', ') } catch {}
   }
@@ -172,7 +173,8 @@ export default function TemplateFormPage() {
       fieldName: pf.fieldName, fieldType: pf.fieldType,
       required: pf.required, unit: pf.unit || undefined,
       options: pf.fieldType === 'select' ? pf.options.split(',').map(o => o.trim()).filter(Boolean) : undefined,
-      referenceRange: pf.referenceRange || undefined,
+      referenceRangeMale: pf.referenceRangeMale || undefined,
+      referenceRangeFemale: pf.referenceRangeFemale || undefined,
     }
   }
 
@@ -205,8 +207,7 @@ export default function TemplateFormPage() {
         navigate('/templates')
       }
     },
-    onError: (err: unknown) =>
-      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to save'),
+    onError: (err) => toastError(err, 'Failed to save'),
   })
 
   const addFieldMutation = useMutation({
@@ -223,7 +224,8 @@ export default function TemplateFormPage() {
           fieldName: fieldForm.fieldName, fieldType: 'calculated', required: false,
           unit: fieldForm.unit || undefined,
           formulaJson: buildFormulaJson(fieldForm.formulaFirstKind, fieldForm.formulaFirstFieldId, fieldForm.formulaFirstValue, fieldForm.formulaPairs),
-          referenceRange: fieldForm.referenceRange || undefined,
+          referenceRangeMale: fieldForm.referenceRangeMale || undefined,
+          referenceRangeFemale: fieldForm.referenceRangeFemale || undefined,
         })
       }
       return templateService.addField(Number(id), {
@@ -231,7 +233,8 @@ export default function TemplateFormPage() {
         required: fieldForm.required, unit: fieldForm.unit || undefined,
         options: fieldForm.fieldType === 'select'
           ? fieldForm.options.split(',').map(o => o.trim()).filter(Boolean) : undefined,
-        referenceRange: fieldForm.referenceRange || undefined,
+        referenceRangeMale: fieldForm.referenceRangeMale || undefined,
+        referenceRangeFemale: fieldForm.referenceRangeFemale || undefined,
       })
     },
     onSuccess: () => {
@@ -241,8 +244,7 @@ export default function TemplateFormPage() {
       setAddFieldOpen(false)
       toast.success('Field added')
     },
-    onError: (err: unknown) =>
-      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to add field'),
+    onError: (err) => toastError(err, 'Failed to add field'),
   })
 
   const updateFieldMutation = useMutation({
@@ -258,7 +260,8 @@ export default function TemplateFormPage() {
           fieldName: fieldForm.fieldName, fieldType: 'calculated', required: false,
           unit: fieldForm.unit || undefined,
           formulaJson: buildFormulaJson(fieldForm.formulaFirstKind, fieldForm.formulaFirstFieldId, fieldForm.formulaFirstValue, fieldForm.formulaPairs),
-          referenceRange: fieldForm.referenceRange || undefined,
+          referenceRangeMale: fieldForm.referenceRangeMale || undefined,
+          referenceRangeFemale: fieldForm.referenceRangeFemale || undefined,
         })
       }
       return templateService.updateField(Number(id), editingField.id, {
@@ -266,7 +269,8 @@ export default function TemplateFormPage() {
         required: fieldForm.required, unit: fieldForm.unit || undefined,
         options: fieldForm.fieldType === 'select'
           ? fieldForm.options.split(',').map(o => o.trim()).filter(Boolean) : undefined,
-        referenceRange: fieldForm.referenceRange || undefined,
+        referenceRangeMale: fieldForm.referenceRangeMale || undefined,
+        referenceRangeFemale: fieldForm.referenceRangeFemale || undefined,
       })
     },
     onSuccess: () => {
@@ -277,8 +281,7 @@ export default function TemplateFormPage() {
       setAddFieldOpen(false)
       toast.success('Field updated')
     },
-    onError: (err: unknown) =>
-      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to update field'),
+    onError: (err) => toastError(err, 'Failed to update field'),
   })
 
   const deleteFieldMutation = useMutation({
@@ -289,7 +292,7 @@ export default function TemplateFormPage() {
       setDeleteField(null)
       toast.success('Field removed')
     },
-    onError: () => toast.error('Failed to remove field'),
+    onError: (err) => toastError(err, 'Failed to remove field'),
   })
 
   const handleSave = async () => {
@@ -468,7 +471,7 @@ export default function TemplateFormPage() {
                         <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Field Name</th>
                         <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 w-28">Type</th>
                         <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 w-24">Unit</th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 w-32">Ref Range</th>
+                        <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 w-40">Ref Range (M / F)</th>
                         <th className="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 w-10">Req</th>
                         <th className="w-16" />
                       </tr>
@@ -490,7 +493,14 @@ export default function TemplateFormPage() {
                                 </Badge>
                               </td>
                               <td className="px-3 py-2.5 text-xs text-gray-500 dark:text-gray-400">{field.unit || <span className="text-gray-300 dark:text-gray-600">—</span>}</td>
-                              <td className="px-3 py-2.5 text-xs text-gray-500 dark:text-gray-400">{field.referenceRange || <span className="text-gray-300 dark:text-gray-600">—</span>}</td>
+                              <td className="px-3 py-2.5 text-xs text-gray-500 dark:text-gray-400">
+                                {(field.referenceRangeMale || field.referenceRangeFemale) ? (
+                                  <span className="flex flex-col gap-0.5">
+                                    <span>♂ {field.referenceRangeMale || <span className="text-gray-300 dark:text-gray-600">—</span>}</span>
+                                    <span>♀ {field.referenceRangeFemale || <span className="text-gray-300 dark:text-gray-600">—</span>}</span>
+                                  </span>
+                                ) : <span className="text-gray-300 dark:text-gray-600">—</span>}
+                              </td>
                               <td className="px-3 py-2.5 text-center text-xs">
                                 {field.required ? <span className="font-bold text-emerald-500">✓</span> : <span className="text-gray-300 dark:text-gray-600">—</span>}
                               </td>
@@ -531,8 +541,12 @@ export default function TemplateFormPage() {
                                 </td>
                                 <td className="px-2 py-2">
                                   {!fieldForm.isSectionHeader && (
-                                    <Input size="sm" placeholder="e.g. 13.0-18.0" value={fieldForm.referenceRange}
-                                      onChange={e => setFieldForm(p => ({ ...p, referenceRange: e.target.value }))} />
+                                    <div className="flex flex-col gap-1">
+                                      <Input size="sm" placeholder="♂ Male range" value={fieldForm.referenceRangeMale}
+                                        onChange={e => setFieldForm(p => ({ ...p, referenceRangeMale: e.target.value }))} />
+                                      <Input size="sm" placeholder="♀ Female range" value={fieldForm.referenceRangeFemale}
+                                        onChange={e => setFieldForm(p => ({ ...p, referenceRangeFemale: e.target.value }))} />
+                                    </div>
                                   )}
                                 </td>
                                 <td className="px-2 py-2 text-center">
@@ -566,7 +580,14 @@ export default function TemplateFormPage() {
                                 </Badge>
                               </td>
                               <td className="px-3 py-2.5 text-xs text-gray-500 dark:text-gray-400">{pf.unit || <span className="text-gray-300 dark:text-gray-600">—</span>}</td>
-                              <td className="px-3 py-2.5 text-xs text-gray-500 dark:text-gray-400">{pf.referenceRange || <span className="text-gray-300 dark:text-gray-600">—</span>}</td>
+                              <td className="px-3 py-2.5 text-xs text-gray-500 dark:text-gray-400">
+                                {(pf.referenceRangeMale || pf.referenceRangeFemale) ? (
+                                  <span className="flex flex-col gap-0.5">
+                                    <span>♂ {pf.referenceRangeMale || <span className="text-gray-300 dark:text-gray-600">—</span>}</span>
+                                    <span>♀ {pf.referenceRangeFemale || <span className="text-gray-300 dark:text-gray-600">—</span>}</span>
+                                  </span>
+                                ) : <span className="text-gray-300 dark:text-gray-600">—</span>}
+                              </td>
                               <td className="px-3 py-2.5 text-center text-xs">
                                 {pf.required ? <span className="font-bold text-emerald-500">✓</span> : <span className="text-gray-300 dark:text-gray-600">—</span>}
                               </td>
@@ -608,8 +629,12 @@ export default function TemplateFormPage() {
                                 </td>
                                 <td className="px-2 py-2">
                                   {!fieldForm.isSectionHeader && (
-                                    <Input size="sm" placeholder="e.g. 13.0-18.0" value={fieldForm.referenceRange}
-                                      onChange={e => setFieldForm(p => ({ ...p, referenceRange: e.target.value }))} />
+                                    <div className="flex flex-col gap-1">
+                                      <Input size="sm" placeholder="♂ Male range" value={fieldForm.referenceRangeMale}
+                                        onChange={e => setFieldForm(p => ({ ...p, referenceRangeMale: e.target.value }))} />
+                                      <Input size="sm" placeholder="♀ Female range" value={fieldForm.referenceRangeFemale}
+                                        onChange={e => setFieldForm(p => ({ ...p, referenceRangeFemale: e.target.value }))} />
+                                    </div>
                                   )}
                                 </td>
                                 <td className="px-2 py-2 text-center">

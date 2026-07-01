@@ -17,6 +17,7 @@ import {
   User,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { toastError } from '../lib/errors'
 import { orderService } from '../services/orders'
 import { OrderStatusBadge } from '../components/ui/Badge'
 import { Header } from '../components/layout/Header'
@@ -241,10 +242,7 @@ export default function EnterResultsPage() {
         navigate('/orders')
       }
     },
-    onError: (err: unknown, isDraft) => {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast.error(msg || (isDraft ? 'Failed to save' : 'Failed to submit'))
-    },
+    onError: (err, isDraft) => toastError(err, isDraft ? 'Failed to save' : 'Failed to submit'),
   })
 
   /* ── Submit with required-field validation ── */
@@ -408,9 +406,17 @@ export default function EnterResultsPage() {
                       {field.unit && (
                         <span className="ml-1 normal-case font-normal text-gray-400 dark:text-gray-500">({field.unit})</span>
                       )}
-                      {field.referenceRange && (
-                        <span className="ml-1 normal-case font-normal text-gray-400 dark:text-gray-500">Ref: {field.referenceRange}</span>
-                      )}
+                      {(() => {
+                        const gender = order.patient?.gender
+                        const ref = gender === 'Male'
+                          ? (field.referenceRangeMale ?? field.referenceRange)
+                          : gender === 'Female'
+                            ? (field.referenceRangeFemale ?? field.referenceRange)
+                            : (field.referenceRangeMale || field.referenceRangeFemale || field.referenceRange)
+                        return ref ? (
+                          <span className="ml-1 normal-case font-normal text-gray-400 dark:text-gray-500">Ref: {ref}</span>
+                        ) : null
+                      })()}
                       {field.required && <span className="ml-1 text-red-500">*</span>}
                     </label>
                     <ResultField

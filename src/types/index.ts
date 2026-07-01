@@ -6,7 +6,7 @@ export type PaymentType = 'CASH' | 'CHEQUE' | 'ONLINE'
 
 export interface UserProfile { id: number; name: string; email: string; role: UserRole }
 export interface DashboardSummary { superAdmins: number; labUsers: number; templates: number; activeTemplates: number; patients: number; orders: number; completedOrders: number; pendingOrders: number }
-export interface TestTemplateField { id: number; fieldName: string; fieldType: FieldType; required: boolean; optionsJson: string | null; unit: string | null; displayOrder: number; referenceRange: string | null; isSectionHeader: boolean }
+export interface TestTemplateField { id: number; fieldName: string; fieldType: FieldType; required: boolean; optionsJson: string | null; unit: string | null; displayOrder: number; referenceRange: string | null; referenceRangeMale: string | null; referenceRangeFemale: string | null; isSectionHeader: boolean }
 export interface TestTemplateB2bPrice { id: number; b2bLabId: number; amount: number }
 export interface TestTemplate { id: number; name: string; code: string; active: boolean; amount: number; summaryTitle: string | null; summary: string | null; fields: TestTemplateField[]; b2bPrices: TestTemplateB2bPrice[] }
 

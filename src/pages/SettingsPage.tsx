@@ -23,6 +23,7 @@ import { authService } from '../services/auth'
 import { labSettingsService } from '../services/labSettings'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { toastError } from '../lib/errors'
 import type { LabSettings } from '../types'
 
 export default function SettingsPage() {
@@ -59,7 +60,7 @@ export default function SettingsPage() {
       qc.invalidateQueries({ queryKey: ['lab-settings'] })
       toast.success('Lab profile saved')
     },
-    onError: () => toast.error('Failed to save lab profile'),
+    onError: (err) => toastError(err, 'Failed to save lab profile'),
   })
 
   const handleChangePassword = async (e: React.FormEvent) => {
@@ -90,13 +91,7 @@ export default function SettingsPage() {
 
       setTimeout(() => setSuccess(false), 4000)
     } catch (err: unknown) {
-      const msg = (
-        err as {
-          response?: { data?: { message?: string } }
-        }
-      )?.response?.data?.message
-
-      toast.error(msg || 'Failed to change password')
+      toastError(err, 'Failed to change password')
     } finally {
       setLoading(false)
     }

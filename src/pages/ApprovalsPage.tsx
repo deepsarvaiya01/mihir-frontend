@@ -15,9 +15,10 @@ import { orderService } from '../services/orders'
 import { labSettingsService } from '../services/labSettings'
 import { signatureService } from '../services/signatures'
 import { logoService } from '../services/logos'
-import { generateLabReport } from '../utils/generateReport'
+import { generateLabReport, generateLabReportBase64, generateReportBase64 } from '../utils/generateReport'
 import type { Order, OrderResult } from '../types'
 import { toast } from 'sonner'
+import { toastError } from '../lib/errors'
 
 type ViewMode = 'card' | 'table'
 
@@ -154,7 +155,7 @@ export default function ApprovalsPage() {
   const loadResults = useMutation({
     mutationFn: (orderId: number) => orderService.getResults(orderId),
     onSuccess: (data) => { setSelectedReport(data); setReportModalOpen(true) },
-    onError: () => toast.error('Failed to load results'),
+    onError: (err) => toastError(err, 'Failed to load results'),
   })
 
   const downloadReport = useMutation({
@@ -169,18 +170,43 @@ export default function ApprovalsPage() {
         labSettings, signature: activeSignature, activeLogo,
       }).then(() => toast.success('Report downloaded')).catch(() => toast.error('Failed to generate report'))
     },
-    onError: () => toast.error('Failed to generate report'),
+    onError: (err) => toastError(err, 'Failed to generate report'),
   })
 
   const approve = useMutation({
-    mutationFn: (orderId: number) => orderService.approve(orderId),
+    mutationFn: async (orderId: number) => {
+      let pdfBase64: string | undefined
+      let plainPdfBase64: string | undefined
+      try {
+        const { order: orderData, results } = await orderService.getResults(orderId)
+        const reportOpts = {
+          order: orderData,
+          results: results.map(r => ({
+            fieldName: r.fieldName,
+            fieldType: r.fieldType,
+            value: r.value,
+            unit: r.unit ?? null,
+            referenceRange: r.referenceRange ?? null,
+            isSectionHeader: r.isSectionHeader ?? false,
+          })),
+          labSettings,
+          signature: activeSignature,
+          activeLogo,
+        }
+        ;[pdfBase64, plainPdfBase64] = await Promise.all([
+          generateLabReportBase64(reportOpts).catch(() => undefined),
+          generateReportBase64(reportOpts).catch(() => undefined),
+        ])
+      } catch { /* PDF generation failure must not block approval */ }
+      return orderService.approve(orderId, pdfBase64, plainPdfBase64)
+    },
     onSuccess: (_, orderId) => {
       qc.invalidateQueries({ queryKey: ['orders'] })
       qc.invalidateQueries({ queryKey: ['dashboard-summary'] })
       setConfirmAction(null)
       toast.success(`Order #${orderId} approved`)
     },
-    onError: () => toast.error('Failed to approve order'),
+    onError: (err) => toastError(err, 'Failed to approve order'),
   })
 
   const bulkApprove = useMutation({
@@ -193,22 +219,19 @@ export default function ApprovalsPage() {
       if (approved.length) toast.success(`${approved.length} order${approved.length > 1 ? 's' : ''} approved`)
       if (failed.length)   toast.error(`${failed.length} order${failed.length > 1 ? 's' : ''} failed`)
     },
-    onError: () => toast.error('Bulk approval failed'),
+    onError: (err) => toastError(err, 'Bulk approval failed'),
   })
 
   const reopen = useMutation({
     mutationFn: (orderId: number) => orderService.reopen(orderId),
     onSuccess: (order) => { qc.invalidateQueries({ queryKey: ['orders'] }); setReopenOrder(null); toast.success(`Order #${order.id} reopened`) },
-    onError: () => toast.error('Failed to reopen order'),
+    onError: (err) => toastError(err, 'Failed to reopen order'),
   })
 
   const revert = useMutation({
     mutationFn: ({ orderId, remark }: { orderId: number; remark: string }) => orderService.revert(orderId, remark),
     onSuccess: (order) => { qc.invalidateQueries({ queryKey: ['orders'] }); setRevertOrder(null); setRevertRemark(''); toast.success(`Order #${order.id} reverted`) },
-    onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast.error(msg || 'Failed to revert order')
-    },
+    onError: (err) => toastError(err, 'Failed to revert order'),
   })
 
   const reject = useMutation({
@@ -219,7 +242,7 @@ export default function ApprovalsPage() {
       setConfirmAction(null)
       toast.success(`Order #${orderId} rejected`)
     },
-    onError: () => toast.error('Failed to reject order'),
+    onError: (err) => toastError(err, 'Failed to reject order'),
   })
 
   const switchView = (v: ViewMode) => { setViewMode(v); saveView(v) }

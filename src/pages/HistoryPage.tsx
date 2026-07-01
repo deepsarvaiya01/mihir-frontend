@@ -12,6 +12,7 @@ import { Badge } from '../components/ui/Badge'
 import { patientService } from '../services/patients'
 import type { PatientHistory } from '../types'
 import { toast } from 'sonner'
+import { toastError } from '../lib/errors'
 
 export default function HistoryPage() {
   const [selectedPatientId, setSelectedPatientId] = useState('')
@@ -31,7 +32,7 @@ export default function HistoryPage() {
       setHistory(data)
       setExpandedOrderId(null)
     },
-    onError: () => toast.error('Failed to load patient history'),
+    onError: (err) => toastError(err, 'Failed to load patient history'),
   })
 
   useEffect(() => {

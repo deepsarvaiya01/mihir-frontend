@@ -54,6 +54,8 @@ export const templateService = {
       options?: string[]
       formulaJson?: string
       referenceRange?: string
+      referenceRangeMale?: string
+      referenceRangeFemale?: string
       isSectionHeader?: boolean
     }
   ): Promise<TestTemplate> => {
@@ -75,6 +77,8 @@ export const templateService = {
       options?: string[]
       formulaJson?: string
       referenceRange?: string
+      referenceRangeMale?: string
+      referenceRangeFemale?: string
       isSectionHeader?: boolean
     }
   ): Promise<TestTemplate> => {

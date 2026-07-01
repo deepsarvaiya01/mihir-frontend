@@ -95,8 +95,17 @@ function downloadBlob(bytes: Uint8Array, filename: string) {
   URL.revokeObjectURL(url)
 }
 
+/* ─── Uint8Array → base64 (chunked to avoid call stack limits) ─────── */
+function uint8ToBase64(bytes: Uint8Array): string {
+  const chunks: string[] = []
+  for (let i = 0; i < bytes.length; i += 8192) {
+    chunks.push(String.fromCharCode(...bytes.subarray(i, i + 8192)))
+  }
+  return btoa(chunks.join(''))
+}
+
 /* ─── Main generator ────────────────────────────────────── */
-export async function generateLabReport(options: GenerateReportOptions): Promise<void> {
+async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint8Array> {
   const { order, results, labSettings, signature } = options
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
@@ -319,10 +328,7 @@ export async function generateLabReport(options: GenerateReportOptions): Promise
     } catch { /* skip */ }
   }
 
-  /* ── Merge content PDF with Rameshwar.pdf template using pdf-lib ── */
-  const patientSlug = order.patient?.fullName?.replace(/\s+/g, '-') ?? 'patient'
-  const filename = `report-${order.id}-${patientSlug}.pdf`
-
+  /* ── Merge content PDF with report-template.pdf using pdf-lib ── */
   try {
     const templateRes = await fetch('/report-template.pdf')
     if (!templateRes.ok) throw new Error('template not found')
@@ -334,25 +340,16 @@ export async function generateLabReport(options: GenerateReportOptions): Promise
     const contentPdf  = await PDFDocument.load(contentBytes)
     const mergedPdf   = await PDFDocument.create()
 
-    // Embed the template's first page (the Rameshwar letterhead)
     const [embeddedTemplate] = await mergedPdf.embedPages([templatePdf.getPages()[0]])
 
-    const contentPages = contentPdf.getPages()
-
-    for (const contentPage of contentPages) {
+    for (const contentPage of contentPdf.getPages()) {
       const [embeddedContent] = await mergedPdf.embedPages([contentPage])
       const { width, height } = contentPage.getSize()
       const newPage = mergedPdf.addPage([width, height])
-
-      // 1. Draw the real Rameshwar.pdf header as background
       newPage.drawPage(embeddedTemplate, { x: 0, y: 0, width, height })
-
-      // 2. Draw the jsPDF content on top (patient info, results, signature)
-      //    The top TEMPLATE_HDR mm of the content page is empty, so the template header shows through
       newPage.drawPage(embeddedContent, { x: 0, y: 0, width, height })
     }
 
-    // Merge attachment PDF if present
     if (options.attachmentUrl) {
       try {
         const attachmentRes = await fetch(options.attachmentUrl)
@@ -365,12 +362,21 @@ export async function generateLabReport(options: GenerateReportOptions): Promise
       } catch { /* skip attachment on error */ }
     }
 
-    const mergedBytes = await mergedPdf.save()
-    downloadBlob(mergedBytes, filename)
+    return await mergedPdf.save()
   } catch {
-    // Fallback: download the jsPDF output directly if template fetch fails
-    doc.save(filename)
+    return new Uint8Array(doc.output('arraybuffer') as ArrayBuffer)
   }
+}
+
+export async function generateLabReport(options: GenerateReportOptions): Promise<void> {
+  const bytes = await buildLabReportBytes(options)
+  const patientSlug = options.order.patient?.fullName?.replace(/\s+/g, '-') ?? 'patient'
+  downloadBlob(bytes, `report-${options.order.id}-${patientSlug}.pdf`)
+}
+
+/** Generate letterhead report and return it as a base64 string (no download). */
+export async function generateLabReportBase64(options: GenerateReportOptions): Promise<string> {
+  return uint8ToBase64(await buildLabReportBytes(options))
 }
 
 /* ─── Receipt generator ─────────────────────────────────── */
@@ -679,7 +685,7 @@ export async function generateReceipt(options: GenerateReceiptOptions): Promise<
 }
 
 /* ─── Plain B&W report generator ───────────────────────── */
-export async function generatePlainReport(options: GenerateReportOptions): Promise<void> {
+async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPDF> {
   const { order, results, labSettings, signature } = options
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
@@ -940,7 +946,12 @@ export async function generatePlainReport(options: GenerateReportOptions): Promi
     } catch { /* skip */ }
   }
 
-  /* ── Save (with optional attachment merge) ── */
+  return doc
+}
+
+export async function generatePlainReport(options: GenerateReportOptions): Promise<void> {
+  const doc = await buildPlainReportDoc(options)
+  const { order } = options
   const patientSlug = order.patient?.fullName?.replace(/\s+/g, '-') ?? 'patient'
   const filename = `report-plain-${order.id}-${patientSlug}.pdf`
 
@@ -961,4 +972,10 @@ export async function generatePlainReport(options: GenerateReportOptions): Promi
   }
 
   doc.save(filename)
+}
+
+/** Generate report and return it as a base64 string (no download). */
+export async function generateReportBase64(options: GenerateReportOptions): Promise<string> {
+  const doc = await buildPlainReportDoc(options)
+  return (doc.output('datauristring') as string).split(',')[1]
 }

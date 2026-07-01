@@ -13,6 +13,7 @@ import {
   RotateCcw,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { toastError } from '../lib/errors'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
 import { ConfirmModal } from '../components/ui/Modal'
@@ -266,7 +267,7 @@ export default function LogosPage() {
       qc.invalidateQueries({ queryKey: ['logos'] })
       setShowModal(false)
     },
-    onError: () => toast.error('Failed to upload logo'),
+    onError: (err) => toastError(err, 'Failed to upload logo'),
   })
 
   const activateMut = useMutation({
@@ -275,7 +276,7 @@ export default function LogosPage() {
       toast.success('Logo set as active')
       qc.invalidateQueries({ queryKey: ['logos'] })
     },
-    onError: () => toast.error('Failed to activate logo'),
+    onError: (err) => toastError(err, 'Failed to activate logo'),
   })
 
   const deactivateMut = useMutation({
@@ -284,7 +285,7 @@ export default function LogosPage() {
       toast.success('Active logo cleared')
       qc.invalidateQueries({ queryKey: ['logos'] })
     },
-    onError: () => toast.error('Failed to deactivate'),
+    onError: (err) => toastError(err, 'Failed to deactivate logo'),
   })
 
   const deleteMut = useMutation({
@@ -295,7 +296,7 @@ export default function LogosPage() {
       qc.invalidateQueries({ queryKey: ['logos-archived'] })
       setDeleteLogo(null)
     },
-    onError: () => toast.error('Failed to archive logo'),
+    onError: (err) => toastError(err, 'Failed to archive logo'),
   })
 
   const restoreMut = useMutation({
@@ -305,7 +306,7 @@ export default function LogosPage() {
       qc.invalidateQueries({ queryKey: ['logos'] })
       qc.invalidateQueries({ queryKey: ['logos-archived'] })
     },
-    onError: () => toast.error('Failed to restore logo'),
+    onError: (err) => toastError(err, 'Failed to restore logo'),
   })
 
   const permanentDeleteMut = useMutation({
@@ -315,7 +316,7 @@ export default function LogosPage() {
       qc.invalidateQueries({ queryKey: ['logos-archived'] })
       setPermDeleteLogo(null)
     },
-    onError: () => toast.error('Failed to permanently delete logo'),
+    onError: (err) => toastError(err, 'Failed to permanently delete logo'),
   })
 
   const busy = createMut.isPending || activateMut.isPending || deactivateMut.isPending || deleteMut.isPending

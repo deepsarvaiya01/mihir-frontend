@@ -16,8 +16,9 @@ import { templateService } from '../services/templates'
 import { orderService } from '../services/orders'
 import { PageLoader } from '../components/ui/Spinner'
 import { toast } from 'sonner'
+import { toastError } from '../lib/errors'
 
-const GENDERS = ['Male', 'Female', 'Other', 'Prefer not to say']
+const GENDERS = ['Male', 'Female']
 const DISCOUNT_OPTIONS = [0, 5, 10, 15, 20, 25, 30, 50]
 
 const PAYMENT_STATUS_STYLES = {
@@ -223,8 +224,7 @@ export default function PatientFormPage() {
       qc.invalidateQueries({ queryKey: ['orders'] })
       navigate('/patients')
     },
-    onError: (err: unknown) =>
-      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to save patient'),
+    onError: (err) => toastError(err, 'Failed to save patient'),
   })
 
   const updateMutation = useMutation({
@@ -235,8 +235,7 @@ export default function PatientFormPage() {
       toast.success('Patient updated')
       navigate('/patients')
     },
-    onError: (err: unknown) =>
-      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to update patient'),
+    onError: (err) => toastError(err, 'Failed to update patient'),
   })
 
   const handleSave = () => {

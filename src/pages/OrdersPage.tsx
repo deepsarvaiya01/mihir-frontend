@@ -17,6 +17,7 @@ import type { Order, OrderResult, PaymentStatus, PaymentType } from '../types'
 import { patientService } from '../services/patients'
 import { templateService } from '../services/templates'
 import { toast } from 'sonner'
+import { toastError } from '../lib/errors'
 
 type StatusFilter = 'ALL' | 'PENDING' | 'IN_PROGRESS' | 'AWAITING_APPROVAL' | 'REJECTED'
 
@@ -137,26 +138,20 @@ export default function OrdersPage() {
         `${created.length} order${created.length > 1 ? 's' : ''} created${receiptNumber ? ` · Receipt ${receiptNumber}` : ''}`
       )
     },
-    onError: (err: unknown) => {
-      const msg = (err as { message?: string; response?: { data?: { message?: string } } })
-        ?.response?.data?.message
-        ?? (err as { message?: string })?.message
-        ?? 'Failed to create orders'
-      toast.error(msg)
-    },
+    onError: (err) => toastError(err, 'Failed to create orders'),
   })
 
   // ── Load submitted results ───────────────────────────────
   const loadOrderResults = useMutation({
     mutationFn: (orderId: number) => orderService.getResults(orderId),
     onSuccess: (data) => { setSelectedResults(data); setViewResultsOpen(true) },
-    onError: () => toast.error('Failed to load results'),
+    onError: (err) => toastError(err, 'Failed to load results'),
   })
 
   const removeOrder = useMutation({
     mutationFn: (id: number) => orderService.delete(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['orders'] }); setDeleteOrder(null); toast.success('Order deleted') },
-    onError: () => toast.error('Failed to delete order'),
+    onError: (err) => toastError(err, 'Failed to delete order'),
   })
 
   const reopenMutation = useMutation({
@@ -166,7 +161,7 @@ export default function OrdersPage() {
       setReopenOrder(null)
       toast.success(`Order #${order.id} reopened — ready for re-entry`)
     },
-    onError: () => toast.error('Failed to reopen order'),
+    onError: (err) => toastError(err, 'Failed to reopen order'),
   })
 
   const batchSubmitMut = useMutation({
@@ -175,10 +170,7 @@ export default function OrdersPage() {
       qc.invalidateQueries({ queryKey: ['orders'] })
       toast.success(`${count} test${count !== 1 ? 's' : ''} submitted for approval`)
     },
-    onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Failed to submit batch'
-      toast.error(msg)
-    },
+    onError: (err) => toastError(err, 'Failed to submit batch'),
   })
 
   const restoreOrder = useMutation({
@@ -188,7 +180,7 @@ export default function OrdersPage() {
       qc.invalidateQueries({ queryKey: ['orders', 'archived'] })
       toast.success('Order restored')
     },
-    onError: () => toast.error('Failed to restore order'),
+    onError: (err) => toastError(err, 'Failed to restore order'),
   })
 
   const permanentDeleteMut = useMutation({
@@ -198,7 +190,7 @@ export default function OrdersPage() {
       setPermanentDeleteOrder(null)
       toast.success('Order permanently deleted')
     },
-    onError: () => toast.error('Failed to permanently delete'),
+    onError: (err) => toastError(err, 'Failed to permanently delete'),
   })
 
   const activeOrders = orders.filter(o => o.status !== 'APPROVED')

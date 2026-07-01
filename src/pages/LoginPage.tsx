@@ -4,6 +4,7 @@ import { Eye, EyeOff, FlaskConical, ShieldCheck, BarChart3, Users } from 'lucide
 import { authService } from '../services/auth'
 import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
+import { toastError } from '../lib/errors'
 
 const features = [
   { icon: <FlaskConical className="h-4 w-4" />, text: 'End-to-end test result management' },
@@ -29,8 +30,7 @@ export default function LoginPage() {
       toast.success(`Welcome back, ${data.user.name}!`)
       navigate('/dashboard')
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast.error(msg || 'Invalid email or password')
+      toastError(err, 'Invalid email or password')
     } finally {
       setLoading(false)
     }

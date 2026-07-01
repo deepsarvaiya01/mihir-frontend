@@ -18,6 +18,7 @@ import { templateService } from '../services/templates'
 import { b2bLabService } from '../services/b2bLabs'
 import type { FieldType, TestTemplate } from '../types'
 import { toast } from 'sonner'
+import { toastError } from '../lib/errors'
 
 const fieldTypeLabels: Record<FieldType, string> = {
   text: 'Text', number: 'Number', checkbox: 'Checkbox', date: 'Date', select: 'Select', calculated: 'Calculated',
@@ -47,7 +48,7 @@ export default function TemplatesPage() {
   const toggleActive = useMutation({
     mutationFn: ({ id, active }: { id: number; active: boolean }) => templateService.update(id, { active }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['templates'] }); toast.success('Status updated') },
-    onError: () => toast.error('Failed to update'),
+    onError: (err) => toastError(err, 'Failed to update'),
   })
 
   const removeTemplate = useMutation({
@@ -59,8 +60,7 @@ export default function TemplatesPage() {
       setDeleteTemplate(null)
       toast.success('Template archived')
     },
-    onError: (err: unknown) =>
-      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to archive'),
+    onError: (err) => toastError(err, 'Failed to archive'),
   })
 
   const restoreMutation = useMutation({
@@ -71,8 +71,7 @@ export default function TemplatesPage() {
       qc.invalidateQueries({ queryKey: ['dashboard-summary'] })
       toast.success('Template restored')
     },
-    onError: (err: unknown) =>
-      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to restore'),
+    onError: (err) => toastError(err, 'Failed to restore'),
   })
 
   const permanentDeleteMutation = useMutation({
@@ -83,8 +82,7 @@ export default function TemplatesPage() {
       setPermanentDeleteTemplate(null)
       toast.success('Template permanently deleted')
     },
-    onError: (err: unknown) =>
-      toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to delete permanently'),
+    onError: (err) => toastError(err, 'Failed to delete permanently'),
   })
 
   const filtered = templates.filter(t => {

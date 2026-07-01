@@ -14,6 +14,7 @@ import { DataTable, DataTableHead, DataTableTh, DataTableBody, DataTableRow, Dat
 import { b2bLabService, type CreateB2bLabDto } from '../services/b2bLabs'
 import type { B2bLab } from '../types'
 import { toast } from 'sonner'
+import { toastError } from '../lib/errors'
 
 const emptyForm: CreateB2bLabDto = {
   name: '', contactPerson: '', phone: '', email: '', address: '', city: '', active: true,
@@ -114,7 +115,7 @@ export default function B2bLabsPage() {
       setCreateOpen(false)
       toast.success('B2B lab partner created successfully')
     },
-    onError: (err: unknown) => toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to create B2B lab'),
+    onError: (err) => toastError(err, 'Failed to create B2B lab'),
   })
 
   const updateMutation = useMutation({
@@ -124,7 +125,7 @@ export default function B2bLabsPage() {
       setEditLab(null)
       toast.success('B2B lab updated successfully')
     },
-    onError: (err: unknown) => toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to update B2B lab'),
+    onError: (err) => toastError(err, 'Failed to update B2B lab'),
   })
 
   const deleteMutation = useMutation({
@@ -135,7 +136,7 @@ export default function B2bLabsPage() {
       setDeleteLab(null)
       toast.success('B2B lab archived')
     },
-    onError: () => toast.error('Failed to archive B2B lab'),
+    onError: (err) => toastError(err, 'Failed to archive B2B lab'),
   })
 
   const restoreMutation = useMutation({
@@ -145,7 +146,7 @@ export default function B2bLabsPage() {
       qc.invalidateQueries({ queryKey: ['b2b-labs-archived'] })
       toast.success('B2B lab restored')
     },
-    onError: () => toast.error('Failed to restore B2B lab'),
+    onError: (err) => toastError(err, 'Failed to restore B2B lab'),
   })
 
   const permanentDeleteMutation = useMutation({
@@ -155,7 +156,7 @@ export default function B2bLabsPage() {
       setPermDeleteLab(null)
       toast.success('B2B lab permanently deleted')
     },
-    onError: () => toast.error('Failed to permanently delete B2B lab'),
+    onError: (err) => toastError(err, 'Failed to permanently delete B2B lab'),
   })
 
   const openEdit = (lab: B2bLab) => {

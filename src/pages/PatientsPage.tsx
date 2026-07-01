@@ -16,6 +16,7 @@ import { Pagination } from '../components/ui/Pagination'
 import { patientService } from '../services/patients'
 import type { Patient } from '../types'
 import { toast } from 'sonner'
+import { toastError } from '../lib/errors'
 
 // ── Status badge ─────────────────────────────────────────────────────────────
 function TypeBadge({ isB2b }: { isB2b: boolean }) {
@@ -56,7 +57,7 @@ export default function PatientsPage() {
       setDeletePatient(null)
       toast.success('Patient deleted')
     },
-    onError: () => toast.error('Failed to delete patient'),
+    onError: (err) => toastError(err, 'Failed to delete patient'),
   })
 
   const { data: archivedPatients = [] } = useQuery({
@@ -72,7 +73,7 @@ export default function PatientsPage() {
       qc.invalidateQueries({ queryKey: ['patients', 'archived'] })
       toast.success('Patient restored')
     },
-    onError: () => toast.error('Failed to restore patient'),
+    onError: (err) => toastError(err, 'Failed to restore patient'),
   })
 
   const permanentDeleteMutation = useMutation({
@@ -82,7 +83,7 @@ export default function PatientsPage() {
       setPermanentDeletePatient(null)
       toast.success('Patient permanently deleted')
     },
-    onError: () => toast.error('Failed to permanently delete'),
+    onError: (err) => toastError(err, 'Failed to permanently delete patient'),
   })
 
   // Reset to page 1 whenever filters change

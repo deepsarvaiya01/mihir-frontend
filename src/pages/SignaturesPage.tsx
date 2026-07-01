@@ -13,6 +13,7 @@ import {
   RotateCcw,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { toastError } from '../lib/errors'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
 import { ConfirmModal } from '../components/ui/Modal'
@@ -263,11 +264,7 @@ export default function SignaturesPage() {
       qc.invalidateQueries({ queryKey: ['signatures'] })
       setShowModal(false)
     },
-    onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message
-      const text = Array.isArray(msg) ? msg[0] : msg
-      toast.error(text || 'Failed to upload signature')
-    },
+    onError: (err) => toastError(err, 'Failed to upload signature'),
   })
 
   const activateMut = useMutation({
@@ -276,7 +273,7 @@ export default function SignaturesPage() {
       toast.success('Signature set as active')
       qc.invalidateQueries({ queryKey: ['signatures'] })
     },
-    onError: () => toast.error('Failed to activate signature'),
+    onError: (err) => toastError(err, 'Failed to activate signature'),
   })
 
   const deactivateMut = useMutation({
@@ -285,7 +282,7 @@ export default function SignaturesPage() {
       toast.success('Active signature cleared')
       qc.invalidateQueries({ queryKey: ['signatures'] })
     },
-    onError: () => toast.error('Failed to deactivate'),
+    onError: (err) => toastError(err, 'Failed to deactivate signature'),
   })
 
   const deleteMut = useMutation({
@@ -296,7 +293,7 @@ export default function SignaturesPage() {
       qc.invalidateQueries({ queryKey: ['signatures-archived'] })
       setDeleteSig(null)
     },
-    onError: () => toast.error('Failed to archive signature'),
+    onError: (err) => toastError(err, 'Failed to archive signature'),
   })
 
   const restoreMut = useMutation({
@@ -306,7 +303,7 @@ export default function SignaturesPage() {
       qc.invalidateQueries({ queryKey: ['signatures'] })
       qc.invalidateQueries({ queryKey: ['signatures-archived'] })
     },
-    onError: () => toast.error('Failed to restore signature'),
+    onError: (err) => toastError(err, 'Failed to restore signature'),
   })
 
   const permanentDeleteMut = useMutation({
@@ -316,7 +313,7 @@ export default function SignaturesPage() {
       qc.invalidateQueries({ queryKey: ['signatures-archived'] })
       setPermDeleteSig(null)
     },
-    onError: () => toast.error('Failed to permanently delete signature'),
+    onError: (err) => toastError(err, 'Failed to permanently delete signature'),
   })
 
   const busy = createMut.isPending || activateMut.isPending || deactivateMut.isPending || deleteMut.isPending

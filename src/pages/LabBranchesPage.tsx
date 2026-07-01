@@ -14,6 +14,7 @@ import { DataTable, DataTableHead, DataTableTh, DataTableBody, DataTableRow, Dat
 import { labBranchService, type CreateLabBranchDto } from '../services/labBranches'
 import type { LabBranch } from '../types'
 import { toast } from 'sonner'
+import { toastError } from '../lib/errors'
 
 const emptyForm: CreateLabBranchDto = {
   name: '', address: '', phone: '', active: true,
@@ -100,7 +101,7 @@ export default function LabBranchesPage() {
       setCreateOpen(false)
       toast.success('Lab branch created successfully')
     },
-    onError: (err: unknown) => toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to create branch'),
+    onError: (err) => toastError(err, 'Failed to create branch'),
   })
 
   const updateMutation = useMutation({
@@ -110,7 +111,7 @@ export default function LabBranchesPage() {
       setEditBranch(null)
       toast.success('Branch updated successfully')
     },
-    onError: (err: unknown) => toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to update branch'),
+    onError: (err) => toastError(err, 'Failed to update branch'),
   })
 
   const deleteMutation = useMutation({
@@ -121,7 +122,7 @@ export default function LabBranchesPage() {
       setDeleteBranch(null)
       toast.success('Branch archived')
     },
-    onError: () => toast.error('Failed to archive branch'),
+    onError: (err) => toastError(err, 'Failed to archive branch'),
   })
 
   const restoreMutation = useMutation({
@@ -131,7 +132,7 @@ export default function LabBranchesPage() {
       qc.invalidateQueries({ queryKey: ['lab-branches-archived'] })
       toast.success('Branch restored')
     },
-    onError: () => toast.error('Failed to restore branch'),
+    onError: (err) => toastError(err, 'Failed to restore branch'),
   })
 
   const permanentDeleteMutation = useMutation({
@@ -141,7 +142,7 @@ export default function LabBranchesPage() {
       setPermDeleteBranch(null)
       toast.success('Branch permanently deleted')
     },
-    onError: () => toast.error('Failed to permanently delete branch'),
+    onError: (err) => toastError(err, 'Failed to permanently delete branch'),
   })
 
   const openEdit = (branch: LabBranch) => {

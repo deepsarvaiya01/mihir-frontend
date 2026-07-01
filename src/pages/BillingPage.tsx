@@ -21,6 +21,7 @@ import { logoService } from '../services/logos'
 import { generateLabReport, generateReceipt, generatePlainReport } from '../utils/generateReport'
 import type { Order, PaymentStatus, PaymentType } from '../types'
 import { toast } from 'sonner'
+import { toastError } from '../lib/errors'
 
 type PaymentFilter = 'ALL' | PaymentStatus
 
@@ -183,7 +184,7 @@ export default function BillingPage() {
       setEditOrder(null)
       toast.success('Payment updated')
     },
-    onError: () => toast.error('Failed to update payment'),
+    onError: (err) => toastError(err, 'Failed to update payment'),
   })
 
   // Directly generates & downloads the PDF report
@@ -205,7 +206,7 @@ export default function BillingPage() {
         activeLogo,
       }).then(() => toast.success('Report downloaded')).catch(() => toast.error('Failed to generate report'))
     },
-    onError: () => toast.error('Failed to generate report'),
+    onError: (err) => toastError(err, 'Failed to generate report'),
   })
 
   const shareReport = useMutation({
@@ -214,14 +215,14 @@ export default function BillingPage() {
       const url = `${window.location.origin}/r/${data.token}`
       navigator.clipboard.writeText(url).then(() => toast.success('Report link copied to clipboard!'))
     },
-    onError: () => toast.error('Failed to create share link'),
+    onError: (err) => toastError(err, 'Failed to create share link'),
   })
 
   const printReceiptMutation = useMutation({
     mutationFn: (order: Order) =>
       generateReceipt({ order, labSettings, signature: activeSignature, activeLogo }),
     onSuccess: () => toast.success('Receipt downloaded'),
-    onError: () => toast.error('Failed to generate receipt'),
+    onError: (err) => toastError(err, 'Failed to generate receipt'),
   })
 
   const plainReportMutation = useMutation({
@@ -242,7 +243,7 @@ export default function BillingPage() {
         activeLogo,
       }).then(() => toast.success('Plain report downloaded')).catch(() => toast.error('Failed to generate report'))
     },
-    onError: () => toast.error('Failed to generate report'),
+    onError: (err) => toastError(err, 'Failed to generate report'),
   })
 
   const filtered = orders.filter(o => {

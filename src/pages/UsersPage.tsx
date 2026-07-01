@@ -14,6 +14,7 @@ import { DataTable, DataTableHead, DataTableTh, DataTableBody, DataTableRow, Dat
 import { userService, type UserRecord, type CreateUserDto, type UpdateUserDto } from '../services/users'
 import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
+import { toastError } from '../lib/errors'
 import type { UserRole } from '../types'
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -50,11 +51,7 @@ export default function UsersPage() {
       setCreateOpen(false)
       toast.success(`User "${user.name}" created`)
     },
-    onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message
-      const text = Array.isArray(msg) ? msg[0] : msg
-      toast.error(text || 'Failed to create user')
-    },
+    onError: (err) => toastError(err, 'Failed to create user'),
   })
 
   const update = useMutation({
@@ -64,11 +61,7 @@ export default function UsersPage() {
       setEditUser(null)
       toast.success('User updated')
     },
-    onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message
-      const text = Array.isArray(msg) ? msg[0] : msg
-      toast.error(text || 'Failed to update user')
-    },
+    onError: (err) => toastError(err, 'Failed to update user'),
   })
 
   const remove = useMutation({
@@ -87,7 +80,7 @@ export default function UsersPage() {
       qc.invalidateQueries({ queryKey: ['users', 'archived'] })
       toast.success('User restored')
     },
-    onError: () => toast.error('Failed to restore user'),
+    onError: (err) => toastError(err, 'Failed to restore user'),
   })
 
   const permDelete = useMutation({
@@ -97,19 +90,19 @@ export default function UsersPage() {
       setPermanentDeleteUser(null)
       toast.success('User permanently deleted')
     },
-    onError: () => toast.error('Failed to permanently delete user'),
+    onError: (err) => toastError(err, 'Failed to permanently delete user'),
   })
 
   const deactivate = useMutation({
     mutationFn: (id: number) => userService.deactivate(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['users'] }); toast.success('User deactivated') },
-    onError: () => toast.error('Failed to deactivate user'),
+    onError: (err) => toastError(err, 'Failed to deactivate user'),
   })
 
   const activate = useMutation({
     mutationFn: (id: number) => userService.activate(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['users'] }); toast.success('User activated') },
-    onError: () => toast.error('Failed to activate user'),
+    onError: (err) => toastError(err, 'Failed to activate user'),
   })
 
   const openEdit = (u: UserRecord) => {
