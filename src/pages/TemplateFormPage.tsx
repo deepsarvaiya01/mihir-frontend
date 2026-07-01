@@ -687,8 +687,12 @@ export default function TemplateFormPage() {
                           </td>
                           <td className="px-2 py-2">
                             {!fieldForm.isSectionHeader && (
-                              <Input size="sm" placeholder="e.g. 13.0-18.0" value={fieldForm.referenceRange}
-                                onChange={e => setFieldForm(p => ({ ...p, referenceRange: e.target.value }))} />
+                              <div className="flex flex-col gap-1">
+                                <Input size="sm" placeholder="♂ Male range" value={fieldForm.referenceRangeMale}
+                                  onChange={e => setFieldForm(p => ({ ...p, referenceRangeMale: e.target.value }))} />
+                                <Input size="sm" placeholder="♀ Female range" value={fieldForm.referenceRangeFemale}
+                                  onChange={e => setFieldForm(p => ({ ...p, referenceRangeFemale: e.target.value }))} />
+                              </div>
                             )}
                           </td>
                           <td className="px-2 py-2 text-center">
