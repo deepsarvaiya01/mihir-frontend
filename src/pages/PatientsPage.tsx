@@ -4,8 +4,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Users, Search, Pencil, Trash2,
   Building2, History, Archive, RotateCcw,
-  Eye, X, Phone, Mail, MapPin, UserCircle2,
-  Calendar, Stethoscope, AlertCircle, FileText, ExternalLink,
+  Eye, X, Phone, MapPin, UserCircle2,
+  Stethoscope, AlertCircle, FileText, ExternalLink,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'

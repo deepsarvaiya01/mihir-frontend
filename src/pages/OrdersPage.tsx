@@ -159,7 +159,7 @@ export default function OrdersPage() {
     onSuccess: (order) => {
       qc.invalidateQueries({ queryKey: ['orders'] })
       setReopenOrder(null)
-      toast.success(`${order.receiptNumber ?? order.templateName ?? 'Order'} reopened — ready for re-entry`)
+      toast.success(`${order.receiptNumber ?? order.template?.name ?? 'Order'} reopened — ready for re-entry`)
     },
     onError: (err) => toastError(err, 'Failed to reopen order'),
   })

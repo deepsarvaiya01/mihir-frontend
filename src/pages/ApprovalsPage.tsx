@@ -436,13 +436,13 @@ export default function ApprovalsPage() {
 
   const reopen = useMutation({
     mutationFn: (orderId: number) => orderService.reopen(orderId),
-    onSuccess: (order) => { qc.invalidateQueries({ queryKey: ['orders'] }); setReopenOrder(null); toast.success(`${order.receiptNumber ?? order.templateName ?? 'Order'} reopened`) },
+    onSuccess: (order) => { qc.invalidateQueries({ queryKey: ['orders'] }); setReopenOrder(null); toast.success(`${order.receiptNumber ?? order.template?.name ?? 'Order'} reopened`) },
     onError: (err) => toastError(err, 'Failed to reopen order'),
   })
 
   const revert = useMutation({
     mutationFn: ({ orderId, remark }: { orderId: number; remark: string }) => orderService.revert(orderId, remark),
-    onSuccess: (order) => { qc.invalidateQueries({ queryKey: ['orders'] }); setRevertOrder(null); setRevertRemark(''); toast.success(`${order.receiptNumber ?? order.templateName ?? 'Order'} reverted`) },
+    onSuccess: (order) => { qc.invalidateQueries({ queryKey: ['orders'] }); setRevertOrder(null); setRevertRemark(''); toast.success(`${order.receiptNumber ?? order.template?.name ?? 'Order'} reverted`) },
     onError: (err) => toastError(err, 'Failed to revert order'),
   })
 

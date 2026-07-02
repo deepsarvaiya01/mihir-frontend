@@ -6,7 +6,7 @@ import { api } from '../lib/api'
 function fetchReportByToken(token: string) {
   return api.get(`/report-shares/${token}`).then(r => r.data) as Promise<{
     order: {
-      id: number; status: string; createdAt: string;
+      id: number; status: string; createdAt: string; receiptNumber?: string | null;
       patient: { fullName: string; patientCode: string; age: number | null; gender: string | null; doctorName: string | null; city: string | null } | null;
       template: { name: string; code: string } | null;
     };

@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import {
   History, Printer, ChevronDown, ChevronUp, Calendar,
-  FileCheck, Search, User, X, ClipboardList,
+  FileCheck, Search, X, ClipboardList,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'

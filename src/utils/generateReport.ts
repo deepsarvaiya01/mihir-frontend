@@ -16,6 +16,7 @@ export interface ReportResult {
 
 export interface ReportOrder {
   id: number
+  receiptNumber?: string | null
   patient?: {
     fullName: string
     patientCode?: string
@@ -23,6 +24,8 @@ export interface ReportOrder {
     gender: string | null
     doctorName: string | null
     city?: string | null
+    isB2b?: boolean
+    b2bLab?: { name: string; contactPerson?: string | null; city?: string | null; address?: string | null; phone?: string | null } | null
   }
   template?: { name: string; code: string }
   createdAt?: string
