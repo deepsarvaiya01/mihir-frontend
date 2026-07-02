@@ -2,7 +2,7 @@
 import { Link } from 'react-router-dom'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend, AreaChart, Area,
+  PieChart, Pie, Cell, Legend, LineChart, Line,
 } from 'recharts'
 import {
   FlaskConical, Users, ClipboardList, CheckCircle2,
@@ -146,93 +146,105 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Charts row 1: Orders trend + Pie */}
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-          <Card className="lg:col-span-2">
-            <CardHeader title="Monthly Orders Trend" subtitle="Order volume over the last months" />
-            {trends.length > 0 ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <AreaChart data={trends} margin={{ top: 5, right: 5, bottom: 0, left: -20 }}>
-                  <defs>
-                    <linearGradient id="ordersGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.15} />
-                      <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#374151' : '#F3F4F6'} vertical={false} />
-                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: theme === 'dark' ? '#6B7280' : '#9CA3AF' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: theme === 'dark' ? '#6B7280' : '#9CA3AF' }} axisLine={false} tickLine={false} allowDecimals={false} />
-                  <Tooltip contentStyle={{ borderRadius: 8, border: `1px solid ${theme === 'dark' ? '#374151' : '#E5E7EB'}`, fontSize: 12, background: theme === 'dark' ? '#1F2937' : '#fff', color: theme === 'dark' ? '#F9FAFB' : '#111' }} />
-                  <Area type="monotone" dataKey="orders" stroke="#3B82F6" strokeWidth={2} fill="url(#ordersGrad)" dot={{ r: 3, fill: '#3B82F6' }} />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex h-52 items-center justify-center text-sm text-gray-400">No trend data yet</div>
-            )}
-          </Card>
+        {/* Charts 2×2 grid */}
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
 
+          {/* Top Tests — donut */}
           <Card>
             <CardHeader title="Top Tests" subtitle="By order volume" />
             {pieData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={200}>
+              <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
-                  <Pie data={pieData} cx="50%" cy="43%" innerRadius={38} outerRadius={65} paddingAngle={3} dataKey="value">
+                  <Pie
+                    data={pieData} cx="50%" cy="46%"
+                    innerRadius={60} outerRadius={92}
+                    paddingAngle={3} dataKey="value"
+                    stroke="none"
+                  >
                     {pieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                   </Pie>
-                  <Tooltip contentStyle={{ borderRadius: 8, border: `1px solid ${theme === 'dark' ? '#374151' : '#E5E7EB'}`, fontSize: 12, background: theme === 'dark' ? '#1F2937' : '#fff', color: theme === 'dark' ? '#F9FAFB' : '#111' }} />
-                  <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 11 }} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: 10, border: `1px solid ${theme === 'dark' ? '#374151' : '#E5E7EB'}`, fontSize: 12, background: theme === 'dark' ? '#1F2937' : '#fff', color: theme === 'dark' ? '#F9FAFB' : '#111', boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}
+                  />
+                  <Legend iconType="square" iconSize={8} wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex h-52 items-center justify-center text-sm text-gray-400">No data yet</div>
-            )}
-          </Card>
-        </div>
-
-        {/* Charts row 2: Revenue trend + Orders by status */}
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-          <Card className="lg:col-span-2">
-            <CardHeader title="Monthly Revenue Trend" subtitle="Revenue generated over the last months" />
-            {trends.length > 0 ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={trends} barSize={28} margin={{ top: 5, right: 5, bottom: 0, left: -20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#374151' : '#F3F4F6'} vertical={false} />
-                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: theme === 'dark' ? '#6B7280' : '#9CA3AF' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: theme === 'dark' ? '#6B7280' : '#9CA3AF' }} axisLine={false} tickLine={false} allowDecimals={false}
-                    tickFormatter={(v) => v >= 1000 ? `₹${(v/1000).toFixed(0)}k` : `₹${v}`} />
-                  <Tooltip
-                    contentStyle={{ borderRadius: 8, border: `1px solid ${theme === 'dark' ? '#374151' : '#E5E7EB'}`, fontSize: 12, background: theme === 'dark' ? '#1F2937' : '#fff', color: theme === 'dark' ? '#F9FAFB' : '#111' }}
-                    formatter={(value) => [`₹${Number(value).toLocaleString()}`, 'Revenue']}
-                  />
-                  <Bar dataKey="revenue" fill="#F59E0B" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex h-52 items-center justify-center text-sm text-gray-400">No revenue data yet</div>
+              <div className="flex h-60 items-center justify-center text-sm text-gray-400">No data yet</div>
             )}
           </Card>
 
+          {/* Orders by Status — donut */}
           <Card>
             <CardHeader title="Orders by Status" subtitle="Current distribution" />
             {barData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={barData} barSize={24} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#374151' : '#F3F4F6'} vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 9, fill: theme === 'dark' ? '#6B7280' : '#9CA3AF' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: theme === 'dark' ? '#6B7280' : '#9CA3AF' }} axisLine={false} tickLine={false} allowDecimals={false} />
-                  <Tooltip
-                    contentStyle={{ borderRadius: 8, border: `1px solid ${theme === 'dark' ? '#374151' : '#E5E7EB'}`, fontSize: 12, background: theme === 'dark' ? '#1F2937' : '#fff', color: theme === 'dark' ? '#F9FAFB' : '#111' }}
-                    cursor={{ fill: theme === 'dark' ? '#374151' : '#F9FAFB' }}
-                  />
-                  <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+              <ResponsiveContainer width="100%" height={240}>
+                <PieChart>
+                  <Pie
+                    data={barData.map(d => ({ name: d.name, value: d.count, color: d.fill }))}
+                    cx="50%" cy="46%"
+                    innerRadius={60} outerRadius={92}
+                    paddingAngle={3} dataKey="value"
+                    stroke="none"
+                  >
                     {barData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-                  </Bar>
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ borderRadius: 10, border: `1px solid ${theme === 'dark' ? '#374151' : '#E5E7EB'}`, fontSize: 12, background: theme === 'dark' ? '#1F2937' : '#fff', color: theme === 'dark' ? '#F9FAFB' : '#111', boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}
+                  />
+                  <Legend iconType="square" iconSize={8} wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-60 items-center justify-center text-sm text-gray-400">No orders yet</div>
+            )}
+          </Card>
+
+          {/* Revenue — bar chart (violet) */}
+          <Card>
+            <CardHeader title="Revenue Performance" subtitle="Monthly revenue in Rs." />
+            {trends.length > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={trends} barSize={32} margin={{ top: 5, right: 5, bottom: 0, left: -10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#374151' : '#F3F4F6'} vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: theme === 'dark' ? '#6B7280' : '#9CA3AF' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: theme === 'dark' ? '#6B7280' : '#9CA3AF' }} axisLine={false} tickLine={false} allowDecimals={false}
+                    tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}k` : String(v)} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: 10, border: `1px solid ${theme === 'dark' ? '#374151' : '#E5E7EB'}`, fontSize: 12, background: theme === 'dark' ? '#1F2937' : '#fff', color: theme === 'dark' ? '#F9FAFB' : '#111', boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}
+                    formatter={(value) => [`Rs. ${Number(value).toLocaleString('en-IN')}`, 'Revenue']}
+                    cursor={{ fill: theme === 'dark' ? '#374151' : '#F5F3FF' }}
+                  />
+                  <Bar dataKey="revenue" fill="#8B5CF6" radius={[5, 5, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex h-52 items-center justify-center text-sm text-gray-400">No orders yet</div>
+              <div className="flex h-56 items-center justify-center text-sm text-gray-400">No revenue data yet</div>
             )}
           </Card>
+
+          {/* Monthly Activity — multi-line */}
+          <Card>
+            <CardHeader title="Monthly Activity Overview" subtitle="Orders vs approvals over time" />
+            {trends.length > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={trends} margin={{ top: 5, right: 10, bottom: 0, left: -10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#374151' : '#F3F4F6'} vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: theme === 'dark' ? '#6B7280' : '#9CA3AF' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: theme === 'dark' ? '#6B7280' : '#9CA3AF' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip
+                    contentStyle={{ borderRadius: 10, border: `1px solid ${theme === 'dark' ? '#374151' : '#E5E7EB'}`, fontSize: 12, background: theme === 'dark' ? '#1F2937' : '#fff', color: theme === 'dark' ? '#F9FAFB' : '#111', boxShadow: '0 4px 16px rgba(0,0,0,0.08)' }}
+                  />
+                  <Legend iconType="square" iconSize={8} wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                  <Line type="monotone" dataKey="orders"   name="Orders"    stroke="#3B82F6" strokeWidth={2.5} dot={{ r: 4, fill: '#3B82F6', strokeWidth: 0 }}   activeDot={{ r: 5 }} />
+                  <Line type="monotone" dataKey="approved" name="Approvals" stroke="#10B981" strokeWidth={2.5} dot={{ r: 4, fill: '#10B981', strokeWidth: 0 }}   activeDot={{ r: 5 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-56 items-center justify-center text-sm text-gray-400">No trend data yet</div>
+            )}
+          </Card>
+
         </div>
 
         {/* Alert banners */}
@@ -276,7 +288,7 @@ export default function DashboardPage() {
                 <tbody>
                   {recentOrders.map(order => (
                     <tr key={order.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors dark:border-gray-700/50 dark:hover:bg-gray-700/30">
-                      <td className="py-3 font-semibold text-gray-900 dark:text-gray-200">#{order.id}</td>
+                      <td className="py-3 font-semibold text-gray-900 dark:text-gray-200">{order.receiptNumber ?? order.template?.name ?? '—'}</td>
                       <td className="py-3 text-gray-600 dark:text-gray-300">{order.patient?.fullName ?? '—'}</td>
                       <td className="py-3 text-gray-500 text-xs dark:text-gray-400">{order.template?.name ?? '—'}</td>
                       <td className="py-3"><OrderStatusBadge status={order.status} /></td>

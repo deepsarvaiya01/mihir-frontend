@@ -117,8 +117,7 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
   const CW = PAGE_W - ML - MR
 
   // Space reserved at the top of every page for the Rameshwar.pdf header template.
-  // The header in report-template.pdf occupies approximately the top 48 mm.
-  const TEMPLATE_HDR = 58
+  const TEMPLATE_HDR = 36
 
   /* ── Draw patient info block (first page only) ── */
   function drawPatientInfo(startY: number): number {
@@ -130,8 +129,8 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
 
     doc.setFont('helvetica', 'bold');  doc.text("Patient's Name", ML, startY)
     doc.setFont('helvetica', 'normal'); doc.text(`: ${p?.fullName ?? '—'}`, ML + 35, startY)
-    doc.setFont('helvetica', 'bold');  doc.text('Lab ID', col2X, startY)
-    doc.setFont('helvetica', 'normal'); doc.text(`:${order.id}`, col2X + 14, startY)
+    doc.setFont('helvetica', 'bold');  doc.text('Receipt No.', col2X, startY)
+    doc.setFont('helvetica', 'normal'); doc.text(`: ${order.receiptNumber ?? '—'}`, col2X + 14, startY)
 
     doc.setFont('helvetica', 'bold');  doc.text('Age / Gender', ML, startY + 7)
     doc.setFont('helvetica', 'normal'); doc.text(`: ${fmtAgeGender(p?.age ?? null, p?.gender ?? null)}`, ML + 35, startY + 7)
@@ -144,11 +143,25 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
     doc.setFont('helvetica', 'bold');  doc.text('Location', ML, startY + 21)
     doc.setFont('helvetica', 'normal'); doc.text(`: ${p?.city ?? ''}`, ML + 35, startY + 21)
 
+    let extraY = 0
+    if (p?.isB2b && p?.b2bLab) {
+      const lab = p.b2bLab
+      doc.setFont('helvetica', 'bold');  doc.text('Ref. Lab', ML, startY + 28)
+      doc.setFont('helvetica', 'normal'); doc.text(`: ${lab.name}${lab.contactPerson ? ` (${lab.contactPerson})` : ''}`, ML + 35, startY + 28)
+      if (lab.phone) {
+        doc.setFont('helvetica', 'bold');  doc.text('Lab Phone', ML, startY + 35)
+        doc.setFont('helvetica', 'normal'); doc.text(`: ${lab.phone}`, ML + 35, startY + 35)
+        extraY = 14
+      } else {
+        extraY = 7
+      }
+    }
+
     doc.setDrawColor(160, 160, 160)
     doc.setLineWidth(0.3)
-    doc.line(ML, startY + 26, PAGE_W - MR, startY + 26)
+    doc.line(ML, startY + 26 + extraY, PAGE_W - MR, startY + 26 + extraY)
 
-    return startY + 26
+    return startY + 26 + extraY
   }
 
   /* ── Build table rows ── */
@@ -205,8 +218,7 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
     styles: {
       fontSize: 8.5,
       cellPadding: { top: 2.5, bottom: 2.5, left: 2.5, right: 2.5 },
-      lineColor: [210, 210, 210],
-      lineWidth: 0.15,
+      lineWidth: 0,
       textColor: [15, 15, 15],
       font: 'helvetica',
     },
@@ -215,7 +227,7 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
       fontSize: 8.5,
       fillColor: [255, 255, 255],
       textColor: [15, 15, 15],
-      lineWidth: { bottom: 0.5 },
+      lineWidth: { top: 0.5, bottom: 0.5 },
       lineColor: [100, 100, 100],
     },
     columnStyles: {
@@ -260,6 +272,16 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
     },
   })
 
+  /* ── Bottom border after last table row ── */
+  {
+    const tableBottom = ((doc as unknown) as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY
+    if (tableBottom) {
+      doc.setDrawColor(100, 100, 100)
+      doc.setLineWidth(0.5)
+      doc.line(ML, tableBottom, PAGE_W - MR, tableBottom)
+    }
+  }
+
   /* ── Page numbers ── */
   const totalPages = doc.getNumberOfPages()
   for (let i = 1; i <= totalPages; i++) {
@@ -298,24 +320,21 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
   }
 
   const doctorName = labSettings.doctor_name ?? signature?.name ?? ''
-  const doctorQual = labSettings.doctor_qualification ?? ''
+  const doctorQual = signature?.degreeName ?? labSettings.doctor_qualification ?? ''
+  const doctorLine = doctorName
+    ? doctorQual ? `${doctorName} (${doctorQual})` : doctorName
+    : ''
 
-  if (doctorName) {
+  if (doctorLine) {
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(9.5)
     doc.setTextColor(10, 10, 10)
-    doc.text(doctorName, sigX, sigY + 2, { align: 'right' })
-  }
-  if (doctorQual) {
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.5)
-    doc.setTextColor(60, 60, 60)
-    doc.text(`( ${doctorQual} )`, sigX, sigY + 8, { align: 'right' })
+    doc.text(doctorLine, sigX, sigY + 2, { align: 'right' })
   }
   doc.setFont('helvetica', 'italic')
   doc.setFontSize(7.5)
   doc.setTextColor(130, 130, 130)
-  doc.text('Authorized Signatory', sigX, sigY + (doctorQual ? 14 : 8), { align: 'right' })
+  doc.text('Authorized Signatory', sigX, sigY + (doctorLine ? 9 : 2), { align: 'right' })
 
   if (options.shareUrl) {
     try {
@@ -328,9 +347,9 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
     } catch { /* skip */ }
   }
 
-  /* ── Merge content PDF with report-template.pdf using pdf-lib ── */
+  /* ── Merge content PDF with Rameshwar.pdf template using pdf-lib ── */
   try {
-    const templateRes = await fetch('/report-template.pdf')
+    const templateRes = await fetch('/Rameshwar.pdf')
     if (!templateRes.ok) throw new Error('template not found')
 
     const templateBytes = await templateRes.arrayBuffer()
@@ -404,7 +423,7 @@ export async function generateReceipt(options: GenerateReceiptOptions): Promise<
   const net       = Number(order.netAmount ?? 0)
   const discountAmt = amount - net
 
-  const fmt = (n: number) => `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+  const fmt = (n: number) => `Rs. ${n.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
 
   let y = TEMPLATE_HDR + 6
 
@@ -512,12 +531,12 @@ export async function generateReceipt(options: GenerateReceiptOptions): Promise<
   autoTable(doc, {
     startY: y,
     margin: { left: ML, right: MR, bottom: 20 },
-    head: [['Description of Service', 'SAC', 'Gross Amt', discLabel, 'Taxable Amt', 'GST', 'Total']],
+    head: [['Description of Service', 'SAC', 'Gross Amt', discLabel, 'Net Amt', 'GST', 'Total']],
     body: [[
       order.template?.name ?? 'Diagnostic Test',
       sacCode,
       fmt(amount),
-      discount > 0 ? `−${fmt(discountAmt)}` : '—',
+      discount > 0 ? `-${fmt(discountAmt)}` : '-',
       fmt(net),
       'Exempt',
       fmt(net),
@@ -525,7 +544,7 @@ export async function generateReceipt(options: GenerateReceiptOptions): Promise<
     theme: 'plain',
     styles: {
       fontSize: 8.5,
-      cellPadding: { top: 3.5, bottom: 3.5, left: 3, right: 3 },
+      cellPadding: { top: 4, bottom: 4, left: 3, right: 3 },
       lineColor: [210, 210, 210],
       lineWidth: 0.15,
       textColor: [15, 15, 15],
@@ -540,13 +559,13 @@ export async function generateReceipt(options: GenerateReceiptOptions): Promise<
       lineColor: [180, 180, 180],
     },
     columnStyles: {
-      0: { cellWidth: 58 },
-      1: { cellWidth: 18 },
-      2: { cellWidth: 23, halign: 'right' },
-      3: { cellWidth: 23, halign: 'right' },
-      4: { cellWidth: 25, halign: 'right' },
-      5: { cellWidth: 16, halign: 'center' },
-      6: { cellWidth: CW - 58 - 18 - 23 - 23 - 25 - 16, halign: 'right', fontStyle: 'bold' },
+      0: { cellWidth: 52 },
+      1: { cellWidth: 17 },
+      2: { cellWidth: 24, halign: 'right' },
+      3: { cellWidth: 20, halign: 'right' },
+      4: { cellWidth: 26, halign: 'right' },
+      5: { cellWidth: 18, halign: 'center' },
+      6: { cellWidth: CW - 52 - 17 - 24 - 20 - 26 - 18, halign: 'right', fontStyle: 'bold' },
     },
   })
 
@@ -559,7 +578,7 @@ export async function generateReceipt(options: GenerateReceiptOptions): Promise<
   doc.setFontSize(7.5)
   doc.setTextColor(70, 130, 90)
   doc.text(
-    `✓ Pathology & diagnostic services are GST-exempt under Notification 12/2017-CT(Rate) — SAC ${sacCode}`,
+    `* Pathology & diagnostic services are GST-exempt under Notification 12/2017-CT(Rate) - SAC ${sacCode}`,
     ML, y,
   )
   y += 10
@@ -588,12 +607,12 @@ export async function generateReceipt(options: GenerateReceiptOptions): Promise<
 
   if (discount > 0) {
     row('Gross Amount',          fmt(amount))
-    row(`Discount (${discount}%)`, `−${fmt(discountAmt)}`, false, [5, 150, 105])
+    row(`Discount (${discount}%)`, `-${fmt(discountAmt)}`, false, [5, 150, 105])
     row('Taxable Amount',        fmt(net))
   } else {
     row('Taxable Amount',        fmt(net))
   }
-  row('GST Amount', '₹0.00')
+  row('GST Amount', 'Rs. 0.00')
 
   y += 1
   doc.setDrawColor(20, 20, 20)
@@ -624,24 +643,21 @@ export async function generateReceipt(options: GenerateReceiptOptions): Promise<
   }
 
   const doctorName = labSettings.doctor_name ?? signature?.name ?? ''
-  const doctorQual = labSettings.doctor_qualification ?? ''
+  const doctorQual = signature?.degreeName ?? labSettings.doctor_qualification ?? ''
+  const doctorLine = doctorName
+    ? doctorQual ? `${doctorName} (${doctorQual})` : doctorName
+    : ''
 
-  if (doctorName) {
+  if (doctorLine) {
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(9.5)
     doc.setTextColor(10, 10, 10)
-    doc.text(doctorName, sigX, y + 2, { align: 'right' })
-  }
-  if (doctorQual) {
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.5)
-    doc.setTextColor(60, 60, 60)
-    doc.text(`( ${doctorQual} )`, sigX, y + 8, { align: 'right' })
+    doc.text(doctorLine, sigX, y + 2, { align: 'right' })
   }
   doc.setFont('helvetica', 'italic')
   doc.setFontSize(7.5)
   doc.setTextColor(130, 130, 130)
-  doc.text('Authorized Signatory', sigX, y + (doctorQual ? 14 : 8), { align: 'right' })
+  doc.text('Authorized Signatory', sigX, y + (doctorLine ? 9 : 2), { align: 'right' })
 
   /* ── Footer note ──────────────────────────────────────── */
   doc.setFont('helvetica', 'normal')
@@ -652,12 +668,12 @@ export async function generateReceipt(options: GenerateReceiptOptions): Promise<
     PAGE_W / 2, PAGE_H - 10, { align: 'center' },
   )
 
-  /* ── Merge with lab letterhead template ───────────────── */
+  /* ── Merge with payment template ─────────────────────── */
   const patientSlug = order.patient?.fullName?.replace(/\s+/g, '-') ?? 'patient'
   const filename = `receipt-${order.receiptNumber ?? order.id}-${patientSlug}.pdf`
 
   try {
-    const templateRes = await fetch('/report-template.pdf')
+    const templateRes = await fetch('/Payment.pdf')
     if (!templateRes.ok) throw new Error('template not found')
 
     const templateBytes = await templateRes.arrayBuffer()
@@ -736,10 +752,14 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
     const p = order.patient
     const col2X = PAGE_W - MR - 78
     const infoRows: [string, string, string, string][] = [
-      ['Pt. Name',   `: ${p?.fullName ?? '—'}`,   'PID',        `: ${order.id}`],
-      ['Age/Gender', `: ${fmtAgeGender(p?.age ?? null, p?.gender ?? null)}`, 'Lab ID', `: ${order.id}`],
-      ['Ref. By',    `: ${p?.doctorName ?? 'Self'}`, 'Reg. On',  `: ${fmtDate(order.createdAt)}`],
-      ['Location',   `: ${p?.city ?? ''}`,            'Report On', `: ${order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}`],
+      ['Pt. Name',   `: ${p?.fullName ?? '—'}`,   'Receipt No.',  `: ${order.receiptNumber ?? '—'}`],
+      ['Age/Gender', `: ${fmtAgeGender(p?.age ?? null, p?.gender ?? null)}`, 'Reg. On', `: ${fmtDate(order.createdAt)}`],
+      ['Ref. By',    `: ${p?.doctorName ?? 'Self'}`, 'Report On', `: ${order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}`],
+      ['Location',   `: ${p?.city ?? ''}`,            '', ``],
+      ...(p?.isB2b && p?.b2bLab ? [
+        ['Ref. Lab', `: ${p.b2bLab.name}`, p.b2bLab.contactPerson ? 'Contact' : '', p.b2bLab.contactPerson ? `: ${p.b2bLab.contactPerson}` : ''],
+        ...(p.b2bLab.phone ? [['Lab Phone', `: ${p.b2bLab.phone}`, '', '']] as [string,string,string,string][] : []),
+      ] as [string,string,string,string][] : []),
     ]
 
     doc.setFontSize(9)
@@ -766,7 +786,7 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
     doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(10, 10, 10)
     doc.text(labName, ML, 10)
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(50, 50, 50)
-    doc.text(`${order.patient?.fullName ?? ''}   |   Lab ID: ${order.id}`, PAGE_W - MR, 10, { align: 'right' })
+    doc.text(`${order.patient?.fullName ?? ''}${order.receiptNumber ? `   |   ${order.receiptNumber}` : ''}`, PAGE_W - MR, 10, { align: 'right' })
     doc.setDrawColor(20, 20, 20); doc.setLineWidth(0.6)
     doc.line(ML, 13.5, PAGE_W - MR, 13.5)
   }
@@ -838,8 +858,7 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
       styles: {
         fontSize: 8.5,
         cellPadding: { top: 2.5, bottom: 2.5, left: 2.5, right: 2.5 },
-        lineColor: [210, 210, 210],
-        lineWidth: 0.15,
+        lineWidth: 0,
         textColor: [15, 15, 15],
         font: 'helvetica',
       },
@@ -848,7 +867,7 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
         fontSize: 8.5,
         fillColor: [255, 255, 255],
         textColor: [15, 15, 15],
-        lineWidth: { bottom: 0.5 },
+        lineWidth: { top: 0.5, bottom: 0.5 },
         lineColor: [100, 100, 100],
       },
       columnStyles: {
@@ -888,6 +907,16 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
       },
     })
 
+    /* ── Bottom border after last row of this section ── */
+    {
+      const tableBottom = ((doc as unknown) as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY
+      if (tableBottom) {
+        doc.setDrawColor(100, 100, 100)
+        doc.setLineWidth(0.5)
+        doc.line(ML, tableBottom, PAGE_W - MR, tableBottom)
+      }
+    }
+
     isFirstGroup = false
   }
 
@@ -924,18 +953,17 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
   }
 
   const doctorName = labSettings.doctor_name ?? signature?.name ?? ''
-  const doctorQual = labSettings.doctor_qualification ?? ''
+  const doctorQual = signature?.degreeName ?? labSettings.doctor_qualification ?? ''
+  const doctorLine = doctorName
+    ? doctorQual ? `${doctorName} (${doctorQual})` : doctorName
+    : ''
 
-  if (doctorName) {
+  if (doctorLine) {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(10, 10, 10)
-    doc.text(doctorName, sigX, sigY + 2, { align: 'right' })
-  }
-  if (doctorQual) {
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(60, 60, 60)
-    doc.text(`( ${doctorQual} )`, sigX, sigY + 8, { align: 'right' })
+    doc.text(doctorLine, sigX, sigY + 2, { align: 'right' })
   }
   doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); doc.setTextColor(130, 130, 130)
-  doc.text('Authorized Signatory', sigX, sigY + (doctorQual ? 14 : 8), { align: 'right' })
+  doc.text('Authorized Signatory', sigX, sigY + (doctorLine ? 9 : 2), { align: 'right' })
 
   if (options.shareUrl) {
     try {
@@ -978,4 +1006,37 @@ export async function generatePlainReport(options: GenerateReportOptions): Promi
 export async function generateReportBase64(options: GenerateReportOptions): Promise<string> {
   const doc = await buildPlainReportDoc(options)
   return (doc.output('datauristring') as string).split(',')[1]
+}
+
+/**
+ * Generate a combined PDF for multiple tests — each test starts on its own page.
+ * Falls back to individual downloads if merging fails.
+ */
+export async function generateCombinedReport(
+  optionsList: GenerateReportOptions[],
+  type: 'letterhead' | 'plain' = 'plain',
+): Promise<void> {
+  if (optionsList.length === 0) return
+  if (optionsList.length === 1) {
+    return type === 'letterhead' ? generateLabReport(optionsList[0]) : generatePlainReport(optionsList[0])
+  }
+
+  const pdfBytesArray = await Promise.all(
+    optionsList.map(opt =>
+      type === 'letterhead'
+        ? buildLabReportBytes(opt)
+        : buildPlainReportDoc(opt).then(d => new Uint8Array(d.output('arraybuffer') as ArrayBuffer))
+    )
+  )
+
+  const merged = await PDFDocument.create()
+  for (const bytes of pdfBytesArray) {
+    const pdf = await PDFDocument.load(bytes)
+    const pages = await merged.copyPages(pdf, pdf.getPageIndices())
+    pages.forEach(p => merged.addPage(p))
+  }
+
+  const first = optionsList[0]
+  const patientSlug = first.order.patient?.fullName?.replace(/\s+/g, '-') ?? 'patient'
+  downloadBlob(await merged.save(), `report-combined-${patientSlug}.pdf`)
 }

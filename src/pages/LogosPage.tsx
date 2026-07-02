@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
+import { toTitleCase } from '../lib/utils'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
 import { ConfirmModal } from '../components/ui/Modal'
@@ -94,7 +95,7 @@ function UploadModal({ onClose, onSave, saving }: UploadModalProps) {
             <input
               type="text"
               value={name}
-              onChange={e => setName(e.target.value)}
+              onChange={e => setName(toTitleCase(e.target.value))}
               placeholder="e.g. Mihir Diagnostic Lab"
               className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-500 dark:focus:bg-gray-600"
             />

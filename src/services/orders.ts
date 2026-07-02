@@ -44,9 +44,8 @@ export const orderService = {
     return data
   },
 
-  approve: async (orderId: number, pdfBase64?: string, plainPdfBase64?: string): Promise<Order> => {
-    const body = (pdfBase64 || plainPdfBase64) ? { pdfBase64, plainPdfBase64 } : undefined
-    const { data } = await api.post(`/orders/${orderId}/approve`, body)
+  approve: async (orderId: number): Promise<Order> => {
+    const { data } = await api.post(`/orders/${orderId}/approve`)
     return data
   },
 

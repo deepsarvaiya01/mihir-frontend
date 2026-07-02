@@ -124,7 +124,7 @@ export default function AuditLogPage() {
                 ) : (
                   data.data.map((log: AuditLog) => (
                     <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors">
-                      <td className="px-4 py-3 font-mono text-xs text-gray-400 dark:text-gray-500">#{log.id}</td>
+                      <td className="px-4 py-3 text-xs text-gray-400 dark:text-gray-500">{new Date(log.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</td>
                       <td className="px-4 py-3"><ActionBadge action={log.action} /></td>
                       <td className="px-4 py-3">
                         {log.entityType ? (

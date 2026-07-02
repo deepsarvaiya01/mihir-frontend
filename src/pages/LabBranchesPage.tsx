@@ -15,6 +15,7 @@ import { labBranchService, type CreateLabBranchDto } from '../services/labBranch
 import type { LabBranch } from '../types'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
+import { toTitleCase } from '../lib/utils'
 
 const emptyForm: CreateLabBranchDto = {
   name: '', address: '', phone: '', active: true,
@@ -33,7 +34,7 @@ function BranchForm({
         label="Branch Name"
         placeholder="e.g. Main Branch, North Centre"
         value={form.name}
-        onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+        onChange={e => setForm(p => ({ ...p, name: toTitleCase(e.target.value) }))}
         required
       />
       <Input

@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   CheckCircle2, XCircle, FileText, Download, RefreshCw,
   RotateCcw, Undo2, LayoutGrid, List, CheckSquare, Square,
-  Minus,
+  Minus, X, User, Building2, Stethoscope, AlertTriangle,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
@@ -15,10 +15,247 @@ import { orderService } from '../services/orders'
 import { labSettingsService } from '../services/labSettings'
 import { signatureService } from '../services/signatures'
 import { logoService } from '../services/logos'
-import { generateLabReport, generateLabReportBase64, generateReportBase64 } from '../utils/generateReport'
-import type { Order, OrderResult } from '../types'
+import { generateLabReport } from '../utils/generateReport'
+import type { Order, OrderResult, HistoryResult } from '../types'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
+
+/* ── helpers ─────────────────────────────────────────────────────────────── */
+
+function isOutOfRange(result: HistoryResult): boolean {
+  if (!result.referenceRange || result.value == null) return false
+  const val = Number(result.value)
+  if (isNaN(val)) return false
+  const m = result.referenceRange.match(/^(\d+\.?\d*)\s*[-–]\s*(\d+\.?\d*)$/)
+  if (!m) return false
+  return val < Number(m[1]) || val > Number(m[2])
+}
+
+function InfoPill({ label, value }: { label: string; value?: string | number | null }) {
+  if (!value && value !== 0) return null
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{label}</span>
+      <span className="text-sm text-gray-800 dark:text-gray-200">{value}</span>
+    </div>
+  )
+}
+
+/* ── Full-screen review panel ─────────────────────────────────────────────── */
+
+function ReviewPanel({
+  data,
+  onClose,
+  onApprove,
+  onReject,
+  approving,
+  rejecting,
+}: {
+  data: OrderResult
+  onClose: () => void
+  onApprove: () => void
+  onReject: () => void
+  approving: boolean
+  rejecting: boolean
+}) {
+  const { order, results } = data
+  const p = order.patient
+  const isPending = order.status === 'AWAITING_APPROVAL'
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-white dark:bg-gray-900 overflow-hidden">
+
+      {/* ── Top bar ── */}
+      <div className="flex shrink-0 items-center justify-between border-b border-gray-100 bg-white px-5 py-3 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+        <div className="flex min-w-0 items-center gap-3">
+          <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800">
+            <X className="h-5 w-5" />
+          </button>
+          <div className="min-w-0">
+            <h2 className="truncate text-base font-bold text-gray-900 dark:text-white">
+              {p?.fullName ?? '—'}
+            </h2>
+            <p className="truncate text-xs text-gray-400">
+              {order.template?.name ?? '—'} · {order.receiptNumber ?? p?.patientCode ?? ''}
+            </p>
+          </div>
+          <OrderStatusBadge status={order.status} />
+        </div>
+        {isPending && (
+          <div className="flex shrink-0 items-center gap-2">
+            <Button size="sm" variant="danger" icon={<XCircle className="h-3.5 w-3.5" />}
+              loading={rejecting} onClick={onReject}>Reject</Button>
+            <Button size="sm" variant="success" icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+              loading={approving} onClick={onApprove}>Approve</Button>
+          </div>
+        )}
+      </div>
+
+      {/* ── Scrollable body ── */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-5xl space-y-5 p-5">
+
+          {/* ── Patient + Order info row ── */}
+          <div className="grid gap-4 sm:grid-cols-2">
+
+            {/* Patient card */}
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-800/60">
+              <div className="mb-3 flex items-center gap-2">
+                <User className="h-4 w-4 text-blue-500" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Patient</span>
+              </div>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-lg font-bold text-white">
+                  {p?.fullName?.charAt(0).toUpperCase() ?? '?'}
+                </div>
+                <div>
+                  <p className="font-bold text-gray-900 dark:text-white">{p?.fullName ?? '—'}</p>
+                  <p className="font-mono text-xs text-blue-600 dark:text-blue-400">{p?.patientCode ?? '—'}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
+                <InfoPill label="Age" value={p?.age != null ? `${p.age} yrs` : null} />
+                <InfoPill label="Gender" value={p?.gender} />
+                <InfoPill label="Blood Group" value={p?.bloodGroup} />
+                <InfoPill label="Phone" value={p?.phoneNumber} />
+                <InfoPill label="Email" value={p?.email} />
+                {(p?.city || p?.state) && <InfoPill label="Location" value={[p.city, p.state].filter(Boolean).join(', ')} />}
+                {p?.doctorName && <InfoPill label="Ref. Doctor" value={p.doctorName} />}
+              </div>
+            </div>
+
+            {/* Order + B2B card */}
+            <div className="flex flex-col gap-4">
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-800/60">
+                <div className="mb-3 flex items-center gap-2">
+                  <Stethoscope className="h-4 w-4 text-emerald-500" />
+                  <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Order</span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
+                  <InfoPill label="Test" value={order.template?.name} />
+                  <InfoPill label="Receipt" value={order.receiptNumber} />
+                  <InfoPill label="Registered" value={order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null} />
+                  <InfoPill label="Report Date" value={p?.reportDate ? new Date(p.reportDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null} />
+                </div>
+              </div>
+
+              {p?.isB2b && p?.b2bLab && (
+                <div className="rounded-2xl border border-violet-100 bg-violet-50/60 p-4 dark:border-violet-800/40 dark:bg-violet-900/20">
+                  <div className="mb-3 flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-violet-500" />
+                    <span className="text-xs font-semibold uppercase tracking-wide text-violet-500 dark:text-violet-400">B2B Referral Lab</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
+                    <div className="col-span-2"><InfoPill label="Lab Name" value={p.b2bLab.name} /></div>
+                    <InfoPill label="Contact" value={p.b2bLab.contactPerson} />
+                    <InfoPill label="Phone" value={p.b2bLab.phone} />
+                    <InfoPill label="Email" value={p.b2bLab.email} />
+                    <InfoPill label="City" value={p.b2bLab.city} />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── Test Results ── */}
+          <div className="rounded-2xl border border-gray-100 bg-white dark:border-gray-800 dark:bg-gray-800/40">
+            <div className="border-b border-gray-100 px-5 py-3.5 dark:border-gray-800">
+              <h3 className="text-sm font-bold text-gray-800 dark:text-gray-100">Test Results</h3>
+              <p className="mt-0.5 text-xs text-gray-400">{results.filter(r => !r.isSectionHeader).length} parameters</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-50 bg-gray-50 dark:border-gray-800 dark:bg-gray-900/40">
+                    <th className="px-5 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Parameter</th>
+                    <th className="px-5 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Value</th>
+                    <th className="px-5 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Unit</th>
+                    <th className="px-5 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Reference Range</th>
+                    <th className="px-5 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Flag</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {results.map((r, i) => {
+                    if (r.isSectionHeader) {
+                      return (
+                        <tr key={i} className="border-t-2 border-blue-100 bg-blue-50/60 dark:border-blue-900/40 dark:bg-blue-900/20">
+                          <td colSpan={5} className="px-5 py-2.5 text-xs font-bold uppercase tracking-wider text-blue-700 dark:text-blue-400">
+                            {r.fieldName}
+                          </td>
+                        </tr>
+                      )
+                    }
+                    const outOfRange = isOutOfRange(r)
+                    return (
+                      <tr key={i} className={`border-b border-gray-50 transition-colors dark:border-gray-800/60
+                        ${outOfRange ? 'bg-red-50/40 dark:bg-red-900/10' : 'hover:bg-gray-50/60 dark:hover:bg-gray-800/30'}`}>
+                        <td className="px-5 py-3 font-medium text-gray-800 dark:text-gray-200">{r.fieldName}</td>
+                        <td className={`px-5 py-3 font-bold ${outOfRange ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'}`}>
+                          {r.value != null ? String(r.value) : '—'}
+                        </td>
+                        <td className="px-5 py-3 text-gray-500 dark:text-gray-400">{r.unit ?? '—'}</td>
+                        <td className="px-5 py-3 text-gray-500 dark:text-gray-400">{r.referenceRange ?? '—'}</td>
+                        <td className="px-5 py-3">
+                          {outOfRange && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-600 dark:bg-red-900/40 dark:text-red-400">
+                              <AlertTriangle className="h-3 w-3" /> Out of range
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* ── Documents ── */}
+          <div className="rounded-2xl border border-gray-100 bg-white dark:border-gray-800 dark:bg-gray-800/40">
+            <div className="flex items-center gap-2 border-b border-gray-100 px-5 py-3.5 dark:border-gray-800">
+              <h3 className="text-sm font-bold text-gray-800 dark:text-gray-100">Documents</h3>
+              {(p?.documents?.length ?? 0) > 0 && (
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500 dark:bg-gray-700 dark:text-gray-400">
+                  {p!.documents!.length}
+                </span>
+              )}
+            </div>
+            {(p?.documents?.length ?? 0) === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-center">
+                <FileText className="mb-2 h-8 w-8 text-gray-200 dark:text-gray-700" />
+                <p className="text-sm text-gray-400 dark:text-gray-500">No documents uploaded for this patient</p>
+              </div>
+            ) : (
+              <div className="grid gap-2 p-5 sm:grid-cols-2">
+                {p!.documents!.map(doc => (
+                  <a key={doc.id} href={doc.url} target="_blank" rel="noopener noreferrer"
+                    className="group flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 transition-colors hover:border-blue-200 hover:bg-blue-50/40 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-800">
+                    <FileText className="h-5 w-5 shrink-0 text-blue-500" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-gray-800 group-hover:text-blue-700 dark:text-gray-200">{doc.name}</p>
+                      <p className="text-xs text-gray-400">{new Date(doc.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ── Bottom action bar ── */}
+          {isPending && (
+            <div className="flex justify-end gap-3 rounded-2xl border border-gray-100 bg-white p-4 dark:border-gray-800 dark:bg-gray-800/40">
+              <Button variant="secondary" onClick={onClose}>Close</Button>
+              <Button variant="danger" icon={<XCircle className="h-4 w-4" />}
+                loading={rejecting} onClick={onReject}>Reject Order</Button>
+              <Button variant="success" icon={<CheckCircle2 className="h-4 w-4" />}
+                loading={approving} onClick={onApprove}>Approve Order</Button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 type ViewMode = 'card' | 'table'
 
@@ -74,7 +311,7 @@ function PendingCard({
       <div className="mb-4 ml-8 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <span className="text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
-            Order #{order.id}
+            {order.receiptNumber ?? order.template?.name ?? 'Order'}
           </span>
           <p className="mt-1 font-semibold text-gray-900 dark:text-white">{order.patient?.fullName ?? '—'}</p>
           <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">{order.template?.name ?? '—'}</p>
@@ -174,32 +411,7 @@ export default function ApprovalsPage() {
   })
 
   const approve = useMutation({
-    mutationFn: async (orderId: number) => {
-      let pdfBase64: string | undefined
-      let plainPdfBase64: string | undefined
-      try {
-        const { order: orderData, results } = await orderService.getResults(orderId)
-        const reportOpts = {
-          order: orderData,
-          results: results.map(r => ({
-            fieldName: r.fieldName,
-            fieldType: r.fieldType,
-            value: r.value,
-            unit: r.unit ?? null,
-            referenceRange: r.referenceRange ?? null,
-            isSectionHeader: r.isSectionHeader ?? false,
-          })),
-          labSettings,
-          signature: activeSignature,
-          activeLogo,
-        }
-        ;[pdfBase64, plainPdfBase64] = await Promise.all([
-          generateLabReportBase64(reportOpts).catch(() => undefined),
-          generateReportBase64(reportOpts).catch(() => undefined),
-        ])
-      } catch { /* PDF generation failure must not block approval */ }
-      return orderService.approve(orderId, pdfBase64, plainPdfBase64)
-    },
+    mutationFn: (orderId: number) => orderService.approve(orderId),
     onSuccess: (_, orderId) => {
       qc.invalidateQueries({ queryKey: ['orders'] })
       qc.invalidateQueries({ queryKey: ['dashboard-summary'] })
@@ -224,13 +436,13 @@ export default function ApprovalsPage() {
 
   const reopen = useMutation({
     mutationFn: (orderId: number) => orderService.reopen(orderId),
-    onSuccess: (order) => { qc.invalidateQueries({ queryKey: ['orders'] }); setReopenOrder(null); toast.success(`Order #${order.id} reopened`) },
+    onSuccess: (order) => { qc.invalidateQueries({ queryKey: ['orders'] }); setReopenOrder(null); toast.success(`${order.receiptNumber ?? order.templateName ?? 'Order'} reopened`) },
     onError: (err) => toastError(err, 'Failed to reopen order'),
   })
 
   const revert = useMutation({
     mutationFn: ({ orderId, remark }: { orderId: number; remark: string }) => orderService.revert(orderId, remark),
-    onSuccess: (order) => { qc.invalidateQueries({ queryKey: ['orders'] }); setRevertOrder(null); setRevertRemark(''); toast.success(`Order #${order.id} reverted`) },
+    onSuccess: (order) => { qc.invalidateQueries({ queryKey: ['orders'] }); setRevertOrder(null); setRevertRemark(''); toast.success(`${order.receiptNumber ?? order.templateName ?? 'Order'} reverted`) },
     onError: (err) => toastError(err, 'Failed to revert order'),
   })
 
@@ -389,7 +601,7 @@ export default function ApprovalsPage() {
                               <Checkbox checked={selected.has(order.id)} onChange={() => toggleOne(order.id)} />
                             </td>
                             <td className="whitespace-nowrap px-4 py-3.5 font-bold text-amber-600 dark:text-amber-400">
-                              #{order.id}
+                              {order.receiptNumber ?? order.template?.name ?? '—'}
                             </td>
                             <td className="px-4 py-3.5">
                               <p className="font-medium text-gray-900 dark:text-white">{order.patient?.fullName ?? '—'}</p>
@@ -452,7 +664,7 @@ export default function ApprovalsPage() {
                       <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
                         {reviewed.map(order => (
                           <tr key={order.id} className="transition-colors hover:bg-gray-50/50 dark:hover:bg-gray-700/40">
-                            <td className="whitespace-nowrap px-5 py-4 font-bold text-gray-700 dark:text-gray-300">#{order.id}</td>
+                            <td className="whitespace-nowrap px-5 py-4 font-bold text-gray-700 dark:text-gray-300">{order.receiptNumber ?? order.template?.name ?? '—'}</td>
                             <td className="px-5 py-4">
                               <p className="font-medium text-gray-800 dark:text-gray-200">{order.patient?.fullName ?? '—'}</p>
                               <p className="text-xs text-gray-400">{order.patient?.patientCode ?? ''}</p>
@@ -494,54 +706,17 @@ export default function ApprovalsPage() {
         )}
       </div>
 
-      {/* ── Review modal ──────────────────────────────────────── */}
-      <Modal
-        open={reportModalOpen}
-        onClose={() => setReportModalOpen(false)}
-        title={`Test Results — Order #${selectedReport?.order.id ?? ''}`}
-        subtitle={`${selectedReport?.order.patient?.fullName ?? ''} · ${selectedReport?.order.template?.name ?? ''}`}
-        size="lg"
-        footer={
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Button variant="secondary" onClick={() => setReportModalOpen(false)}>Close</Button>
-            {selectedReport?.order.status === 'AWAITING_APPROVAL' && (
-              <>
-                <Button variant="danger" icon={<XCircle className="h-4 w-4" />}
-                  onClick={() => { setReportModalOpen(false); setConfirmAction({ type: 'reject', order: selectedReport.order }) }}>
-                  Reject
-                </Button>
-                <Button variant="success" icon={<CheckCircle2 className="h-4 w-4" />}
-                  onClick={() => { setReportModalOpen(false); setConfirmAction({ type: 'approve', order: selectedReport.order }) }}>
-                  Approve
-                </Button>
-              </>
-            )}
-          </div>
-        }
-      >
-        {selectedReport && (
-          <div>
-            <div className="mb-5 grid grid-cols-1 gap-3 rounded-xl bg-gray-50 p-4 text-sm sm:grid-cols-2 dark:bg-gray-900/50">
-              <div><span className="text-gray-400">Patient:</span>{' '}<span className="font-medium text-gray-800 dark:text-gray-200">{selectedReport.order.patient?.fullName ?? '—'}</span></div>
-              <div><span className="text-gray-400">Code:</span>{' '}<span className="font-mono text-gray-700 dark:text-gray-300">{selectedReport.order.patient?.patientCode ?? '—'}</span></div>
-              <div><span className="text-gray-400">Test:</span>{' '}<span className="font-medium text-gray-800 dark:text-gray-200">{selectedReport.order.template?.name ?? '—'}</span></div>
-              <div><span className="text-gray-400">Status:</span>{' '}<OrderStatusBadge status={selectedReport.order.status} /></div>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {selectedReport.results.filter(r => !r.isSectionHeader).map((result, i) => (
-                <div key={i} className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800/50">
-                  <p className="text-xs uppercase tracking-wide text-gray-400">{result.fieldName}</p>
-                  <p className="mt-1 text-lg font-bold text-gray-900 dark:text-white">
-                    {String(result.value ?? '—')}
-                    {result.unit && <span className="ml-1.5 text-sm font-normal text-gray-400">{result.unit}</span>}
-                  </p>
-                  {result.referenceRange && <p className="mt-0.5 text-xs text-gray-400">Ref: {result.referenceRange}</p>}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </Modal>
+      {/* ── Full-screen review panel ──────────────────────────── */}
+      {reportModalOpen && selectedReport && (
+        <ReviewPanel
+          data={selectedReport}
+          onClose={() => setReportModalOpen(false)}
+          onApprove={() => { setReportModalOpen(false); setConfirmAction({ type: 'approve', order: selectedReport.order }) }}
+          onReject={() => { setReportModalOpen(false); setConfirmAction({ type: 'reject', order: selectedReport.order }) }}
+          approving={approve.isPending}
+          rejecting={reject.isPending}
+        />
+      )}
 
       {/* ── Bulk approve confirm ──────────────────────────────── */}
       <ConfirmModal
@@ -559,7 +734,7 @@ export default function ApprovalsPage() {
       <Modal
         open={!!revertOrder}
         onClose={() => { setRevertOrder(null); setRevertRemark('') }}
-        title={`Revert Order #${revertOrder?.id ?? ''}`}
+        title={`Revert Order — ${revertOrder?.receiptNumber ?? revertOrder?.template?.name ?? ''}`}
         subtitle={`${revertOrder?.patient?.fullName ?? ''} · ${revertOrder?.template?.name ?? ''}`}
         size="sm"
         footer={
@@ -598,7 +773,7 @@ export default function ApprovalsPage() {
         onClose={() => setReopenOrder(null)}
         onConfirm={() => reopenOrder && reopen.mutate(reopenOrder.id)}
         title="Re-open Order"
-        message={`Re-open Order #${reopenOrder?.id} for ${reopenOrder?.patient?.fullName ?? ''}? All previously submitted results will be cleared.`}
+        message={`Re-open ${reopenOrder?.receiptNumber ?? reopenOrder?.template?.name ?? 'this order'} for ${reopenOrder?.patient?.fullName ?? ''}? All previously submitted results will be cleared.`}
         confirmLabel="Re-open Order"
         variant="primary"
         loading={reopen.isPending}
@@ -616,8 +791,8 @@ export default function ApprovalsPage() {
         title={confirmAction?.type === 'approve' ? 'Approve Order' : 'Reject Order'}
         message={
           confirmAction?.type === 'approve'
-            ? `Approve Order #${confirmAction?.order.id}? This will publish the results.`
-            : `Reject Order #${confirmAction?.order.id}?`
+            ? `Approve ${confirmAction?.order.receiptNumber ?? confirmAction?.order.template?.name ?? 'this order'}? This will publish the results.`
+            : `Reject ${confirmAction?.order.receiptNumber ?? confirmAction?.order.template?.name ?? 'this order'}?`
         }
         confirmLabel={confirmAction?.type === 'approve' ? 'Approve' : 'Reject'}
         variant={confirmAction?.type === 'approve' ? 'primary' : 'danger'}

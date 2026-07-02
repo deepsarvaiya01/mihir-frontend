@@ -15,6 +15,7 @@ import { b2bLabService, type CreateB2bLabDto } from '../services/b2bLabs'
 import type { B2bLab } from '../types'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
+import { toTitleCase } from '../lib/utils'
 
 const emptyForm: CreateB2bLabDto = {
   name: '', contactPerson: '', phone: '', email: '', address: '', city: '', active: true,
@@ -33,7 +34,7 @@ function LabForm({
         label="Lab Name"
         placeholder="e.g. City Diagnostics Centre"
         value={form.name}
-        onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+        onChange={e => setForm(p => ({ ...p, name: toTitleCase(e.target.value) }))}
         required
       />
       <div className="grid gap-4 sm:grid-cols-2">
@@ -41,7 +42,7 @@ function LabForm({
           label="Contact Person"
           placeholder="Dr. John Smith"
           value={form.contactPerson ?? ''}
-          onChange={e => setForm(p => ({ ...p, contactPerson: e.target.value }))}
+          onChange={e => setForm(p => ({ ...p, contactPerson: toTitleCase(e.target.value) }))}
         />
         <Input
           label="Phone"

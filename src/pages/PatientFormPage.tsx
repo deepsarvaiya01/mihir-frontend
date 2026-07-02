@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Save, FlaskConical, Loader2, Upload, FileText, X,
-  Search, UserCircle2, Image,
+  Search, UserCircle2, Image, Trash2, ExternalLink,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
@@ -17,6 +17,7 @@ import { orderService } from '../services/orders'
 import { PageLoader } from '../components/ui/Spinner'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
+import { toTitleCase } from '../lib/utils'
 
 const GENDERS = ['Male', 'Female']
 const DISCOUNT_OPTIONS = [0, 5, 10, 15, 20, 25, 30, 50]
@@ -97,8 +98,8 @@ function getFileIcon(fileName: string) {
   return <FileText className="h-5 w-5 text-blue-500" />
 }
 
-interface DocumentEntry {
-  id: string; name: string; file: File; url: string
+interface LocalDocEntry {
+  localId: string; name: string; file: File; previewUrl: string; uploading?: boolean
 }
 
 function FormDivider({ label }: { label: string }) {
@@ -124,8 +125,9 @@ export default function PatientFormPage() {
 
   const [testSearch, setTestSearch] = useState('')
 
-  const [documents, setDocuments] = useState<DocumentEntry[]>([])
+  const [localDocs, setLocalDocs] = useState<LocalDocEntry[]>([])
   const [pendingFile, setPendingFile] = useState<{ file: File; name: string } | null>(null)
+  const [deletingDocId, setDeletingDocId] = useState<number | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const { data: b2bLabs = [] } = useQuery({ queryKey: ['b2b-labs'], queryFn: b2bLabService.getAll })
@@ -144,7 +146,7 @@ export default function PatientFormPage() {
   }, [existingPatient])
 
   useEffect(() => {
-    return () => { documents.forEach(d => URL.revokeObjectURL(d.url)) }
+    return () => { localDocs.forEach(d => URL.revokeObjectURL(d.previewUrl)) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -186,28 +188,70 @@ export default function PatientFormPage() {
     e.target.value = ''
   }
 
+  const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((res, rej) => {
+      const reader = new FileReader()
+      reader.onload = () => res(reader.result as string)
+      reader.onerror = rej
+      reader.readAsDataURL(file)
+    })
+
+  const uploadDocMutation = useMutation({
+    mutationFn: async ({ patientId, name, file }: { patientId: number; name: string; file: File; localId: string }) => {
+      const fileBase64 = await fileToBase64(file)
+      return patientService.uploadDocument(patientId, name, fileBase64)
+    },
+    onSuccess: (_, vars) => {
+      setLocalDocs(prev => prev.filter(d => d.localId !== vars.localId))
+      qc.invalidateQueries({ queryKey: ['patient', id] })
+    },
+    onError: (err, vars) => {
+      setLocalDocs(prev => prev.map(d => d.localId === vars.localId ? { ...d, uploading: false } : d))
+      toastError(err, 'Failed to upload document')
+    },
+  })
+
+  const deleteDocMutation = useMutation({
+    mutationFn: (docId: number) => patientService.deleteDocument(Number(id), docId),
+    onSuccess: () => {
+      setDeletingDocId(null)
+      qc.invalidateQueries({ queryKey: ['patient', id] })
+    },
+    onError: (err) => { setDeletingDocId(null); toastError(err, 'Failed to delete document') },
+  })
+
   const confirmAddDocument = () => {
     if (!pendingFile) return
-    setDocuments(prev => [...prev, {
-      id: `${Date.now()}-${Math.random()}`,
-      name: pendingFile.name.trim() || pendingFile.file.name,
-      file: pendingFile.file,
-      url: URL.createObjectURL(pendingFile.file),
-    }])
+    const localId = `${Date.now()}-${Math.random()}`
+    const previewUrl = URL.createObjectURL(pendingFile.file)
+    const name = pendingFile.name.trim() || pendingFile.file.name
     setPendingFile(null)
+
+    if (isEdit && id) {
+      setLocalDocs(prev => [...prev, { localId, name, file: pendingFile.file, previewUrl, uploading: true }])
+      uploadDocMutation.mutate({ patientId: Number(id), name, file: pendingFile.file, localId })
+    } else {
+      setLocalDocs(prev => [...prev, { localId, name, file: pendingFile.file, previewUrl }])
+    }
   }
 
-  const removeDocument = (docId: string) => {
-    setDocuments(prev => {
-      const doc = prev.find(d => d.id === docId)
-      if (doc) URL.revokeObjectURL(doc.url)
-      return prev.filter(d => d.id !== docId)
+  const removeLocalDoc = (localId: string) => {
+    setLocalDocs(prev => {
+      const doc = prev.find(d => d.localId === localId)
+      if (doc) URL.revokeObjectURL(doc.previewUrl)
+      return prev.filter(d => d.localId !== localId)
     })
   }
 
   const createMutation = useMutation({
     mutationFn: async () => {
       const patient = await patientService.create(formToDto(form))
+      if (localDocs.length > 0) {
+        await Promise.allSettled(localDocs.map(async d => {
+          const fileBase64 = await fileToBase64(d.file)
+          return patientService.uploadDocument(patient.id, d.name, fileBase64)
+        }))
+      }
       if (selectedTests.length > 0) {
         const result = await orderService.createBatch({
           patientId: patient.id,
@@ -325,7 +369,8 @@ export default function PatientFormPage() {
                   <Input label="Report Date" type="date"
                     value={form.reportDate ?? ''} onChange={setField('reportDate')} />
                   <Input label="Referring Doctor" placeholder="Dr. Name"
-                    value={form.doctorName ?? ''} onChange={setField('doctorName')} />
+                    value={form.doctorName ?? ''}
+                    onChange={e => setForm(p => ({ ...p, doctorName: toTitleCase(e.target.value) }))} />
                 </div>
               </div>
             </Card>
@@ -346,7 +391,9 @@ export default function PatientFormPage() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="sm:col-span-2">
                     <Input label="Full Name" placeholder="Enter patient's full name"
-                      value={form.fullName} onChange={setField('fullName')} required />
+                      value={form.fullName}
+                      onChange={e => setForm(p => ({ ...p, fullName: toTitleCase(e.target.value) }))}
+                      required />
                   </div>
                   <Input label="Age" type="number" placeholder="Years" min={0} max={150}
                     value={form.age} onChange={setField('age')} />
@@ -381,7 +428,8 @@ export default function PatientFormPage() {
                 <FormDivider label="Emergency Contact" />
                 <div className="grid gap-4 sm:grid-cols-2">
                   <Input label="Contact Name" placeholder="Emergency contact name"
-                    value={form.emergencyContactName} onChange={setField('emergencyContactName')} />
+                    value={form.emergencyContactName}
+                    onChange={e => setForm(p => ({ ...p, emergencyContactName: toTitleCase(e.target.value) }))} />
                   <Input label="Contact Phone" placeholder="+91 98765 43210"
                     value={form.emergencyContactPhone} onChange={setField('emergencyContactPhone')} />
                 </div>
@@ -392,31 +440,72 @@ export default function PatientFormPage() {
             <Card padding="lg">
               <CardHeader
                 title="Supporting Documents"
-                subtitle="Upload prescriptions, reports, or ID proofs (optional)"
+                subtitle="Prescriptions, reports, or ID proofs"
               />
 
               <input ref={fileInputRef} type="file" className="hidden"
                 accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.gif,.webp"
                 onChange={handleFileSelect} />
 
-              {documents.length > 0 && (
-                <div className="mb-4 space-y-2">
-                  {documents.map(doc => (
+              {/* Saved documents (edit mode) */}
+              {isEdit && (existingPatient?.documents ?? []).length > 0 && (
+                <div className="mb-3 space-y-2">
+                  {(existingPatient?.documents ?? []).map(doc => (
                     <div key={doc.id}
                       className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white border border-gray-100">
-                        {getFileIcon(doc.file.name)}
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-100 bg-white">
+                        {getFileIcon(doc.name)}
                       </div>
                       <a href={doc.url} target="_blank" rel="noopener noreferrer"
-                        className="min-w-0 flex-1 group" title={`Open ${doc.name}`}>
+                        className="group min-w-0 flex-1" title="Open document">
                         <p className="truncate text-sm font-medium text-gray-800 group-hover:text-blue-600">{doc.name}</p>
-                        <p className="truncate text-xs text-gray-400">{formatBytes(doc.file.size)}</p>
+                        <p className="truncate text-xs text-gray-400">
+                          {new Date(doc.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        </p>
                       </a>
-                      <button onClick={() => removeDocument(doc.id)}
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-                        title="Remove">
-                        <X className="h-4 w-4" />
+                      <a href={doc.url} target="_blank" rel="noopener noreferrer"
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-blue-50 hover:text-blue-500 transition-colors"
+                        title="Open">
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                      <button
+                        onClick={() => { setDeletingDocId(doc.id); deleteDocMutation.mutate(doc.id) }}
+                        disabled={deleteDocMutation.isPending && deletingDocId === doc.id}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors disabled:opacity-50"
+                        title="Delete">
+                        {deleteDocMutation.isPending && deletingDocId === doc.id
+                          ? <Loader2 className="h-4 w-4 animate-spin" />
+                          : <Trash2 className="h-3.5 w-3.5" />}
                       </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Local (queued/uploading) documents */}
+              {localDocs.length > 0 && (
+                <div className="mb-3 space-y-2">
+                  {localDocs.map(doc => (
+                    <div key={doc.localId}
+                      className="flex items-center gap-3 rounded-lg border border-blue-100 bg-blue-50/40 px-4 py-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-blue-100 bg-white">
+                        {doc.uploading
+                          ? <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+                          : getFileIcon(doc.file.name)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-gray-800">{doc.name}</p>
+                        <p className="text-xs text-gray-400">
+                          {doc.uploading ? 'Uploading…' : formatBytes(doc.file.size)}
+                        </p>
+                      </div>
+                      {!doc.uploading && (
+                        <button onClick={() => removeLocalDoc(doc.localId)}
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                          title="Remove">
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -443,7 +532,7 @@ export default function PatientFormPage() {
                   className="flex w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-gray-200 bg-gray-50/50 py-8 text-sm text-gray-500 transition-all hover:border-blue-300 hover:bg-blue-50/30 hover:text-blue-600">
                   <Upload className="h-5 w-5" />
                   <span className="font-medium">Click to upload a document</span>
-                  <span className="text-xs text-gray-400">PDF, JPG, PNG, or Word · Max recommended 10 MB</span>
+                  <span className="text-xs text-gray-400">PDF, JPG, PNG, or Word · Max 10 MB</span>
                 </button>
               )}
             </Card>

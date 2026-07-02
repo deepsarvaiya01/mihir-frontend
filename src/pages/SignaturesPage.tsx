@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
+import { toTitleCase } from '../lib/utils'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
 import { ConfirmModal } from '../components/ui/Modal'
@@ -35,13 +36,14 @@ function fileToBase64(file: File): Promise<string> {
 
 interface UploadModalProps {
   onClose: () => void
-  onSave: (name: string, imageData: string) => void
+  onSave: (name: string, degreeName: string, imageData: string) => void
   saving: boolean
 }
 
 function UploadModal({ onClose, onSave, saving }: UploadModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [name, setName] = useState('')
+  const [degreeName, setDegreeName] = useState('')
   const [preview, setPreview] = useState<string | null>(null)
   const [imageData, setImageData] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
@@ -71,7 +73,7 @@ function UploadModal({ onClose, onSave, saving }: UploadModalProps) {
   const handleSubmit = () => {
     if (!name.trim()) { toast.error('Please enter a signature name'); return }
     if (!imageData)   { toast.error('Please select an image');         return }
-    onSave(name.trim(), imageData)
+    onSave(name.trim(), degreeName.trim(), imageData)
   }
 
   return (
@@ -89,12 +91,23 @@ function UploadModal({ onClose, onSave, saving }: UploadModalProps) {
 
         <div className="space-y-5 px-6 py-5">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Signature Name</label>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Doctor Name</label>
             <input
               type="text"
               value={name}
-              onChange={e => setName(e.target.value)}
+              onChange={e => setName(toTitleCase(e.target.value))}
               placeholder="e.g. Dr. Sharma"
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-500 dark:focus:bg-gray-600"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">Degree <span className="font-normal text-gray-400">(optional)</span></label>
+            <input
+              type="text"
+              value={degreeName}
+              onChange={e => setDegreeName(toTitleCase(e.target.value))}
+              placeholder="e.g. MD, Pathologist"
               className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-500 dark:focus:bg-gray-600"
             />
           </div>
@@ -197,6 +210,9 @@ function SigCard({ sig, onActivate, onDeactivate, onDelete, busy }: SigCardProps
       <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3 dark:border-gray-700">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-gray-900 dark:text-white">{sig.name}</p>
+          {sig.degreeName && (
+            <p className="truncate text-xs text-gray-500 dark:text-gray-400">({sig.degreeName})</p>
+          )}
           <p className="text-xs text-gray-400 dark:text-gray-500">
             {new Date(sig.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
           </p>
@@ -449,7 +465,7 @@ export default function SignaturesPage() {
         <UploadModal
           onClose={() => setShowModal(false)}
           saving={createMut.isPending}
-          onSave={(name, imageData) => createMut.mutate({ name, imageData })}
+          onSave={(name, degreeName, imageData) => createMut.mutate({ name, degreeName: degreeName || undefined, imageData })}
         />
       )}
 

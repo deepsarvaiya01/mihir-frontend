@@ -1,5 +1,5 @@
 import { api } from '../lib/api'
-import type { Patient, PatientHistory } from '../types'
+import type { Patient, PatientDocument, PatientHistory } from '../types'
 
 export interface CreatePatientDto {
   fullName: string
@@ -82,5 +82,19 @@ export const patientService = {
 
   permanentDelete: async (id: number): Promise<void> => {
     await api.delete(`/patients/${id}/permanent`)
+  },
+
+  getDocuments: async (patientId: number): Promise<PatientDocument[]> => {
+    const { data } = await api.get(`/patients/${patientId}/documents`)
+    return data
+  },
+
+  uploadDocument: async (patientId: number, name: string, fileBase64: string): Promise<PatientDocument> => {
+    const { data } = await api.post(`/patients/${patientId}/documents`, { name, fileBase64 })
+    return data
+  },
+
+  deleteDocument: async (patientId: number, docId: number): Promise<void> => {
+    await api.delete(`/patients/${patientId}/documents/${docId}`)
   },
 }

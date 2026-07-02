@@ -11,6 +11,7 @@ export interface TestTemplateB2bPrice { id: number; b2bLabId: number; amount: nu
 export interface TestTemplate { id: number; name: string; code: string; active: boolean; amount: number; summaryTitle: string | null; summary: string | null; fields: TestTemplateField[]; b2bPrices: TestTemplateB2bPrice[] }
 
 export interface B2bLab { id: number; name: string; contactPerson: string | null; phone: string | null; email: string | null; address: string | null; city: string | null; active: boolean; deletedAt?: string | null }
+export interface PatientDocument { id: number; patientId: number; name: string; url: string; createdAt: string }
 export interface LabBranch { id: number; name: string; address: string | null; phone: string | null; active: boolean; deletedAt?: string | null }
 
 export interface Patient {
@@ -19,6 +20,9 @@ export interface Patient {
   addressLine: string | null; city: string | null; state: string | null; postalCode: string | null
   emergencyContactName: string | null; emergencyContactPhone: string | null
   isB2b: boolean; b2bLabId: number | null; labBranchId: number | null; doctorName: string | null; reportDate: string | null
+  b2bLab?: B2bLab | null
+  documents?: PatientDocument[]
+  createdAt?: string
 }
 
 export interface Order {
@@ -34,7 +38,7 @@ export interface Order {
 export interface OrderFormData { order: Order; fields: TestTemplateField[] }
 export interface HistoryResult { fieldId?: number; fieldName: string; fieldType: FieldType; value: string | number | boolean | null; unit?: string | null; referenceRange?: string | null; isSectionHeader?: boolean }
 export interface LabSettings { lab_name?: string; lab_address?: string; lab_email?: string; lab_phone?: string; lab_timing?: string; lab_logo_base64?: string; doctor_name?: string; doctor_qualification?: string; lab_gstin?: string; lab_hsn_code?: string }
-export interface ActiveSignature { id: number; name: string; imageUrl: string; isActive: boolean }
+export interface ActiveSignature { id: number; name: string; degreeName?: string | null; imageUrl: string; isActive: boolean }
 export interface Logo { id: number; name: string; imageUrl: string; isActive: boolean; createdAt: string; deletedAt?: string | null }
 export interface OrderResult { order: Order; results: HistoryResult[] }
 export interface HistoryItem { orderId: number; testName: string; testCode: string; status: string; createdAt: string; results: HistoryResult[] }

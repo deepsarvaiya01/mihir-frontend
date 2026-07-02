@@ -17,6 +17,7 @@ import { b2bLabService } from '../services/b2bLabs'
 import type { FieldType, TestTemplateField } from '../types'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
+import { toTitleCase } from '../lib/utils'
 
 const OP_LABELS: Record<string, string> = { '+': 'Add (+)', '-': 'Subtract (−)', '*': 'Multiply (×)', '/': 'Divide (÷)' }
 const OP_SYMBOLS: Record<string, string> = { '+': '+', '-': '−', '*': '×', '/': '÷' }
@@ -433,7 +434,7 @@ export default function TemplateFormPage() {
           {/* All fields in one row */}
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
             <div className="col-span-2 lg:col-span-2">
-              <Input size="sm" label="Template Name" placeholder="e.g. Complete Blood Count" value={name} onChange={e => setName(e.target.value)} required />
+              <Input size="sm" label="Template Name" placeholder="e.g. Complete Blood Count" value={name} onChange={e => setName(toTitleCase(e.target.value))} required />
             </div>
             <Input size="sm" label="Template Code" placeholder="e.g. CBC" value={code} onChange={e => setCode(e.target.value.toUpperCase())} required />
             <Input size="sm" label="Default Amount (₹)" type="number" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} />
@@ -521,7 +522,7 @@ export default function TemplateFormPage() {
                                       onChange={e => setFieldForm(p => ({ ...p, isSectionHeader: e.target.checked, required: false }))}
                                       className="h-3 w-3 shrink-0 rounded accent-blue-600" title="Section Header" />
                                     <Input size="sm" placeholder={fieldForm.isSectionHeader ? 'e.g. RBC Indices :' : 'e.g. Hemoglobin'}
-                                      value={fieldForm.fieldName} onChange={e => setFieldForm(p => ({ ...p, fieldName: e.target.value }))} />
+                                      value={fieldForm.fieldName} onChange={e => setFieldForm(p => ({ ...p, fieldName: toTitleCase(e.target.value) }))} />
                                   </div>
                                 </td>
                                 <td className="px-2 py-2">
@@ -608,7 +609,7 @@ export default function TemplateFormPage() {
                                       onChange={e => setFieldForm(p => ({ ...p, isSectionHeader: e.target.checked, required: false }))}
                                       className="h-3 w-3 shrink-0 rounded accent-blue-600" title="Section Header" />
                                     <Input size="sm" placeholder={fieldForm.isSectionHeader ? 'e.g. RBC Indices :' : 'e.g. Hemoglobin'}
-                                      value={fieldForm.fieldName} onChange={e => setFieldForm(p => ({ ...p, fieldName: e.target.value }))} />
+                                      value={fieldForm.fieldName} onChange={e => setFieldForm(p => ({ ...p, fieldName: toTitleCase(e.target.value) }))} />
                                   </div>
                                 </td>
                                 <td className="px-2 py-2">
@@ -666,7 +667,7 @@ export default function TemplateFormPage() {
                                 onChange={e => setFieldForm(p => ({ ...p, isSectionHeader: e.target.checked, required: false }))}
                                 className="h-3 w-3 shrink-0 rounded accent-blue-600" title="Section Header" />
                               <Input size="sm" placeholder={fieldForm.isSectionHeader ? 'e.g. RBC Indices :' : 'e.g. Hemoglobin'}
-                                value={fieldForm.fieldName} onChange={e => setFieldForm(p => ({ ...p, fieldName: e.target.value }))} />
+                                value={fieldForm.fieldName} onChange={e => setFieldForm(p => ({ ...p, fieldName: toTitleCase(e.target.value) }))} />
                             </div>
                           </td>
                           <td className="px-2 py-2">

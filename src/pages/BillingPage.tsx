@@ -1,9 +1,9 @@
-﻿import { useState } from 'react'
+﻿import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Search, Receipt, ChevronDown, DollarSign,
   CheckCircle, Clock, FileText, Pencil,
-  RefreshCw, Download, Share2,
+  RefreshCw, Download, Share2, Layers, Loader2,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Card } from '../components/ui/Card'
@@ -18,7 +18,7 @@ import { reportShareService } from '../services/reportShares'
 import { labSettingsService } from '../services/labSettings'
 import { signatureService } from '../services/signatures'
 import { logoService } from '../services/logos'
-import { generateLabReport, generateReceipt, generatePlainReport } from '../utils/generateReport'
+import { generateLabReport, generateReceipt, generatePlainReport, generateCombinedReport } from '../utils/generateReport'
 import type { Order, PaymentStatus, PaymentType } from '../types'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
@@ -29,6 +29,31 @@ const PAYMENT_VARIANTS: Record<PaymentStatus, 'success' | 'warning' | 'info'> = 
   PAID: 'success',
   PENDING: 'warning',
   PARTIAL: 'info',
+}
+
+/* ─── Reusable icon action button ────────────────────────── */
+function IBtn({
+  title, onClick, disabled, loading, color, children,
+}: {
+  title: string
+  onClick: () => void
+  disabled?: boolean
+  loading?: boolean
+  color: string   // tailwind hover classes e.g. "hover:bg-emerald-50 hover:text-emerald-600"
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      title={title}
+      onClick={onClick}
+      disabled={disabled || loading}
+      className={`relative flex h-8 w-8 items-center justify-center rounded-lg transition-all disabled:opacity-40 ${color}`}
+    >
+      {loading
+        ? <Loader2 className="h-4 w-4 animate-spin" />
+        : children}
+    </button>
+  )
 }
 
 /* ─── Payment edit modal ─────────────────────────────────── */
@@ -65,7 +90,7 @@ function PaymentModal({ order, onClose, onSave, saving }: PaymentModalProps) {
     <Modal
       open
       onClose={onClose}
-      title={`Update Payment — Order #${order.id}`}
+      title={`Update Payment — ${order.receiptNumber ?? order.template?.name}`}
       subtitle={`${order.patient?.fullName} · ${order.template?.name}`}
       size="sm"
       footer={
@@ -246,6 +271,40 @@ export default function BillingPage() {
     onError: (err) => toastError(err, 'Failed to generate report'),
   })
 
+  const combinedReportMutation = useMutation({
+    mutationFn: (receiptNumber: string) => {
+      const siblings = orders.filter(o => o.receiptNumber === receiptNumber && o.status === 'APPROVED')
+      return Promise.all(siblings.map(o => orderService.getResults(o.id)))
+    },
+    onSuccess: (results) => {
+      const optionsList = results.map(data => ({
+        order: data.order,
+        results: data.results.map(r => ({
+          fieldName: r.fieldName, fieldType: r.fieldType, value: r.value,
+          unit: r.unit ?? null, referenceRange: r.referenceRange ?? null,
+          isSectionHeader: r.isSectionHeader ?? false,
+        })),
+        labSettings, signature: activeSignature, activeLogo,
+      }))
+      generateCombinedReport(optionsList, 'letterhead')
+        .then(() => toast.success('Combined report downloaded'))
+        .catch(() => toast.error('Failed to generate combined report'))
+    },
+    onError: (err) => toastError(err, 'Failed to generate combined report'),
+  })
+
+  // Map receiptNumber → list of APPROVED orders in that receipt
+  const approvedByReceipt = useMemo(() => {
+    const map: Record<string, number[]> = {}
+    orders.forEach(o => {
+      if (o.receiptNumber && o.status === 'APPROVED') {
+        if (!map[o.receiptNumber]) map[o.receiptNumber] = []
+        map[o.receiptNumber].push(o.id)
+      }
+    })
+    return map
+  }, [orders])
+
   const filtered = orders.filter(o => {
     const matchSearch = !search ||
       String(o.id).includes(search) ||
@@ -384,7 +443,7 @@ export default function BillingPage() {
                 {filtered.map(order => (
                   <tr key={order.id} className="group hover:bg-gray-50/60 transition-colors dark:hover:bg-gray-700/30">
                     <td className="px-5 py-4">
-                      <span className="font-bold text-gray-700 dark:text-gray-300">#{order.id}</span>
+                      <span className="font-bold text-gray-700 dark:text-gray-300">{order.receiptNumber ?? order.template?.name ?? '—'}</span>
                       <p className="text-[11px] text-gray-400 dark:text-gray-500">{order.createdAt ? new Date(order.createdAt).toLocaleDateString() : ''}</p>
                     </td>
                     <td className="px-5 py-4">
@@ -415,57 +474,76 @@ export default function BillingPage() {
                       {order.receiptNumber ?? <span className="text-gray-300 dark:text-gray-600">—</span>}
                     </td>
                     <td className="px-5 py-4">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex items-center justify-end gap-0.5">
                         {/* Edit payment */}
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          icon={<Pencil className="h-3.5 w-3.5" />}
+                        <IBtn
                           title="Edit Payment"
                           onClick={() => setEditOrder(order)}
-                        />
+                          color="text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </IBtn>
 
-                        {/* Receipt PDF */}
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          icon={<Receipt className="h-3.5 w-3.5" />}
-                          title="Download Receipt"
-                          loading={printReceiptMutation.isPending && printReceiptMutation.variables?.id === order.id}
+                        {/* Receipt — disabled until payment is not PENDING */}
+                        <IBtn
+                          title={order.paymentStatus === 'PENDING' ? 'Receipt unavailable until payment is made' : 'Download Receipt'}
                           onClick={() => printReceiptMutation.mutate(order)}
-                        />
+                          disabled={order.paymentStatus === 'PENDING'}
+                          loading={printReceiptMutation.isPending && printReceiptMutation.variables?.id === order.id}
+                          color={order.paymentStatus === 'PENDING'
+                            ? 'text-gray-300 cursor-not-allowed dark:text-gray-600'
+                            : 'text-amber-500 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/30'}
+                        >
+                          <Receipt className="h-4 w-4" />
+                        </IBtn>
 
                         {order.status === 'APPROVED' && (
-                          <Button
-                            size="sm"
-                            variant="success"
-                            icon={<Download className="h-3.5 w-3.5" />}
-                            title="Download Letterhead Report"
-                            loading={downloadReport.isPending && downloadReport.variables === order.id}
-                            onClick={() => downloadReport.mutate(order.id)}
-                          />
-                        )}
+                          <>
+                            {/* Divider */}
+                            <span className="mx-1 h-5 w-px bg-gray-200 dark:bg-gray-700" />
 
-                        {order.status === 'APPROVED' && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            icon={<FileText className="h-3.5 w-3.5" />}
-                            title="Download Plain Report"
-                            loading={plainReportMutation.isPending && plainReportMutation.variables === order.id}
-                            onClick={() => plainReportMutation.mutate(order.id)}
-                          />
-                        )}
+                            {/* Letterhead report */}
+                            <IBtn
+                              title="Letterhead Report"
+                              onClick={() => downloadReport.mutate(order.id)}
+                              loading={downloadReport.isPending && downloadReport.variables === order.id}
+                              color="text-emerald-500 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-900/30"
+                            >
+                              <Download className="h-4 w-4" />
+                            </IBtn>
 
-                        {order.status === 'APPROVED' && (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            icon={<Share2 className="h-3.5 w-3.5" />}
-                            title="Share Report Link"
-                            loading={shareReport.isPending && shareReport.variables === order.id}
-                            onClick={() => shareReport.mutate(order.id)}
-                          />
+                            {/* Plain report */}
+                            <IBtn
+                              title="Plain Report"
+                              onClick={() => plainReportMutation.mutate(order.id)}
+                              loading={plainReportMutation.isPending && plainReportMutation.variables === order.id}
+                              color="text-blue-500 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/30"
+                            >
+                              <FileText className="h-4 w-4" />
+                            </IBtn>
+
+                            {/* Combined (only when multiple tests share receipt) */}
+                            {order.receiptNumber && (approvedByReceipt[order.receiptNumber]?.length ?? 0) > 1 && (
+                              <IBtn
+                                title="Combined Report (All Tests)"
+                                onClick={() => combinedReportMutation.mutate(order.receiptNumber!)}
+                                loading={combinedReportMutation.isPending && combinedReportMutation.variables === order.receiptNumber}
+                                color="text-violet-500 hover:bg-violet-50 hover:text-violet-600 dark:hover:bg-violet-900/30"
+                              >
+                                <Layers className="h-4 w-4" />
+                              </IBtn>
+                            )}
+
+                            {/* Share link */}
+                            <IBtn
+                              title="Share Report Link"
+                              onClick={() => shareReport.mutate(order.id)}
+                              loading={shareReport.isPending && shareReport.variables === order.id}
+                              color="text-indigo-400 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/30"
+                            >
+                              <Share2 className="h-4 w-4" />
+                            </IBtn>
+                          </>
                         )}
                       </div>
                     </td>

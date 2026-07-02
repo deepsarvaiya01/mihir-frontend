@@ -304,7 +304,7 @@ export default function EnterResultsPage() {
   return (
     <div>
       <Header
-        title={`Enter Results — Order #${order.id}`}
+        title={`Enter Results — ${order.receiptNumber ?? order.template?.name}`}
         subtitle={`${order.template?.name} · ${order.patient?.fullName}`}
         action={
           <div className="flex items-center gap-3">

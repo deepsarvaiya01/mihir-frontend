@@ -12,6 +12,7 @@ import { PageContent } from '../components/ui/PageContent'
 import { StatSummaryGrid } from '../components/ui/StatSummaryGrid'
 import { DataTable, DataTableHead, DataTableTh, DataTableBody, DataTableRow, DataTableTd } from '../components/ui/DataTable'
 import { userService, type UserRecord, type CreateUserDto, type UpdateUserDto } from '../services/users'
+import { toTitleCase } from '../lib/utils'
 import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
@@ -175,7 +176,7 @@ export default function UsersPage() {
                       </div>
                       <div>
                         <p className="font-semibold text-gray-800">{u.name}</p>
-                        <p className="text-xs text-gray-400">ID #{u.id}</p>
+                        <p className="text-xs text-gray-400">{u.email}</p>
                       </div>
                     </div>
                   </DataTableTd>
@@ -254,7 +255,7 @@ export default function UsersPage() {
                         </div>
                         <div>
                           <p className="font-semibold text-gray-700">{u.name}</p>
-                          <p className="text-xs text-gray-400">ID #{u.id}</p>
+                          <p className="text-xs text-gray-400">{u.email}</p>
                         </div>
                       </div>
                     </DataTableTd>
@@ -316,7 +317,7 @@ export default function UsersPage() {
       >
         <div className="space-y-4">
           <Input label="Full Name" placeholder="e.g. Dr. Ramesh Shah" value={createForm.name}
-            onChange={e => setCreateForm(p => ({ ...p, name: e.target.value }))} required />
+            onChange={e => setCreateForm(p => ({ ...p, name: toTitleCase(e.target.value) }))} required />
           <Input label="Email" type="email" placeholder="user@lab.com" value={createForm.email}
             onChange={e => setCreateForm(p => ({ ...p, email: e.target.value }))} required />
           <Input label="Password" type="password" placeholder="Minimum 6 characters" value={createForm.password}
@@ -339,7 +340,7 @@ export default function UsersPage() {
         }
       >
         <div className="space-y-4">
-          <Input label="Full Name" value={editForm.name ?? ''} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} />
+          <Input label="Full Name" value={editForm.name ?? ''} onChange={e => setEditForm(p => ({ ...p, name: toTitleCase(e.target.value) }))} />
           <Input label="Email" value={editForm.email ?? ''} onChange={e => setEditForm(p => ({ ...p, email: e.target.value }))} />
           <Input label="New Password" type="password" value={editForm.password} placeholder="Leave blank to keep current"
             onChange={e => setEditForm(p => ({ ...p, password: e.target.value }))} />

@@ -159,7 +159,7 @@ export default function OrdersPage() {
     onSuccess: (order) => {
       qc.invalidateQueries({ queryKey: ['orders'] })
       setReopenOrder(null)
-      toast.success(`Order #${order.id} reopened — ready for re-entry`)
+      toast.success(`${order.receiptNumber ?? order.templateName ?? 'Order'} reopened — ready for re-entry`)
     },
     onError: (err) => toastError(err, 'Failed to reopen order'),
   })
@@ -389,7 +389,7 @@ export default function OrdersPage() {
                   return (
                     <tr key={order.id} className={`hover:bg-gray-50/50 transition-colors dark:hover:bg-gray-700/30 ${row.grouped ? 'bg-white dark:bg-gray-800' : ''}`}>
                       <td className={`px-5 py-4 ${row.grouped ? 'pl-9' : ''}`}>
-                        <span className="font-bold text-gray-700 dark:text-gray-200">#{order.id}</span>
+                        <span className="font-bold text-gray-700 dark:text-gray-200">{order.receiptNumber ?? order.template?.name ?? '—'}</span>
                       </td>
                       <td className="px-5 py-4">
                         {!row.grouped && (
@@ -479,7 +479,7 @@ export default function OrdersPage() {
                     {archivedOrders.map(order => (
                       <tr key={order.id} className="hover:bg-amber-50/40 transition-colors dark:hover:bg-amber-900/10">
                         <td className="px-5 py-4">
-                          <span className="font-bold text-gray-700 dark:text-gray-200">#{order.id}</span>
+                          <span className="font-bold text-gray-700 dark:text-gray-200">{order.receiptNumber ?? order.template?.name ?? '—'}</span>
                         </td>
                         <td className="px-5 py-4">
                           <p className="font-medium text-gray-800 dark:text-gray-200">{order.patient?.fullName ?? '—'}</p>
@@ -728,7 +728,7 @@ export default function OrdersPage() {
       <Modal
         open={viewResultsOpen}
         onClose={() => setViewResultsOpen(false)}
-        title={`Submitted Results — Order #${selectedResults?.order.id ?? ''}`}
+        title={`Submitted Results — ${selectedResults?.order.receiptNumber ?? selectedResults?.order.template?.name ?? ''}`}
         subtitle={selectedResults?.order.patient?.fullName}
         size="lg"
         footer={<Button variant="secondary" onClick={() => setViewResultsOpen(false)}>Close</Button>}

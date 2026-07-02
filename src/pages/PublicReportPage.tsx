@@ -96,8 +96,8 @@ export default function PublicReportPage() {
                 <p className="mt-0.5 font-semibold text-gray-900">{order.template?.name ?? '—'}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-400">Order #</p>
-                <p className="mt-0.5 font-mono font-semibold text-gray-700">#{order.id}</p>
+                <p className="text-xs text-gray-400">Receipt No.</p>
+                <p className="mt-0.5 font-semibold text-gray-700">{order.receiptNumber ?? '—'}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-400">Report Date</p>

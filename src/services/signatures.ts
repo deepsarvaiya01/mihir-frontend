@@ -3,6 +3,7 @@ import { api } from '../lib/api'
 export interface Signature {
   id: number
   name: string
+  degreeName?: string | null
   imageUrl: string
   isActive: boolean
   createdAt: string
@@ -11,6 +12,7 @@ export interface Signature {
 
 export interface CreateSignatureDto {
   name: string
+  degreeName?: string
   imageData: string
 }
 

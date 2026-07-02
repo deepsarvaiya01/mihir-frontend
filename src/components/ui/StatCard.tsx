@@ -11,32 +11,39 @@ interface StatCardProps {
 }
 
 const colorMap = {
-  blue:    { icon: 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',       border: 'border-blue-100 dark:border-blue-800/40' },
-  emerald: { icon: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400', border: 'border-emerald-100 dark:border-emerald-800/40' },
-  amber:   { icon: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400',   border: 'border-amber-100 dark:border-amber-800/40' },
-  red:     { icon: 'bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400',           border: 'border-red-100 dark:border-red-800/40' },
-  violet:  { icon: 'bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400', border: 'border-violet-100 dark:border-violet-800/40' },
-  gray:    { icon: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400',         border: 'border-gray-200 dark:border-gray-600' },
+  blue:    { border: 'border-l-blue-500',   icon: 'bg-blue-50   text-blue-600   dark:bg-blue-900/30  dark:text-blue-400'   },
+  emerald: { border: 'border-l-emerald-500', icon: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400' },
+  amber:   { border: 'border-l-amber-500',  icon: 'bg-amber-50  text-amber-600  dark:bg-amber-900/30 dark:text-amber-400'  },
+  red:     { border: 'border-l-red-500',    icon: 'bg-red-50    text-red-600    dark:bg-red-900/30   dark:text-red-400'    },
+  violet:  { border: 'border-l-violet-500', icon: 'bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-400' },
+  gray:    { border: 'border-l-gray-400',   icon: 'bg-gray-100  text-gray-600   dark:bg-gray-700     dark:text-gray-400'   },
 }
 
 export function StatCard({ title, value, subtitle, icon, trend, color = 'blue' }: StatCardProps) {
   const c = colorMap[color]
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:bg-gray-800 dark:border-gray-700">
-      <div className="flex items-start justify-between">
-        <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${c.icon}`}>
-          {icon}
-        </div>
-        {trend && (
-          <span className={`text-xs font-semibold ${trend.value >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-            {trend.value >= 0 ? '+' : ''}{trend.value}% {trend.label}
-          </span>
-        )}
+    <div className={`flex items-center gap-4 rounded-xl border border-gray-200 border-l-4 bg-white px-5 py-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 ${c.border}`}>
+      {/* Icon */}
+      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${c.icon}`}>
+        {icon}
       </div>
-      <div className="mt-4">
-        <p className="text-2xl font-bold text-gray-900 tabular-nums dark:text-white">{value}</p>
-        <p className="mt-0.5 text-sm font-medium text-gray-600 dark:text-gray-400">{title}</p>
-        {subtitle && <p className="mt-0.5 text-xs text-gray-400">{subtitle}</p>}
+
+      {/* Text */}
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">{title}</p>
+        <p className="mt-0.5 text-2xl font-bold tabular-nums text-gray-900 dark:text-white">{value}</p>
+        {(subtitle || trend) && (
+          <div className="mt-0.5 flex items-center gap-1.5">
+            {trend && (
+              <span className={`text-[11px] font-semibold ${trend.value >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                {trend.value >= 0 ? '+' : ''}{trend.value}% {trend.label}
+              </span>
+            )}
+            {subtitle && !trend && (
+              <span className="text-[11px] text-gray-400">{subtitle}</span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
