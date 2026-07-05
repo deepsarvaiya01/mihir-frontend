@@ -3,6 +3,14 @@ import { useQuery } from '@tanstack/react-query'
 import { FlaskConical, FileCheck, Clock, AlertCircle } from 'lucide-react'
 import { api } from '../lib/api'
 
+interface ReportResultRow {
+  fieldName: string
+  value: string | number | boolean | null
+  unit: string | null
+  referenceRange: string | null
+  isSectionHeader: boolean
+}
+
 function fetchReportByToken(token: string) {
   return api.get(`/report-shares/${token}`).then(r => r.data) as Promise<{
     order: {
@@ -10,6 +18,7 @@ function fetchReportByToken(token: string) {
       patient: { fullName: string; patientCode: string; age: number | null; gender: string | null; doctorName: string | null; city: string | null } | null;
       template: { name: string; code: string } | null;
     };
+    results: ReportResultRow[]
     expiresAt: string;
   }>
 }
@@ -40,7 +49,7 @@ export default function PublicReportPage() {
     </div>
   )
 
-  const { order, expiresAt } = data!
+  const { order, results, expiresAt } = data!
 
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4">
@@ -107,6 +116,40 @@ export default function PublicReportPage() {
               </div>
             </div>
           </div>
+
+          {results.length > 0 && (
+            <div className="border-t border-gray-100 pt-4">
+              <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-400">Test Results</h2>
+              <div className="overflow-x-auto rounded-xl border border-gray-100">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-400">
+                      <th className="px-4 py-2 font-semibold">Parameter</th>
+                      <th className="px-4 py-2 font-semibold">Result</th>
+                      <th className="px-4 py-2 font-semibold">Unit</th>
+                      <th className="px-4 py-2 font-semibold">Reference Range</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {results.map((r, i) =>
+                      r.isSectionHeader ? (
+                        <tr key={i} className="bg-gray-50">
+                          <td colSpan={4} className="px-4 py-2 font-semibold text-gray-700">{r.fieldName}</td>
+                        </tr>
+                      ) : (
+                        <tr key={i} className="border-t border-gray-100">
+                          <td className="px-4 py-2 text-gray-600">{r.fieldName}</td>
+                          <td className="px-4 py-2 font-semibold text-gray-900">{r.value !== null ? String(r.value) : '—'}</td>
+                          <td className="px-4 py-2 text-gray-500">{r.unit ?? '—'}</td>
+                          <td className="px-4 py-2 text-gray-500">{r.referenceRange ?? '—'}</td>
+                        </tr>
+                      ),
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center gap-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
             <Clock className="h-4 w-4 shrink-0 text-amber-600" />

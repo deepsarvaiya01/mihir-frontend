@@ -3,6 +3,7 @@ import autoTable from 'jspdf-autotable'
 import { PDFDocument } from 'pdf-lib'
 import QRCode from 'qrcode'
 import type { LabSettings, ActiveSignature, Logo, Order } from '../types'
+import { isOutOfRange } from './rangeCheck'
 
 /* ─── Types ─────────────────────────────────────────────── */
 export interface ReportResult {
@@ -59,15 +60,6 @@ async function fetchImageAsDataUri(url: string): Promise<string | null> {
   }
 }
 
-function isOutOfRange(value: string | number | boolean | null, range: string | null): boolean {
-  if (!range || value === null || value === undefined) return false
-  const num = typeof value === 'number' ? value : parseFloat(String(value))
-  if (isNaN(num)) return false
-  const m = range.replace(/[\[\]\s]/g, '').match(/^([\d.]+)[-–]([\d.]+)$/)
-  if (!m) return false
-  return num < parseFloat(m[1]) || num > parseFloat(m[2])
-}
-
 function fmtDate(iso?: string): string {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('en-IN', {
@@ -84,6 +76,91 @@ function fmtAgeGender(age: number | null, gender: string | null): string {
     parts.push(g === 'm' || g === 'male' ? 'Male' : 'Female')
   }
   return parts.join('/') || '—'
+}
+
+const SIG_IMG_H = 22   // signature image slot (20mm image + 2mm gap)
+const SIG_LINE_H = 5.5 // name / qualification line slot
+const SIG_AUTH_H = 4   // "Authorized Signatory" line slot (always the bottom-most line)
+
+/**
+ * Draws the standard bottom-right sign-off block used on reports and receipts:
+ * signature image, "Dr. <Name>" line, degree/qualification line, then an
+ * "Authorized Signatory" caption.
+ *
+ * Pass either `y` (draw downward starting there) or `bottomY` (stack the block
+ * upward so "Authorized Signatory" lands exactly on `bottomY` — e.g. flush
+ * with a page-number footer row). Returns the Y position after the block.
+ */
+async function drawSignatureBlock(
+  doc: jsPDF,
+  opts: {
+    x: number
+    y?: number
+    bottomY?: number
+    signatureUrl?: string | null
+    doctorName?: string | null
+    doctorQual?: string | null
+  },
+): Promise<number> {
+  const { x } = opts
+
+  let imgData: string | null = null
+  if (opts.signatureUrl) {
+    try { imgData = await fetchImageAsDataUri(opts.signatureUrl) } catch { imgData = null }
+  }
+
+  const rawName = opts.doctorName?.trim()
+  const displayName = rawName ? (/^dr\.?\s/i.test(rawName) ? rawName : `Dr. ${rawName}`) : ''
+  const hasQual = !!opts.doctorQual
+
+  let y: number
+  if (opts.bottomY !== undefined) {
+    const totalH = (imgData ? SIG_IMG_H : 0) + (displayName ? SIG_LINE_H : 0) + (hasQual ? SIG_LINE_H : 0) + SIG_AUTH_H
+    y = opts.bottomY - totalH
+  } else {
+    y = opts.y ?? 0
+  }
+
+  if (imgData) {
+    doc.addImage(imgData, 'PNG', x - 45, y, 40, 20)
+    y += SIG_IMG_H
+  }
+
+  if (displayName) {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9.5)
+    doc.setTextColor(10, 10, 10)
+    doc.text(displayName, x, y + 4, { align: 'right' })
+    y += SIG_LINE_H
+  }
+
+  if (hasQual) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(90, 90, 90)
+    doc.text(opts.doctorQual!, x, y + 4, { align: 'right' })
+    y += SIG_LINE_H
+  }
+
+  doc.setFont('helvetica', 'italic')
+  doc.setFontSize(7.5)
+  doc.setTextColor(130, 130, 130)
+  doc.text('Authorized Signatory', x, y + 4, { align: 'right' })
+  y += SIG_AUTH_H
+
+  return y
+}
+
+/** Draws a centered footer note on every page of the document at the given (x, y). */
+function drawFooterNote(doc: jsPDF, note: string, x: number, y: number): void {
+  const totalPages = doc.getNumberOfPages()
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+    doc.setTextColor(150, 150, 150)
+    doc.text(note, x, y, { align: 'center' })
+  }
 }
 
 function downloadBlob(bytes: Uint8Array, filename: string) {
@@ -125,7 +202,7 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
   /* ── Draw patient info block (first page only) ── */
   function drawPatientInfo(startY: number): number {
     const p = order.patient
-    const col2X = PAGE_W - MR - 65
+    const col2X = PAGE_W - MR - 75
 
     doc.setFontSize(9)
     doc.setTextColor(10, 10, 10)
@@ -133,12 +210,12 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
     doc.setFont('helvetica', 'bold');  doc.text("Patient's Name", ML, startY)
     doc.setFont('helvetica', 'normal'); doc.text(`: ${p?.fullName ?? '—'}`, ML + 35, startY)
     doc.setFont('helvetica', 'bold');  doc.text('Receipt No.', col2X, startY)
-    doc.setFont('helvetica', 'normal'); doc.text(`: ${order.receiptNumber ?? '—'}`, col2X + 14, startY)
+    doc.setFont('helvetica', 'normal'); doc.text(`: ${order.receiptNumber ?? '—'}`, col2X + 24, startY)
 
     doc.setFont('helvetica', 'bold');  doc.text('Age / Gender', ML, startY + 7)
     doc.setFont('helvetica', 'normal'); doc.text(`: ${fmtAgeGender(p?.age ?? null, p?.gender ?? null)}`, ML + 35, startY + 7)
     doc.setFont('helvetica', 'bold');  doc.text('Date', col2X, startY + 7)
-    doc.setFont('helvetica', 'normal'); doc.text(`:${fmtDate(order.createdAt)}`, col2X + 14, startY + 7)
+    doc.setFont('helvetica', 'normal'); doc.text(`: ${fmtDate(order.createdAt)}`, col2X + 24, startY + 7)
 
     doc.setFont('helvetica', 'bold');  doc.text('Referred by', ML, startY + 14)
     doc.setFont('helvetica', 'normal'); doc.text(`: ${p?.doctorName ?? 'Self'}`, ML + 35, startY + 14)
@@ -178,7 +255,7 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
       tableBody.push([{
         content: r.fieldName,
         colSpan: 4,
-        styles: { fontStyle: 'bold', fillColor: [252, 252, 252] as [number, number, number] },
+        styles: { fontStyle: 'bold', halign: 'center' },
       }])
       rowMetas.push({ isSectionHeader: true, isOutOfRange: false })
     } else {
@@ -255,9 +332,9 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
       if (meta.isSectionHeader && data.column.index === 0) {
         const row = tableBody[data.row.index]
         const text = typeof row[0] === 'object' ? (row[0] as CellDef).content : String(row[0])
-        const tx = data.cell.x + data.cell.padding('left')
-        const ty = data.cell.y + data.cell.height - data.cell.padding('bottom') - 0.5
         const tw2 = doc.getTextWidth(text)
+        const tx = data.cell.x + (data.cell.width - tw2) / 2
+        const ty = data.cell.y + data.cell.height - data.cell.padding('bottom') - 0.5
         doc.setDrawColor(15, 15, 15)
         doc.setLineWidth(0.25)
         doc.line(tx, ty, tx + tw2, ty)
@@ -285,70 +362,52 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
     }
   }
 
-  /* ── Page numbers ── */
+  /* ── Signature / authority section, bottom-anchored on the last page ──
+     "Authorized Signatory" sits flush with the page-number row (FOOTER_Y),
+     raised clear of the Rameshwar.pdf template's bottom address bar, with
+     the degree/name/image stacked upward above it on the right. ── */
+  const FOOTER_Y = PAGE_H - 24
+  const SIG_RESERVED_H = 40
+
+  doc.setPage(doc.getNumberOfPages())
+  const finalY: number = ((doc as unknown) as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? 200
+
+  if (finalY + 6 > FOOTER_Y - SIG_RESERVED_H) {
+    doc.addPage()
+  }
+
+  const sigX = PAGE_W - MR
+  const dividerY = FOOTER_Y - SIG_RESERVED_H
+
+  await drawSignatureBlock(doc, {
+    x: sigX,
+    bottomY: FOOTER_Y,
+    signatureUrl: signature?.imageUrl,
+    doctorName: labSettings.doctor_name || signature?.name,
+    doctorQual: signature?.degreeName || labSettings.doctor_qualification,
+  })
+
+  if (options.shareUrl) {
+    try {
+      const qrDataUrl = await QRCode.toDataURL(options.shareUrl, { width: 60, margin: 1 })
+      doc.addImage(qrDataUrl, 'PNG', ML, dividerY + 4, 20, 20)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(6.5)
+      doc.setTextColor(130, 130, 130)
+      doc.text('Scan to view report online', ML + 10, dividerY + 26, { align: 'center' })
+    } catch { /* skip */ }
+  }
+
+  /* ── Page numbers + footer note (drawn last so they land on every page, incl. any added for the signature) ── */
   const totalPages = doc.getNumberOfPages()
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i)
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(8)
     doc.setTextColor(140, 140, 140)
-    doc.text(`Page ${i} of ${totalPages}`, PAGE_W - MR, PAGE_H - 8, { align: 'right' })
+    doc.text(`Page ${i} of ${totalPages}`, ML, FOOTER_Y, { align: 'left' })
   }
-
-  /* ── Signature / authority section on last page (bottom-right) ── */
-  doc.setPage(totalPages)
-  const finalY: number = ((doc as unknown) as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? 200
-
-  let sigY = finalY + 14
-  if (sigY > PAGE_H - 55) {
-    doc.addPage()
-    sigY = TEMPLATE_HDR + 10
-  }
-
-  const sigX = PAGE_W - MR
-
-  doc.setDrawColor(200, 200, 200)
-  doc.setLineWidth(0.3)
-  doc.line(ML, sigY, PAGE_W - MR, sigY)
-  sigY += 8
-
-  if (signature?.imageUrl) {
-    try {
-      const imgData = await fetchImageAsDataUri(signature.imageUrl)
-      if (imgData) {
-        doc.addImage(imgData, 'PNG', sigX - 45, sigY, 40, 20)
-        sigY += 22
-      }
-    } catch { /* skip on CORS or fetch error */ }
-  }
-
-  const doctorName = labSettings.doctor_name ?? signature?.name ?? ''
-  const doctorQual = signature?.degreeName ?? labSettings.doctor_qualification ?? ''
-  const doctorLine = doctorName
-    ? doctorQual ? `${doctorName} (${doctorQual})` : doctorName
-    : ''
-
-  if (doctorLine) {
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9.5)
-    doc.setTextColor(10, 10, 10)
-    doc.text(doctorLine, sigX, sigY + 2, { align: 'right' })
-  }
-  doc.setFont('helvetica', 'italic')
-  doc.setFontSize(7.5)
-  doc.setTextColor(130, 130, 130)
-  doc.text('Authorized Signatory', sigX, sigY + (doctorLine ? 9 : 2), { align: 'right' })
-
-  if (options.shareUrl) {
-    try {
-      const qrDataUrl = await QRCode.toDataURL(options.shareUrl, { width: 60, margin: 1 })
-      doc.addImage(qrDataUrl, 'PNG', ML, sigY, 20, 20)
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(6.5)
-      doc.setTextColor(130, 130, 130)
-      doc.text('Scan to view report online', ML + 10, sigY + 22, { align: 'center' })
-    } catch { /* skip */ }
-  }
+  drawFooterNote(doc, 'This is a computer-generated report and does not require a physical signature.', PAGE_W / 2, FOOTER_Y)
 
   /* ── Merge content PDF with Rameshwar.pdf template using pdf-lib ── */
   try {
@@ -635,32 +694,13 @@ export async function generateReceipt(options: GenerateReceiptOptions): Promise<
 
   const sigX = PAGE_W - MR
 
-  if (signature?.imageUrl) {
-    try {
-      const imgData = await fetchImageAsDataUri(signature.imageUrl)
-      if (imgData) {
-        doc.addImage(imgData, 'PNG', sigX - 45, y, 40, 20)
-        y += 22
-      }
-    } catch { /* skip */ }
-  }
-
-  const doctorName = labSettings.doctor_name ?? signature?.name ?? ''
-  const doctorQual = signature?.degreeName ?? labSettings.doctor_qualification ?? ''
-  const doctorLine = doctorName
-    ? doctorQual ? `${doctorName} (${doctorQual})` : doctorName
-    : ''
-
-  if (doctorLine) {
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9.5)
-    doc.setTextColor(10, 10, 10)
-    doc.text(doctorLine, sigX, y + 2, { align: 'right' })
-  }
-  doc.setFont('helvetica', 'italic')
-  doc.setFontSize(7.5)
-  doc.setTextColor(130, 130, 130)
-  doc.text('Authorized Signatory', sigX, y + (doctorLine ? 9 : 2), { align: 'right' })
+  await drawSignatureBlock(doc, {
+    x: sigX,
+    y,
+    signatureUrl: signature?.imageUrl,
+    doctorName: labSettings.doctor_name || signature?.name,
+    doctorQual: signature?.degreeName || labSettings.doctor_qualification,
+  })
 
   /* ── Footer note ──────────────────────────────────────── */
   doc.setFont('helvetica', 'normal')
@@ -838,7 +878,7 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
     const metas: RowMeta[] = []
 
     if (group.title) {
-      body.push([{ content: group.title, colSpan: 4, styles: { fontStyle: 'bold', fillColor: [248, 248, 248] as [number, number, number] } }])
+      body.push([{ content: group.title, colSpan: 4, styles: { fontStyle: 'bold', halign: 'center' } }])
       metas.push({ isSectionHeader: true, isOutOfRange: false })
     }
 
@@ -895,10 +935,11 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
         if (meta.isSectionHeader && data.column.index === 0) {
           const row = body[data.row.index]
           const text = typeof row[0] === 'object' ? (row[0] as CellDef).content : String(row[0])
-          const tx = data.cell.x + data.cell.padding('left')
+          const tw2 = doc.getTextWidth(text)
+          const tx = data.cell.x + (data.cell.width - tw2) / 2
           const ty = data.cell.y + data.cell.height - data.cell.padding('bottom') - 0.5
           doc.setDrawColor(15, 15, 15); doc.setLineWidth(0.25)
-          doc.line(tx, ty, tx + doc.getTextWidth(text), ty)
+          doc.line(tx, ty, tx + tw2, ty)
         }
         if (meta.isOutOfRange && data.column.index === 1) {
           const text = String(data.cell.text ?? '')
@@ -923,17 +964,8 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
     isFirstGroup = false
   }
 
-  /* ── Page numbers ── */
-  const totalPages = doc.getNumberOfPages()
-  for (let i = 1; i <= totalPages; i++) {
-    doc.setPage(i)
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(120, 120, 120)
-    doc.text(`Page ${i} of ${totalPages}`, PAGE_W - MR, PAGE_H - 10, { align: 'right' })
-    doc.text('This is an Electronically Authenticated Report.', PAGE_W / 2, PAGE_H - 10, { align: 'center' })
-  }
-
   /* ── Signature on last page ── */
-  doc.setPage(totalPages)
+  doc.setPage(doc.getNumberOfPages())
   const finalY: number = ((doc as unknown) as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? 200
 
   let sigY = finalY + 14
@@ -948,34 +980,32 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
   doc.line(ML, sigY, PAGE_W - MR, sigY)
   sigY += 8
 
-  if (signature?.imageUrl) {
-    try {
-      const imgData = await fetchImageAsDataUri(signature.imageUrl)
-      if (imgData) { doc.addImage(imgData, 'PNG', sigX - 45, sigY, 40, 20); sigY += 22 }
-    } catch { /* skip */ }
-  }
-
-  const doctorName = labSettings.doctor_name ?? signature?.name ?? ''
-  const doctorQual = signature?.degreeName ?? labSettings.doctor_qualification ?? ''
-  const doctorLine = doctorName
-    ? doctorQual ? `${doctorName} (${doctorQual})` : doctorName
-    : ''
-
-  if (doctorLine) {
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(10, 10, 10)
-    doc.text(doctorLine, sigX, sigY + 2, { align: 'right' })
-  }
-  doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); doc.setTextColor(130, 130, 130)
-  doc.text('Authorized Signatory', sigX, sigY + (doctorLine ? 9 : 2), { align: 'right' })
+  const qrY = sigY
+  await drawSignatureBlock(doc, {
+    x: sigX,
+    y: sigY,
+    signatureUrl: signature?.imageUrl,
+    doctorName: labSettings.doctor_name || signature?.name,
+    doctorQual: signature?.degreeName || labSettings.doctor_qualification,
+  })
 
   if (options.shareUrl) {
     try {
       const qrDataUrl = await QRCode.toDataURL(options.shareUrl, { width: 60, margin: 1 })
-      doc.addImage(qrDataUrl, 'PNG', ML, sigY, 20, 20)
+      doc.addImage(qrDataUrl, 'PNG', ML, qrY, 20, 20)
       doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(130, 130, 130)
-      doc.text('Scan to view report online', ML + 10, sigY + 22, { align: 'center' })
+      doc.text('Scan to view report online', ML + 10, qrY + 22, { align: 'center' })
     } catch { /* skip */ }
   }
+
+  /* ── Page numbers + footer note (drawn last so any page added for the signature is included) ── */
+  const totalPages = doc.getNumberOfPages()
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i)
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(120, 120, 120)
+    doc.text(`Page ${i} of ${totalPages}`, ML, PAGE_H - 10, { align: 'left' })
+  }
+  drawFooterNote(doc, 'This is an Electronically Authenticated Report.', PAGE_W / 2, PAGE_H - 10)
 
   return doc
 }

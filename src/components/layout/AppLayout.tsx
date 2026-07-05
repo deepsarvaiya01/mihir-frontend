@@ -5,9 +5,11 @@ import { useAuthStore } from '../../store/authStore'
 import { useQuery } from '@tanstack/react-query'
 import { authService } from '../../services/auth'
 import { PageLoader } from '../ui/Spinner'
+import { useIdleLogout } from '../../hooks/useIdleLogout'
 
 export function AppLayout() {
   const { isAuthenticated, user, setUser } = useAuthStore()
+  useIdleLogout()
 
   const { isLoading } = useQuery({
     queryKey: ['profile'],

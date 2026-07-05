@@ -15,12 +15,14 @@ export const useAuthStore = create<AuthState>((set) => ({
   setAuth: (user, accessToken, refreshToken) => {
     localStorage.setItem('lab_access_token', accessToken)
     localStorage.setItem('lab_refresh_token', refreshToken)
+    localStorage.setItem('lab_last_activity', String(Date.now()))
     set({ user, isAuthenticated: true })
   },
   setUser: (user) => set({ user }),
   clearAuth: () => {
     localStorage.removeItem('lab_access_token')
     localStorage.removeItem('lab_refresh_token')
+    localStorage.removeItem('lab_last_activity')
     set({ user: null, isAuthenticated: false })
   },
 }))

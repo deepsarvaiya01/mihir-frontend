@@ -16,6 +16,12 @@ export interface CreateSignatureDto {
   imageData: string
 }
 
+export interface UpdateSignatureDto {
+  name?: string
+  degreeName?: string
+  imageData?: string
+}
+
 export const signatureService = {
   getAll: async (): Promise<Signature[]> => {
     const { data } = await api.get('/signatures')
@@ -29,6 +35,11 @@ export const signatureService = {
 
   create: async (dto: CreateSignatureDto): Promise<Signature> => {
     const { data } = await api.post('/signatures', dto)
+    return data
+  },
+
+  update: async (id: number, dto: UpdateSignatureDto): Promise<Signature> => {
+    const { data } = await api.patch(`/signatures/${id}`, dto)
     return data
   },
 

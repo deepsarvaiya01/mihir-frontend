@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   PenLine,
+  Pencil,
   Upload,
   Trash2,
   CheckCircle2,
@@ -19,7 +20,7 @@ import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
 import { ConfirmModal } from '../components/ui/Modal'
 import { DataTable, DataTableHead, DataTableTh, DataTableBody, DataTableRow, DataTableTd } from '../components/ui/DataTable'
-import { signatureService, type Signature } from '../services/signatures'
+import { signatureService, type Signature, type UpdateSignatureDto } from '../services/signatures'
 
 /* ─── helpers ────────────────────────────────────────────── */
 
@@ -32,19 +33,21 @@ function fileToBase64(file: File): Promise<string> {
   })
 }
 
-/* ─── Upload modal ───────────────────────────────────────── */
+/* ─── Upload / Edit modal ────────────────────────────────── */
 
 interface UploadModalProps {
+  signature?: Signature | null
   onClose: () => void
-  onSave: (name: string, degreeName: string, imageData: string) => void
+  onSave: (name: string, degreeName: string, imageData: string | null) => void
   saving: boolean
 }
 
-function UploadModal({ onClose, onSave, saving }: UploadModalProps) {
+function UploadModal({ signature, onClose, onSave, saving }: UploadModalProps) {
+  const isEdit = !!signature
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [name, setName] = useState('')
-  const [degreeName, setDegreeName] = useState('')
-  const [preview, setPreview] = useState<string | null>(null)
+  const [name, setName] = useState(signature?.name ?? '')
+  const [degreeName, setDegreeName] = useState(signature?.degreeName ?? '')
+  const [preview, setPreview] = useState<string | null>(signature?.imageUrl ?? null)
   const [imageData, setImageData] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
 
@@ -72,7 +75,7 @@ function UploadModal({ onClose, onSave, saving }: UploadModalProps) {
 
   const handleSubmit = () => {
     if (!name.trim()) { toast.error('Please enter a signature name'); return }
-    if (!imageData)   { toast.error('Please select an image');         return }
+    if (!isEdit && !imageData) { toast.error('Please select an image'); return }
     onSave(name.trim(), degreeName.trim(), imageData)
   }
 
@@ -82,7 +85,7 @@ function UploadModal({ onClose, onSave, saving }: UploadModalProps) {
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-gray-700">
           <div className="flex items-center gap-2">
             <PenLine className="h-5 w-5 text-blue-600" />
-            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Upload Signature</h2>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{isEdit ? 'Edit Signature' : 'Upload Signature'}</h2>
           </div>
           <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300">
             <X className="h-4 w-4" />
@@ -139,7 +142,15 @@ function UploadModal({ onClose, onSave, saving }: UploadModalProps) {
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }}
               />
             </div>
-            {preview && (
+            {isEdit && imageData && (
+              <button
+                onClick={e => { e.stopPropagation(); setPreview(signature?.imageUrl ?? null); setImageData(null) }}
+                className="mt-1.5 text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400"
+              >
+                Revert to current image
+              </button>
+            )}
+            {!isEdit && preview && (
               <button
                 onClick={e => { e.stopPropagation(); setPreview(null); setImageData(null) }}
                 className="mt-1.5 text-xs text-red-500 hover:text-red-700"
@@ -163,7 +174,7 @@ function UploadModal({ onClose, onSave, saving }: UploadModalProps) {
             className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
           >
             {saving && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
-            Save Signature
+            {isEdit ? 'Save Changes' : 'Save Signature'}
           </button>
         </div>
       </div>
@@ -177,11 +188,12 @@ interface SigCardProps {
   sig: Signature
   onActivate: (id: number) => void
   onDeactivate: () => void
+  onEdit: (sig: Signature) => void
   onDelete: (sig: Signature) => void
   busy: boolean
 }
 
-function SigCard({ sig, onActivate, onDeactivate, onDelete, busy }: SigCardProps) {
+function SigCard({ sig, onActivate, onDeactivate, onEdit, onDelete, busy }: SigCardProps) {
   return (
     <div
       className={`group relative flex flex-col overflow-hidden rounded-2xl border-2 bg-white shadow-sm transition-all dark:bg-gray-800
@@ -240,6 +252,15 @@ function SigCard({ sig, onActivate, onDeactivate, onDelete, busy }: SigCardProps
           )}
 
           <button
+            onClick={() => onEdit(sig)}
+            disabled={busy}
+            title="Edit signature"
+            className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
+
+          <button
             onClick={() => onDelete(sig)}
             disabled={busy}
             title="Delete signature"
@@ -258,6 +279,7 @@ function SigCard({ sig, onActivate, onDeactivate, onDelete, busy }: SigCardProps
 export default function SignaturesPage() {
   const qc = useQueryClient()
   const [showModal, setShowModal] = useState(false)
+  const [editSig, setEditSig] = useState<Signature | null>(null)
   const [deleteSig, setDeleteSig] = useState<Signature | null>(null)
   const [showArchived, setShowArchived] = useState(false)
   const [permDeleteSig, setPermDeleteSig] = useState<Signature | null>(null)
@@ -281,6 +303,16 @@ export default function SignaturesPage() {
       setShowModal(false)
     },
     onError: (err) => toastError(err, 'Failed to upload signature'),
+  })
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, dto }: { id: number; dto: UpdateSignatureDto }) => signatureService.update(id, dto),
+    onSuccess: () => {
+      toast.success('Signature updated successfully')
+      qc.invalidateQueries({ queryKey: ['signatures'] })
+      setEditSig(null)
+    },
+    onError: (err) => toastError(err, 'Failed to update signature'),
   })
 
   const activateMut = useMutation({
@@ -332,7 +364,7 @@ export default function SignaturesPage() {
     onError: (err) => toastError(err, 'Failed to permanently delete signature'),
   })
 
-  const busy = createMut.isPending || activateMut.isPending || deactivateMut.isPending || deleteMut.isPending
+  const busy = createMut.isPending || updateMut.isPending || activateMut.isPending || deactivateMut.isPending || deleteMut.isPending
   const activeCount = signatures.filter(s => s.isActive).length
 
   return (
@@ -413,6 +445,7 @@ export default function SignaturesPage() {
                 busy={busy}
                 onActivate={id => activateMut.mutate(id)}
                 onDeactivate={() => deactivateMut.mutate()}
+                onEdit={sig => setEditSig(sig)}
                 onDelete={sig => setDeleteSig(sig)}
               />
             ))}
@@ -465,7 +498,20 @@ export default function SignaturesPage() {
         <UploadModal
           onClose={() => setShowModal(false)}
           saving={createMut.isPending}
-          onSave={(name, degreeName, imageData) => createMut.mutate({ name, degreeName: degreeName || undefined, imageData })}
+          onSave={(name, degreeName, imageData) => createMut.mutate({ name, degreeName: degreeName || undefined, imageData: imageData! })}
+        />
+      )}
+
+      {editSig && (
+        <UploadModal
+          signature={editSig}
+          onClose={() => setEditSig(null)}
+          saving={updateMut.isPending}
+          onSave={(name, degreeName, imageData) => {
+            const dto: UpdateSignatureDto = { name, degreeName: degreeName || undefined }
+            if (imageData) dto.imageData = imageData
+            updateMut.mutate({ id: editSig.id, dto })
+          }}
         />
       )}
 

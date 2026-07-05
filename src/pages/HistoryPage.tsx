@@ -114,9 +114,9 @@ export default function HistoryPage() {
             <span class="badge">${item.status}</span>
           </div>
           <table>
-            <thead><tr><th>Parameter</th><th>Result</th><th>Unit</th></tr></thead>
+            <thead><tr><th>Parameter</th><th>Result</th><th>Unit</th><th>Reference Range</th></tr></thead>
             <tbody>${item.results.map(r =>
-              `<tr><td>${r.fieldName}</td><td><strong>${String(r.value)}</strong></td><td>${r.unit ?? '—'}</td></tr>`
+              `<tr><td>${r.fieldName}</td><td><strong>${String(r.value)}</strong></td><td>${r.unit ?? '—'}</td><td>${r.referenceRange ?? '—'}</td></tr>`
             ).join('')}</tbody>
           </table>
         </div>`).join('')}
@@ -282,6 +282,9 @@ export default function HistoryPage() {
                                     {String(r.value)}
                                     {r.unit && <span className="ml-1.5 text-sm font-normal text-gray-400">{r.unit}</span>}
                                   </p>
+                                  {r.referenceRange && (
+                                    <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">Ref: {r.referenceRange}</p>
+                                  )}
                                 </div>
                               ))}
                             </div>
