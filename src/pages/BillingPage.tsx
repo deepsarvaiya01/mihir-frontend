@@ -1,9 +1,9 @@
-﻿import { useState, useMemo } from 'react'
+﻿import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Search, Receipt, ChevronDown, DollarSign,
   CheckCircle, Clock, FileText, Pencil,
-  RefreshCw, Download, Share2, Layers, Loader2,
+  RefreshCw, Download, Share2, Loader2, Eye, Paperclip, X,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Card } from '../components/ui/Card'
@@ -18,10 +18,12 @@ import { reportShareService } from '../services/reportShares'
 import { labSettingsService } from '../services/labSettings'
 import { signatureService } from '../services/signatures'
 import { logoService } from '../services/logos'
-import { generateLabReport, generateReceipt, generatePlainReport, generateCombinedReport } from '../utils/generateReport'
+import { generateReceipt, generateCombinedReport, viewCombinedReport, viewMergedAttachments } from '../utils/generateReport'
 import type { Order, PaymentStatus, PaymentType } from '../types'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
+
+const TODAY = new Date().toISOString().split('T')[0]
 
 type PaymentFilter = 'ALL' | PaymentStatus
 
@@ -65,13 +67,16 @@ interface PaymentForm {
 }
 
 interface PaymentModalProps {
-  order: Order
+  orders: Order[]
   onClose: () => void
-  onSave: (id: number, form: PaymentForm) => void
+  onSave: (ids: number[], form: PaymentForm, applyAmount: boolean) => void
   saving: boolean
 }
 
-function PaymentModal({ order, onClose, onSave, saving }: PaymentModalProps) {
+function PaymentModal({ orders, onClose, onSave, saving }: PaymentModalProps) {
+  const order = orders[0]
+  const isSingle = orders.length === 1
+
   const [form, setForm] = useState<PaymentForm>({
     paymentStatus: order.paymentStatus ?? 'PENDING',
     paymentType: order.paymentType ?? '',
@@ -81,7 +86,8 @@ function PaymentModal({ order, onClose, onSave, saving }: PaymentModalProps) {
 
   const amount = parseFloat(form.amount) || 0
   const discount = parseFloat(form.discount) || 0
-  const netAmount = Math.round(amount * (1 - discount / 100) * 100) / 100
+  const totalNet = orders.reduce((s, o) => s + Number(o.netAmount ?? 0), 0)
+  const netAmount = isSingle ? Math.round(amount * (1 - discount / 100) * 100) / 100 : totalNet
 
   const set = (key: keyof PaymentForm, val: string) =>
     setForm(prev => ({ ...prev, [key]: val }))
@@ -91,22 +97,28 @@ function PaymentModal({ order, onClose, onSave, saving }: PaymentModalProps) {
       open
       onClose={onClose}
       title={`Update Payment — ${order.receiptNumber ?? order.template?.name}`}
-      subtitle={`${order.patient?.fullName} · ${order.template?.name}`}
+      subtitle={isSingle ? `${order.patient?.fullName} · ${order.template?.name}` : `${order.patient?.fullName} · ${orders.length} tests`}
       size="sm"
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button loading={saving} onClick={() => onSave(order.id, form)}>Save Changes</Button>
+          <Button loading={saving} onClick={() => onSave(orders.map(o => o.id), form, isSingle)}>Save Changes</Button>
         </>
       }
     >
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <Input label="Amount (₹)" type="number" min={0} step="0.01"
-            value={form.amount} onChange={e => set('amount', e.target.value)} />
-          <Input label="Discount (%)" type="number" min={0} max={100} step="0.5"
-            value={form.discount} onChange={e => set('discount', e.target.value)} />
-        </div>
+        {isSingle ? (
+          <div className="grid grid-cols-2 gap-4">
+            <Input label="Amount (₹)" type="number" min={0} step="0.01"
+              value={form.amount} onChange={e => set('amount', e.target.value)} />
+            <Input label="Discount (%)" type="number" min={0} max={100} step="0.5"
+              value={form.discount} onChange={e => set('discount', e.target.value)} />
+          </div>
+        ) : (
+          <div className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-xs text-gray-500 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400">
+            {orders.length} tests on this receipt — amounts are set per test at order creation and aren't edited here.
+          </div>
+        )}
 
         <div className="flex items-center justify-between rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 dark:border-blue-900 dark:bg-blue-900/20">
           <span className="text-sm font-medium text-blue-700 dark:text-blue-400">Net Amount</span>
@@ -175,7 +187,9 @@ export default function BillingPage() {
   const qc = useQueryClient()
   const [search, setSearch] = useState('')
   const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>('ALL')
-  const [editOrder, setEditOrder] = useState<Order | null>(null)
+  const [dateFrom, setDateFrom] = useState(TODAY)
+  const [dateTo, setDateTo] = useState('')
+  const [editGroup, setEditGroup] = useState<Order[] | null>(null)
 
   const { data: orders = [], isLoading, refetch } = useQuery({
     queryKey: ['orders'],
@@ -197,41 +211,71 @@ export default function BillingPage() {
   })
 
   const updatePayment = useMutation({
-    mutationFn: ({ id, form }: { id: number; form: PaymentForm }) =>
-      orderService.updatePayment(id, {
+    mutationFn: ({ ids, form, applyAmount }: { ids: number[]; form: PaymentForm; applyAmount: boolean }) =>
+      Promise.all(ids.map(id => orderService.updatePayment(id, {
         paymentStatus: form.paymentStatus,
         paymentType: form.paymentType || null,
-        amount: parseFloat(form.amount) || 0,
-        discount: parseFloat(form.discount) || 0,
-      }),
+        ...(applyAmount ? { amount: parseFloat(form.amount) || 0, discount: parseFloat(form.discount) || 0 } : {}),
+      }))),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['orders'] })
-      setEditOrder(null)
+      setEditGroup(null)
       toast.success('Payment updated')
     },
     onError: (err) => toastError(err, 'Failed to update payment'),
   })
 
-  // Directly generates & downloads the PDF report
+  // Fetches results for every approved test sharing this order's receipt, ready to feed a report generator
+  const fetchReportOptions = async (order: Order) => {
+    const siblings = order.receiptNumber
+      ? orders.filter(o => o.receiptNumber === order.receiptNumber && o.status === 'APPROVED')
+      : []
+    const targets = siblings.length > 0 ? siblings : [order]
+    const results = await Promise.all(targets.map(o => orderService.getResults(o.id)))
+    return results.map(data => ({
+      order: data.order,
+      results: data.results.map(r => ({
+        fieldName: r.fieldName,
+        fieldType: r.fieldType,
+        value: r.value,
+        unit: r.unit ?? null,
+        referenceRange: r.referenceRange ?? null,
+        isSectionHeader: r.isSectionHeader ?? false,
+      })),
+      labSettings,
+      signature: activeSignature,
+      activeLogo,
+    }))
+  }
+
+  // Downloads the PDF report — combined across every approved test on the same receipt, since that's always what's wanted
   const downloadReport = useMutation({
-    mutationFn: (orderId: number) => orderService.getResults(orderId),
-    onSuccess: (data) => {
-      generateLabReport({
-        order: data.order,
-        results: data.results.map(r => ({
-          fieldName: r.fieldName,
-          fieldType: r.fieldType,
-          value: r.value,
-          unit: r.unit ?? null,
-          referenceRange: r.referenceRange ?? null,
-          isSectionHeader: r.isSectionHeader ?? false,
-        })),
-        labSettings,
-        signature: activeSignature,
-        activeLogo,
-      }).then(() => toast.success('Report downloaded')).catch(() => toast.error('Failed to generate report'))
+    mutationFn: fetchReportOptions,
+    onSuccess: (optionsList) => {
+      generateCombinedReport(optionsList, 'letterhead')
+        .then(() => toast.success('Report downloaded'))
+        .catch(() => toast.error('Failed to generate report'))
     },
     onError: (err) => toastError(err, 'Failed to generate report'),
+  })
+
+  // Opens the same combined report in a new tab instead of downloading it
+  const viewReportMutation = useMutation({
+    mutationFn: fetchReportOptions,
+    onSuccess: (optionsList) => {
+      viewCombinedReport(optionsList, 'letterhead')
+        .catch(() => toast.error('Failed to open report'))
+    },
+    onError: (err) => toastError(err, 'Failed to open report'),
+  })
+
+  // Merges every uploaded attachment on this receipt (one per test) into a single PDF and opens it
+  const viewAttachmentsMutation = useMutation({
+    mutationFn: (group: Order[]) => {
+      const urls = group.map(o => o.attachmentUrl).filter((u): u is string => !!u)
+      return viewMergedAttachments(urls)
+    },
+    onError: () => toast.error('Failed to open uploaded document'),
   })
 
   const shareReport = useMutation({
@@ -244,16 +288,23 @@ export default function BillingPage() {
   })
 
   const printReceiptMutation = useMutation({
-    mutationFn: (order: Order) =>
-      generateReceipt({ order, labSettings, signature: activeSignature, activeLogo }),
+    mutationFn: (orders: Order[]) =>
+      generateReceipt({ orders, labSettings, signature: activeSignature, activeLogo }),
     onSuccess: () => toast.success('Receipt downloaded'),
     onError: (err) => toastError(err, 'Failed to generate receipt'),
   })
 
+  // Plain report — combined across every approved test on the same receipt, like the letterhead report
   const plainReportMutation = useMutation({
-    mutationFn: (orderId: number) => orderService.getResults(orderId),
-    onSuccess: (data) => {
-      generatePlainReport({
+    mutationFn: (order: Order) => {
+      const siblings = order.receiptNumber
+        ? orders.filter(o => o.receiptNumber === order.receiptNumber && o.status === 'APPROVED')
+        : []
+      const targets = siblings.length > 0 ? siblings : [order]
+      return Promise.all(targets.map(o => orderService.getResults(o.id)))
+    },
+    onSuccess: (results) => {
+      const optionsList = results.map(data => ({
         order: data.order,
         results: data.results.map(r => ({
           fieldName: r.fieldName,
@@ -266,53 +317,42 @@ export default function BillingPage() {
         labSettings,
         signature: activeSignature,
         activeLogo,
-      }).then(() => toast.success('Plain report downloaded')).catch(() => toast.error('Failed to generate report'))
+      }))
+      generateCombinedReport(optionsList, 'plain')
+        .then(() => toast.success('Plain report downloaded'))
+        .catch(() => toast.error('Failed to generate report'))
     },
     onError: (err) => toastError(err, 'Failed to generate report'),
   })
 
-  const combinedReportMutation = useMutation({
-    mutationFn: (receiptNumber: string) => {
-      const siblings = orders.filter(o => o.receiptNumber === receiptNumber && o.status === 'APPROVED')
-      return Promise.all(siblings.map(o => orderService.getResults(o.id)))
-    },
-    onSuccess: (results) => {
-      const optionsList = results.map(data => ({
-        order: data.order,
-        results: data.results.map(r => ({
-          fieldName: r.fieldName, fieldType: r.fieldType, value: r.value,
-          unit: r.unit ?? null, referenceRange: r.referenceRange ?? null,
-          isSectionHeader: r.isSectionHeader ?? false,
-        })),
-        labSettings, signature: activeSignature, activeLogo,
-      }))
-      generateCombinedReport(optionsList, 'letterhead')
-        .then(() => toast.success('Combined report downloaded'))
-        .catch(() => toast.error('Failed to generate combined report'))
-    },
-    onError: (err) => toastError(err, 'Failed to generate combined report'),
-  })
+  // Group orders sharing one receipt into a single billing row — we always bill/report a receipt as one unit
+  const receiptGroups: Order[][] = []
+  const groupByKey = new Map<string, Order[]>()
+  for (const o of orders) {
+    const key = o.receiptNumber ?? `order-${o.id}`
+    const existing = groupByKey.get(key)
+    if (existing) existing.push(o)
+    else {
+      const group: Order[] = [o]
+      groupByKey.set(key, group)
+      receiptGroups.push(group)
+    }
+  }
 
-  // Map receiptNumber → list of APPROVED orders in that receipt
-  const approvedByReceipt = useMemo(() => {
-    const map: Record<string, number[]> = {}
-    orders.forEach(o => {
-      if (o.receiptNumber && o.status === 'APPROVED') {
-        if (!map[o.receiptNumber]) map[o.receiptNumber] = []
-        map[o.receiptNumber].push(o.id)
-      }
-    })
-    return map
-  }, [orders])
-
-  const filtered = orders.filter(o => {
+  const filtered = receiptGroups.filter(group => {
+    const primary = group[0]
+    const q = search.toLowerCase()
     const matchSearch = !search ||
-      String(o.id).includes(search) ||
-      (o.patient?.fullName ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      (o.receiptNumber ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      (o.patient?.patientCode ?? '').toLowerCase().includes(search.toLowerCase())
-    const matchPayment = paymentFilter === 'ALL' || o.paymentStatus === paymentFilter
-    return matchSearch && matchPayment
+      group.some(o => String(o.id).includes(search)) ||
+      (primary.patient?.fullName ?? '').toLowerCase().includes(q) ||
+      (primary.receiptNumber ?? '').toLowerCase().includes(q) ||
+      (primary.patient?.patientCode ?? '').toLowerCase().includes(q) ||
+      group.some(o => (o.template?.name ?? '').toLowerCase().includes(q))
+    const matchPayment = paymentFilter === 'ALL' || primary.paymentStatus === paymentFilter
+    const orderDate = primary.createdAt ? new Date(primary.createdAt) : null
+    const matchFrom = !dateFrom || (orderDate && orderDate >= new Date(dateFrom))
+    const matchTo = !dateTo || (orderDate && orderDate <= new Date(dateTo + 'T23:59:59'))
+    return matchSearch && matchPayment && matchFrom && matchTo
   })
 
   // Summary stats
@@ -401,12 +441,28 @@ export default function BillingPage() {
             </select>
             <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           </div>
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+            className="rounded-xl border border-gray-200 bg-white py-2.5 px-3 text-sm text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200" />
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+            className="rounded-xl border border-gray-200 bg-white py-2.5 px-3 text-sm text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200" />
+          {(dateFrom || dateTo) && (
+            <button onClick={() => { setDateFrom(''); setDateTo('') }}
+              className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
+              Show All
+            </button>
+          )}
           <button
             onClick={() => refetch()}
             className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
           >
             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
+          {(search || paymentFilter !== 'ALL' || dateFrom !== TODAY || dateTo) && (
+            <button onClick={() => { setSearch(''); setPaymentFilter('ALL'); setDateFrom(TODAY); setDateTo('') }}
+              className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
+              <X className="h-3.5 w-3.5" /> Clear
+            </button>
+          )}
           <span className="self-center ml-auto text-sm text-gray-500">
             {filtered.length} record{filtered.length !== 1 ? 's' : ''}
           </span>
@@ -430,125 +486,147 @@ export default function BillingPage() {
                 <tr className="border-b border-gray-100 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/50">
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Order</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Patient</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">B2B</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Test</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Amount</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Net</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Method</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Payment</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Receipt #</th>
                   <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
-                {filtered.map(order => (
-                  <tr key={order.id} className="group hover:bg-gray-50/60 transition-colors dark:hover:bg-gray-700/30">
-                    <td className="px-5 py-4">
-                      <span className="font-bold text-gray-700 dark:text-gray-300">{order.receiptNumber ?? order.template?.name ?? '—'}</span>
-                      <p className="text-[11px] text-gray-400 dark:text-gray-500">{order.createdAt ? new Date(order.createdAt).toLocaleDateString() : ''}</p>
-                    </td>
-                    <td className="px-5 py-4">
-                      <p className="font-semibold text-gray-800 dark:text-white">{order.patient?.fullName ?? '—'}</p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500">{order.patient?.patientCode ?? ''}</p>
-                    </td>
-                    <td className="px-5 py-4 text-gray-600 dark:text-gray-300 max-w-[160px] truncate">{order.template?.name ?? '—'}</td>
-                    <td className="px-5 py-4 text-gray-700 dark:text-gray-300">
-                      <span>₹{Number(order.amount ?? 0).toLocaleString()}</span>
-                      {(order.discount ?? 0) > 0 && (
-                        <span className="ml-1.5 text-xs text-emerald-600">−{order.discount}%</span>
-                      )}
-                    </td>
-                    <td className="px-5 py-4 font-bold text-gray-900 dark:text-white">₹{Number(order.netAmount ?? 0).toLocaleString()}</td>
-                    <td className="px-5 py-4">
-                      {order.paymentType ? (
-                        <span className="inline-flex items-center rounded-lg bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700 capitalize dark:bg-gray-700 dark:text-gray-300">
-                          {order.paymentType.toLowerCase()}
-                        </span>
-                      ) : <span className="text-gray-300 dark:text-gray-600">—</span>}
-                    </td>
-                    <td className="px-5 py-4">
-                      <Badge variant={PAYMENT_VARIANTS[order.paymentStatus] ?? 'default'} dot>
-                        {order.paymentStatus?.charAt(0) + order.paymentStatus?.slice(1).toLowerCase()}
-                      </Badge>
-                    </td>
-                    <td className="px-5 py-4 font-mono text-xs text-gray-500 dark:text-gray-400">
-                      {order.receiptNumber ?? <span className="text-gray-300 dark:text-gray-600">—</span>}
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center justify-end gap-0.5">
-                        {/* Edit payment */}
-                        <IBtn
-                          title="Edit Payment"
-                          onClick={() => setEditOrder(order)}
-                          color="text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </IBtn>
+                {filtered.map(group => {
+                  const primary = group[0]
+                  const totalAmount = group.reduce((s, o) => s + Number(o.amount ?? 0), 0)
+                  const totalNet = group.reduce((s, o) => s + Number(o.netAmount ?? 0), 0)
+                  const savings = totalAmount - totalNet
+                  const testNames = group.map(o => o.template?.name).filter(Boolean).join(', ')
+                  const anyApproved = group.some(o => o.status === 'APPROVED')
+                  const attachmentUrls = group.map(o => o.attachmentUrl).filter((u): u is string => !!u)
 
-                        {/* Receipt — disabled until payment is not PENDING */}
-                        <IBtn
-                          title={order.paymentStatus === 'PENDING' ? 'Receipt unavailable until payment is made' : 'Download Receipt'}
-                          onClick={() => printReceiptMutation.mutate(order)}
-                          disabled={order.paymentStatus === 'PENDING'}
-                          loading={printReceiptMutation.isPending && printReceiptMutation.variables?.id === order.id}
-                          color={order.paymentStatus === 'PENDING'
-                            ? 'text-gray-300 cursor-not-allowed dark:text-gray-600'
-                            : 'text-amber-500 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/30'}
-                        >
-                          <Receipt className="h-4 w-4" />
-                        </IBtn>
-
-                        {order.status === 'APPROVED' && (
+                  return (
+                    <tr key={primary.receiptNumber ?? primary.id} className="group hover:bg-gray-50/60 transition-colors dark:hover:bg-gray-700/30">
+                      <td className="px-5 py-4">
+                        <span className="font-bold text-gray-700 dark:text-gray-300">{primary.receiptNumber ?? primary.template?.name ?? '—'}</span>
+                        <p className="text-[11px] text-gray-400 dark:text-gray-500">{primary.createdAt ? new Date(primary.createdAt).toLocaleDateString() : ''}</p>
+                      </td>
+                      <td className="px-5 py-4">
+                        <p className="font-semibold text-gray-800 dark:text-white">{primary.patient?.fullName ?? '—'}</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">{primary.patient?.patientCode ?? ''}</p>
+                      </td>
+                      <td className="px-5 py-4">
+                        {primary.patient?.isB2b
+                          ? <span className="text-sm text-violet-700 dark:text-violet-400">{primary.patient.b2bLab?.name ?? 'B2B'}</span>
+                          : <span className="text-xs text-gray-300 dark:text-gray-600">—</span>}
+                      </td>
+                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300 max-w-[200px] truncate" title={testNames || undefined}>
+                        {testNames || '—'}
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className="font-bold text-gray-900 dark:text-white">₹{totalNet.toLocaleString()}</span>
+                        {savings > 0 && (
                           <>
-                            {/* Divider */}
-                            <span className="mx-1 h-5 w-px bg-gray-200 dark:bg-gray-700" />
-
-                            {/* Letterhead report */}
-                            <IBtn
-                              title="Letterhead Report"
-                              onClick={() => downloadReport.mutate(order.id)}
-                              loading={downloadReport.isPending && downloadReport.variables === order.id}
-                              color="text-emerald-500 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-900/30"
-                            >
-                              <Download className="h-4 w-4" />
-                            </IBtn>
-
-                            {/* Plain report */}
-                            <IBtn
-                              title="Plain Report"
-                              onClick={() => plainReportMutation.mutate(order.id)}
-                              loading={plainReportMutation.isPending && plainReportMutation.variables === order.id}
-                              color="text-blue-500 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/30"
-                            >
-                              <FileText className="h-4 w-4" />
-                            </IBtn>
-
-                            {/* Combined (only when multiple tests share receipt) */}
-                            {order.receiptNumber && (approvedByReceipt[order.receiptNumber]?.length ?? 0) > 1 && (
-                              <IBtn
-                                title="Combined Report (All Tests)"
-                                onClick={() => combinedReportMutation.mutate(order.receiptNumber!)}
-                                loading={combinedReportMutation.isPending && combinedReportMutation.variables === order.receiptNumber}
-                                color="text-violet-500 hover:bg-violet-50 hover:text-violet-600 dark:hover:bg-violet-900/30"
-                              >
-                                <Layers className="h-4 w-4" />
-                              </IBtn>
-                            )}
-
-                            {/* Share link */}
-                            <IBtn
-                              title="Share Report Link"
-                              onClick={() => shareReport.mutate(order.id)}
-                              loading={shareReport.isPending && shareReport.variables === order.id}
-                              color="text-indigo-400 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/30"
-                            >
-                              <Share2 className="h-4 w-4" />
-                            </IBtn>
+                            <span className="ml-1.5 text-xs text-gray-400 line-through dark:text-gray-500">₹{totalAmount.toLocaleString()}</span>
+                            <span className="ml-1 text-xs text-emerald-600">−₹{savings.toLocaleString()}</span>
                           </>
                         )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-5 py-4">
+                        <Badge variant={PAYMENT_VARIANTS[primary.paymentStatus] ?? 'default'} dot>
+                          {primary.paymentStatus?.charAt(0) + primary.paymentStatus?.slice(1).toLowerCase()}
+                        </Badge>
+                        {primary.paymentStatus !== 'PENDING' && primary.paymentType && (
+                          <span className="ml-1.5 inline-flex items-center rounded-lg bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700 capitalize dark:bg-gray-700 dark:text-gray-300">
+                            {primary.paymentType.toLowerCase()}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center justify-end gap-0.5">
+                          {/* Edit payment */}
+                          <IBtn
+                            title="Edit Payment"
+                            onClick={() => setEditGroup(group)}
+                            color="text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </IBtn>
+
+                          {/* Receipt — disabled until payment is not PENDING */}
+                          <IBtn
+                            title={primary.paymentStatus === 'PENDING' ? 'Receipt unavailable until payment is made' : 'Download Receipt'}
+                            onClick={() => printReceiptMutation.mutate(group)}
+                            disabled={primary.paymentStatus === 'PENDING'}
+                            loading={printReceiptMutation.isPending && printReceiptMutation.variables?.[0]?.id === primary.id}
+                            color={primary.paymentStatus === 'PENDING'
+                              ? 'text-gray-300 cursor-not-allowed dark:text-gray-600'
+                              : 'text-amber-500 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/30'}
+                          >
+                            <Receipt className="h-4 w-4" />
+                          </IBtn>
+
+                          {/* Uploaded document(s) — merged into one PDF if this receipt has more than one */}
+                          {attachmentUrls.length > 0 && (
+                            <IBtn
+                              title={attachmentUrls.length > 1 ? `View Uploaded Documents (${attachmentUrls.length}, merged)` : 'View Uploaded Document'}
+                              onClick={() => viewAttachmentsMutation.mutate(group)}
+                              loading={viewAttachmentsMutation.isPending && viewAttachmentsMutation.variables === group}
+                              color="text-cyan-500 hover:bg-cyan-50 hover:text-cyan-600 dark:hover:bg-cyan-900/30"
+                            >
+                              <Paperclip className="h-4 w-4" />
+                            </IBtn>
+                          )}
+
+                          {anyApproved && (
+                            <>
+                              {/* Divider */}
+                              <span className="mx-1 h-5 w-px bg-gray-200 dark:bg-gray-700" />
+
+                              {/* View report — combined across every approved test on this receipt, opened in a new tab */}
+                              <IBtn
+                                title="View Report"
+                                onClick={() => viewReportMutation.mutate(primary)}
+                                loading={viewReportMutation.isPending && viewReportMutation.variables?.id === primary.id}
+                                color="text-violet-500 hover:bg-violet-50 hover:text-violet-600 dark:hover:bg-violet-900/30"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </IBtn>
+
+                              {/* Letterhead report — combined across every approved test on this receipt */}
+                              <IBtn
+                                title="Download Report"
+                                onClick={() => downloadReport.mutate(primary)}
+                                loading={downloadReport.isPending && downloadReport.variables?.id === primary.id}
+                                color="text-emerald-500 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-900/30"
+                              >
+                                <Download className="h-4 w-4" />
+                              </IBtn>
+
+                              {/* Plain report — also combined across every approved test on this receipt */}
+                              <IBtn
+                                title="Plain Report"
+                                onClick={() => plainReportMutation.mutate(primary)}
+                                loading={plainReportMutation.isPending && plainReportMutation.variables?.id === primary.id}
+                                color="text-blue-500 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/30"
+                              >
+                                <FileText className="h-4 w-4" />
+                              </IBtn>
+
+                              {/* Share link — points at the first test on this receipt */}
+                              <IBtn
+                                title="Share Report Link"
+                                onClick={() => shareReport.mutate(primary.id)}
+                                loading={shareReport.isPending && shareReport.variables === primary.id}
+                                color="text-indigo-400 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-900/30"
+                              >
+                                <Share2 className="h-4 w-4" />
+                              </IBtn>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -556,12 +634,12 @@ export default function BillingPage() {
       </div>
 
       {/* Payment edit modal */}
-      {editOrder && (
+      {editGroup && (
         <PaymentModal
-          order={editOrder}
-          onClose={() => setEditOrder(null)}
+          orders={editGroup}
+          onClose={() => setEditGroup(null)}
           saving={updatePayment.isPending}
-          onSave={(id, form) => updatePayment.mutate({ id, form })}
+          onSave={(ids, form, applyAmount) => updatePayment.mutate({ ids, form, applyAmount })}
         />
       )}
     </div>

@@ -3,32 +3,35 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Save, FlaskConical, Tag, Building2, Calculator,
-  X, Plus, Pencil,
+  X, Plus, Pencil, PlayCircle,
 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Input, Select } from '../components/ui/Input'
 import { Badge } from '../components/ui/Badge'
 import { Header } from '../components/layout/Header'
 import { PageContent } from '../components/ui/PageContent'
-import { ConfirmModal } from '../components/ui/Modal'
+import { ConfirmModal, Modal } from '../components/ui/Modal'
 import { PageLoader } from '../components/ui/Spinner'
 import { templateService } from '../services/templates'
 import { b2bLabService } from '../services/b2bLabs'
-import type { FieldType, TestTemplateField } from '../types'
+import type { FieldType, TestTemplateField, SummaryFormat } from '../types'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
 import { toTitleCase } from '../lib/utils'
+import { evalFormula } from '../utils/formula'
 
-const OP_LABELS: Record<string, string> = { '+': 'Add (+)', '-': 'Subtract (−)', '*': 'Multiply (×)', '/': 'Divide (÷)' }
-const OP_SYMBOLS: Record<string, string> = { '+': '+', '-': '−', '*': '×', '/': '÷' }
+const OP_LABELS: Record<string, string> = { '+': 'Add (+)', '-': 'Subtract (−)', '*': 'Multiply (×)', '/': 'Divide (÷)', '%': 'Percent of (%)' }
+const OP_SYMBOLS: Record<string, string> = { '+': '+', '-': '−', '*': '×', '/': '÷', '%': '%' }
 
 type FormulaOperandKind = 'field' | 'constant'
+type FormulaOp = '+' | '-' | '*' | '/' | '%'
 type FormulaPair = {
-  op: '+' | '-' | '*' | '/'
+  op: FormulaOp
   kind: FormulaOperandKind
   fieldId: string   // used when kind === 'field'
   value: string     // used when kind === 'constant'
 }
+type FormulaStep = { fieldId?: number; op?: string; value?: number; paren?: '(' | ')' }
 
 const fieldTypeLabels: Record<FieldType, string> = {
   text: 'Text', number: 'Number', checkbox: 'Checkbox (Yes/No)',
@@ -38,32 +41,57 @@ const fieldTypeBadgeVariants: Record<FieldType, 'default' | 'info' | 'success' |
   text: 'default', number: 'info', checkbox: 'success', date: 'warning', select: 'purple', calculated: 'danger',
 }
 
+/** Operand slot index 0 is the first operand; index i+1 is pairs[i]'s operand. */
 function buildFormulaJson(
   firstKind: FormulaOperandKind, firstFieldId: string, firstValue: string,
-  pairs: FormulaPair[]
+  pairs: FormulaPair[], groupStart: number | null, groupEnd: number | null,
 ): string {
-  const steps: Array<{ fieldId?: number; op?: string; value?: number }> = []
-  steps.push(firstKind === 'field' ? { fieldId: Number(firstFieldId) } : { value: Number(firstValue) })
+  const operands: Array<{ fieldId?: number; value?: number }> = []
+  operands.push(firstKind === 'field' ? { fieldId: Number(firstFieldId) } : { value: Number(firstValue) })
   for (const pair of pairs) {
-    steps.push({ op: pair.op })
-    steps.push(pair.kind === 'field' ? { fieldId: Number(pair.fieldId) } : { value: Number(pair.value) })
+    operands.push(pair.kind === 'field' ? { fieldId: Number(pair.fieldId) } : { value: Number(pair.value) })
   }
+  const hasGroup = groupStart !== null && groupEnd !== null && groupStart <= groupEnd
+  const steps: FormulaStep[] = []
+  operands.forEach((operand, i) => {
+    if (i > 0) steps.push({ op: pairs[i - 1].op })
+    if (hasGroup && i === groupStart) steps.push({ paren: '(' })
+    steps.push(operand)
+    if (hasGroup && i === groupEnd) steps.push({ paren: ')' })
+  })
   return JSON.stringify(steps)
 }
 function previewFormulaText(
   firstKind: FormulaOperandKind, firstFieldId: string, firstValue: string,
-  pairs: FormulaPair[], fields: TestTemplateField[]
+  pairs: FormulaPair[], fields: TestTemplateField[], groupStart: number | null, groupEnd: number | null,
 ): string {
   const fieldName = (id: string) => fields.find(f => String(f.id) === id)?.fieldName ?? `Field ${id}`
-  const firstLabel = firstKind === 'field'
-    ? (firstFieldId ? fieldName(firstFieldId) : '?')
-    : (firstValue || '?')
-  const parts: string[] = [firstLabel]
-  for (const p of pairs) {
-    parts.push(OP_SYMBOLS[p.op] ?? p.op)
-    parts.push(p.kind === 'field' ? (p.fieldId ? fieldName(p.fieldId) : '?') : (p.value || '?'))
-  }
-  return parts.join(' ')
+  const operandLabels: string[] = []
+  operandLabels.push(firstKind === 'field' ? (firstFieldId ? fieldName(firstFieldId) : '?') : (firstValue || '?'))
+  for (const p of pairs) operandLabels.push(p.kind === 'field' ? (p.fieldId ? fieldName(p.fieldId) : '?') : (p.value || '?'))
+
+  const hasGroup = groupStart !== null && groupEnd !== null && groupStart <= groupEnd
+  const parts: string[] = []
+  operandLabels.forEach((label, i) => {
+    if (i > 0) parts.push(OP_SYMBOLS[pairs[i - 1].op] ?? pairs[i - 1].op)
+    if (hasGroup && i === groupStart) parts.push('(')
+    parts.push(label)
+    if (hasGroup && i === groupEnd) parts.push(')')
+  })
+  return parts.join(' ').replace(/\( /g, '(').replace(/ \)/g, ')')
+}
+
+/** Display label for a single operand slot (0 = first operand, i+1 = pairs[i]). */
+function operandLabelAt(
+  idx: number,
+  firstKind: FormulaOperandKind, firstFieldId: string, firstValue: string,
+  pairs: FormulaPair[], fields: TestTemplateField[],
+): string {
+  const fieldName = (id: string) => fields.find(f => String(f.id) === id)?.fieldName ?? `Field ${id}`
+  if (idx === 0) return firstKind === 'field' ? (firstFieldId ? fieldName(firstFieldId) : '?') : (firstValue || '?')
+  const p = pairs[idx - 1]
+  if (!p) return '?'
+  return p.kind === 'field' ? (p.fieldId ? fieldName(p.fieldId) : '?') : (p.value || '?')
 }
 
 function SectionTitle({ icon, title }: { icon: React.ReactNode; title: string }) {
@@ -84,6 +112,8 @@ const emptyFieldForm = {
   formulaFirstKind: 'field' as FormulaOperandKind,
   formulaFirstFieldId: '', formulaFirstValue: '',
   formulaPairs: [] as FormulaPair[],
+  formulaGroupStart: null as number | null,
+  formulaGroupEnd: null as number | null,
 }
 
 function fieldToForm(field: TestTemplateField): typeof emptyFieldForm {
@@ -96,7 +126,7 @@ function fieldToForm(field: TestTemplateField): typeof emptyFieldForm {
   }
   if (field.fieldType === 'calculated' && field.optionsJson) {
     try {
-      const steps: Array<{ fieldId?: number; op?: string; value?: number }> = JSON.parse(field.optionsJson)
+      const steps: FormulaStep[] = JSON.parse(field.optionsJson)
       const operandSteps = steps.filter(s => 'fieldId' in s || 'value' in s)
       const opSteps = steps.filter(s => 'op' in s)
       if (operandSteps.length > 0) {
@@ -111,12 +141,24 @@ function fieldToForm(field: TestTemplateField): typeof emptyFieldForm {
       }
       base.formulaPairs = opSteps.map((o, i) => {
         const operand = operandSteps[i + 1]
-        if (!operand) return { op: (o.op ?? '+') as FormulaPair['op'], kind: 'field' as FormulaOperandKind, fieldId: '', value: '' }
+        if (!operand) return { op: (o.op ?? '+') as FormulaOp, kind: 'field' as FormulaOperandKind, fieldId: '', value: '' }
         if ('fieldId' in operand && operand.fieldId !== undefined) {
-          return { op: (o.op ?? '+') as FormulaPair['op'], kind: 'field' as FormulaOperandKind, fieldId: String(operand.fieldId), value: '' }
+          return { op: (o.op ?? '+') as FormulaOp, kind: 'field' as FormulaOperandKind, fieldId: String(operand.fieldId), value: '' }
         }
-        return { op: (o.op ?? '+') as FormulaPair['op'], kind: 'constant' as FormulaOperandKind, fieldId: '', value: String(operand.value ?? '') }
+        return { op: (o.op ?? '+') as FormulaOp, kind: 'constant' as FormulaOperandKind, fieldId: '', value: String(operand.value ?? '') }
       })
+
+      // Reconstruct group boundaries from '(' / ')' markers, tracked by operand position.
+      let operandIndex = -1
+      for (const s of steps) {
+        if (s.paren === '(') {
+          base.formulaGroupStart = operandIndex + 1
+        } else if (s.paren === ')') {
+          base.formulaGroupEnd = operandIndex
+        } else if ('fieldId' in s || 'value' in s) {
+          operandIndex++
+        }
+      }
     } catch {}
   }
   return base
@@ -134,6 +176,7 @@ export default function TemplateFormPage() {
   const [active, setActive] = useState(true)
   const [summaryTitle, setSummaryTitle] = useState('')
   const [summary, setSummary] = useState('')
+  const [summaryFormat, setSummaryFormat] = useState<SummaryFormat>('paragraph')
   const [b2bPrices, setB2bPrices] = useState<Record<number, string>>({})
   const [addFieldOpen, setAddFieldOpen] = useState(false)
   const [fieldForm, setFieldForm] = useState(emptyFieldForm)
@@ -142,6 +185,9 @@ export default function TemplateFormPage() {
   const [pendingFields, setPendingFields] = useState<Array<typeof emptyFieldForm>>([])
   const [editingPendingIndex, setEditingPendingIndex] = useState<number | null>(null)
   const [isCreating, setIsCreating] = useState(false)
+  const [testModalOpen, setTestModalOpen] = useState(false)
+  const [testValues, setTestValues] = useState<Record<number, string>>({})
+  const [testResult, setTestResult] = useState<number | null>(null)
 
   const { data: b2bLabs = [] } = useQuery({ queryKey: ['b2b-labs'], queryFn: b2bLabService.getAll })
   const activeB2bLabs = b2bLabs.filter(l => l.active)
@@ -160,6 +206,7 @@ export default function TemplateFormPage() {
       setActive(template.active)
       setSummaryTitle(template.summaryTitle ?? '')
       setSummary(template.summary ?? '')
+      setSummaryFormat(template.summaryFormat ?? 'paragraph')
       const prices: Record<number, string> = {}
       for (const p of template.b2bPrices ?? []) prices[p.b2bLabId] = String(p.amount)
       setB2bPrices(prices)
@@ -167,6 +214,31 @@ export default function TemplateFormPage() {
   }, [template])
 
   const numericFields = (template?.fields ?? []).filter(f => f.fieldType === 'number')
+
+  const testFieldIds = Array.from(new Set(
+    [
+      fieldForm.formulaFirstKind === 'field' ? fieldForm.formulaFirstFieldId : null,
+      ...fieldForm.formulaPairs.map(p => p.kind === 'field' ? p.fieldId : null),
+    ].filter((id): id is string => !!id)
+  )).map(Number)
+
+  function openTestFormula() {
+    setTestValues(prev => {
+      const next: Record<number, string> = {}
+      for (const id of testFieldIds) next[id] = prev[id] ?? ''
+      return next
+    })
+    setTestResult(null)
+    setTestModalOpen(true)
+  }
+
+  function evaluateTest() {
+    const formulaJson = buildFormulaJson(
+      fieldForm.formulaFirstKind, fieldForm.formulaFirstFieldId, fieldForm.formulaFirstValue,
+      fieldForm.formulaPairs, fieldForm.formulaGroupStart, fieldForm.formulaGroupEnd,
+    )
+    setTestResult(evalFormula(formulaJson, testValues))
+  }
 
   function buildAddFieldDto(pf: typeof emptyFieldForm) {
     if (pf.isSectionHeader) return { fieldName: pf.fieldName, fieldType: 'text' as FieldType, required: false, isSectionHeader: true }
@@ -189,6 +261,7 @@ export default function TemplateFormPage() {
           name, code, active, amount: Number(amount) || 0,
           summaryTitle: summaryTitle.trim() || undefined,
           summary: summary.trim() || undefined,
+          summaryFormat,
           b2bPrices: b2bPricesPayload,
         })
       }
@@ -196,6 +269,7 @@ export default function TemplateFormPage() {
         name, code, amount: Number(amount) || 0,
         summaryTitle: summaryTitle.trim() || undefined,
         summary: summary.trim() || undefined,
+        summaryFormat,
         b2bPrices: b2bPricesPayload,
       })
     },
@@ -224,7 +298,7 @@ export default function TemplateFormPage() {
         return templateService.addField(Number(id), {
           fieldName: fieldForm.fieldName, fieldType: 'calculated', required: false,
           unit: fieldForm.unit || undefined,
-          formulaJson: buildFormulaJson(fieldForm.formulaFirstKind, fieldForm.formulaFirstFieldId, fieldForm.formulaFirstValue, fieldForm.formulaPairs),
+          formulaJson: buildFormulaJson(fieldForm.formulaFirstKind, fieldForm.formulaFirstFieldId, fieldForm.formulaFirstValue, fieldForm.formulaPairs, fieldForm.formulaGroupStart, fieldForm.formulaGroupEnd),
           referenceRangeMale: fieldForm.referenceRangeMale || undefined,
           referenceRangeFemale: fieldForm.referenceRangeFemale || undefined,
         })
@@ -260,7 +334,7 @@ export default function TemplateFormPage() {
         return templateService.updateField(Number(id), editingField.id, {
           fieldName: fieldForm.fieldName, fieldType: 'calculated', required: false,
           unit: fieldForm.unit || undefined,
-          formulaJson: buildFormulaJson(fieldForm.formulaFirstKind, fieldForm.formulaFirstFieldId, fieldForm.formulaFirstValue, fieldForm.formulaPairs),
+          formulaJson: buildFormulaJson(fieldForm.formulaFirstKind, fieldForm.formulaFirstFieldId, fieldForm.formulaFirstValue, fieldForm.formulaPairs, fieldForm.formulaGroupStart, fieldForm.formulaGroupEnd),
           referenceRangeMale: fieldForm.referenceRangeMale || undefined,
           referenceRangeFemale: fieldForm.referenceRangeFemale || undefined,
         })
@@ -310,6 +384,7 @@ export default function TemplateFormPage() {
         name, code, amount: Number(amount) || 0,
         summaryTitle: summaryTitle.trim() || undefined,
         summary: summary.trim() || undefined,
+        summaryFormat,
         b2bPrices: b2bPricesPayload,
       })
       for (const pf of pendingFields) {
@@ -443,10 +518,25 @@ export default function TemplateFormPage() {
 
           {/* Summary textarea — full width */}
           <div className="mt-3 flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Summary</label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                Summary <span className="font-normal text-gray-400">(shown in the report after results)</span>
+              </label>
+              <div className="flex rounded-lg border border-gray-300 overflow-hidden text-xs font-semibold dark:border-gray-600">
+                {(['paragraph', 'points'] as SummaryFormat[]).map(f => (
+                  <button key={f} type="button"
+                    onClick={() => setSummaryFormat(f)}
+                    className={`px-2.5 py-1 capitalize transition-colors ${summaryFormat === f ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'}`}>
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </div>
             <textarea
-              rows={2}
-              placeholder="Enter test summary, clinical notes, or interpretation guidelines..."
+              rows={summaryFormat === 'points' ? 4 : 2}
+              placeholder={summaryFormat === 'points'
+                ? 'One point per line, e.g.:\nElevated levels may indicate...\nRecommend follow-up in 2 weeks...'
+                : 'Enter test summary, clinical notes, or interpretation guidelines...'}
               value={summary}
               onChange={e => setSummary(e.target.value)}
               className="w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-y dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500"
@@ -528,7 +618,7 @@ export default function TemplateFormPage() {
                                 <td className="px-2 py-2">
                                   {!fieldForm.isSectionHeader && (
                                     <Select size="sm" value={fieldForm.fieldType}
-                                      onChange={e => setFieldForm(p => ({ ...p, fieldType: e.target.value as FieldType, formulaFirstFieldId: '', formulaPairs: [] }))}>
+                                      onChange={e => setFieldForm(p => ({ ...p, fieldType: e.target.value as FieldType, formulaFirstFieldId: '', formulaPairs: [], formulaGroupStart: null, formulaGroupEnd: null }))}>
                                       {(Object.entries(fieldTypeLabels) as [FieldType, string][])
                                         .map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                                     </Select>
@@ -615,7 +705,7 @@ export default function TemplateFormPage() {
                                 <td className="px-2 py-2">
                                   {!fieldForm.isSectionHeader && (
                                     <Select size="sm" value={fieldForm.fieldType}
-                                      onChange={e => setFieldForm(p => ({ ...p, fieldType: e.target.value as FieldType, formulaFirstFieldId: '', formulaPairs: [] }))}>
+                                      onChange={e => setFieldForm(p => ({ ...p, fieldType: e.target.value as FieldType, formulaFirstFieldId: '', formulaPairs: [], formulaGroupStart: null, formulaGroupEnd: null }))}>
                                       {(Object.entries(fieldTypeLabels) as [FieldType, string][])
                                         .filter(([v]) => v !== 'calculated')
                                         .map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -673,7 +763,7 @@ export default function TemplateFormPage() {
                           <td className="px-2 py-2">
                             {!fieldForm.isSectionHeader && (
                               <Select size="sm" value={fieldForm.fieldType}
-                                onChange={e => setFieldForm(p => ({ ...p, fieldType: e.target.value as FieldType, formulaFirstFieldId: '', formulaPairs: [] }))}>
+                                onChange={e => setFieldForm(p => ({ ...p, fieldType: e.target.value as FieldType, formulaFirstFieldId: '', formulaPairs: [], formulaGroupStart: null, formulaGroupEnd: null }))}>
                                 {(Object.entries(fieldTypeLabels) as [FieldType, string][])
                                   .filter(([v]) => isEdit || v !== 'calculated')
                                   .map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -795,22 +885,67 @@ export default function TemplateFormPage() {
                                       className="w-28 rounded-lg border border-amber-300 bg-white px-2 py-1.5 text-sm outline-none dark:border-amber-700 dark:bg-gray-700 dark:text-gray-100" />
                                   )}
                                 </div>
-                                <button onClick={() => setFieldForm(p => ({ ...p, formulaPairs: p.formulaPairs.filter((_, fi) => fi !== i) }))}
+                                <button onClick={() => setFieldForm(p => ({ ...p, formulaPairs: p.formulaPairs.filter((_, fi) => fi !== i), formulaGroupStart: null, formulaGroupEnd: null }))}
                                   className="mb-0.5 rounded p-1.5 text-amber-600 hover:bg-amber-100"><X className="h-3.5 w-3.5" /></button>
                               </div>
                             ))}
                             <button
-                              onClick={() => setFieldForm(p => ({ ...p, formulaPairs: [...p.formulaPairs, { op: '+', kind: 'field', fieldId: '', value: '' }] }))}
+                              onClick={() => setFieldForm(p => ({ ...p, formulaPairs: [...p.formulaPairs, { op: '+', kind: 'field', fieldId: '', value: '' }], formulaGroupStart: null, formulaGroupEnd: null }))}
                               className="self-end rounded-lg border border-dashed border-amber-400 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100 mb-0.5">
                               + Add Step
                             </button>
                           </div>
+
+                          {fieldForm.formulaPairs.length > 0 && (
+                            <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-white/60 px-3 py-2 dark:border-amber-800 dark:bg-gray-800/40">
+                              <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">Group in brackets ( ):</span>
+                              <select
+                                value={fieldForm.formulaGroupStart ?? ''}
+                                onChange={e => setFieldForm(p => {
+                                  const start = e.target.value === '' ? null : Number(e.target.value)
+                                  const end = p.formulaGroupEnd !== null && start !== null && p.formulaGroupEnd < start ? start : p.formulaGroupEnd
+                                  return { ...p, formulaGroupStart: start, formulaGroupEnd: start === null ? null : end }
+                                })}
+                                className="rounded-lg border border-amber-300 bg-white px-2 py-1 text-xs outline-none dark:border-amber-700 dark:bg-gray-700 dark:text-gray-100">
+                                <option value="">From…</option>
+                                {Array.from({ length: fieldForm.formulaPairs.length + 1 }, (_, idx) => (
+                                  <option key={idx} value={idx}>
+                                    Operand {idx + 1} ({operandLabelAt(idx, fieldForm.formulaFirstKind, fieldForm.formulaFirstFieldId, fieldForm.formulaFirstValue, fieldForm.formulaPairs, numericFields)})
+                                  </option>
+                                ))}
+                              </select>
+                              <span className="text-xs text-amber-600">to</span>
+                              <select
+                                value={fieldForm.formulaGroupEnd ?? ''}
+                                onChange={e => setFieldForm(p => ({ ...p, formulaGroupEnd: e.target.value === '' ? null : Number(e.target.value) }))}
+                                disabled={fieldForm.formulaGroupStart === null}
+                                className="rounded-lg border border-amber-300 bg-white px-2 py-1 text-xs outline-none disabled:opacity-50 dark:border-amber-700 dark:bg-gray-700 dark:text-gray-100">
+                                <option value="">To…</option>
+                                {Array.from({ length: fieldForm.formulaPairs.length + 1 }, (_, idx) => idx)
+                                  .filter(idx => fieldForm.formulaGroupStart === null || idx >= fieldForm.formulaGroupStart)
+                                  .map(idx => (
+                                    <option key={idx} value={idx}>
+                                      Operand {idx + 1} ({operandLabelAt(idx, fieldForm.formulaFirstKind, fieldForm.formulaFirstFieldId, fieldForm.formulaFirstValue, fieldForm.formulaPairs, numericFields)})
+                                    </option>
+                                  ))}
+                              </select>
+                              {(fieldForm.formulaGroupStart !== null || fieldForm.formulaGroupEnd !== null) && (
+                                <button onClick={() => setFieldForm(p => ({ ...p, formulaGroupStart: null, formulaGroupEnd: null }))}
+                                  className="text-xs text-amber-600 hover:underline">Clear</button>
+                              )}
+                            </div>
+                          )}
                           {(fieldForm.formulaFirstFieldId || fieldForm.formulaFirstValue) && (
-                            <div className="mt-3 rounded-lg bg-white border border-amber-200 px-3 py-2 dark:bg-gray-700 dark:border-amber-700">
+                            <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-white border border-amber-200 px-3 py-2 dark:bg-gray-700 dark:border-amber-700">
                               <span className="text-xs text-amber-600 font-medium dark:text-amber-400">Preview: </span>
                               <span className="text-sm font-mono text-gray-700 dark:text-gray-200">
-                                {previewFormulaText(fieldForm.formulaFirstKind, fieldForm.formulaFirstFieldId, fieldForm.formulaFirstValue, fieldForm.formulaPairs, numericFields)}
+                                {previewFormulaText(fieldForm.formulaFirstKind, fieldForm.formulaFirstFieldId, fieldForm.formulaFirstValue, fieldForm.formulaPairs, numericFields, fieldForm.formulaGroupStart, fieldForm.formulaGroupEnd)}
                               </span>
+                              <button
+                                onClick={openTestFormula}
+                                className="ml-auto flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50">
+                                <PlayCircle className="h-3.5 w-3.5" /> Test Formula
+                              </button>
                             </div>
                           )}
                         </>
@@ -890,6 +1025,55 @@ export default function TemplateFormPage() {
         confirmLabel="Remove Field" variant="danger"
         loading={deleteFieldMutation.isPending}
       />
+
+      <Modal
+        open={testModalOpen}
+        onClose={() => setTestModalOpen(false)}
+        title="Test Formula"
+        subtitle={previewFormulaText(fieldForm.formulaFirstKind, fieldForm.formulaFirstFieldId, fieldForm.formulaFirstValue, fieldForm.formulaPairs, numericFields, fieldForm.formulaGroupStart, fieldForm.formulaGroupEnd)}
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setTestModalOpen(false)}>Close</Button>
+            <Button icon={<PlayCircle className="h-4 w-4" />} onClick={evaluateTest}>Evaluate</Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          {testFieldIds.length === 0 ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              This formula only uses constant values — click Evaluate to see the result.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {testFieldIds.map(id => {
+                const f = numericFields.find(nf => nf.id === id)
+                return (
+                  <div key={id}>
+                    <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      {f?.fieldName ?? `Field ${id}`}
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="Enter a test value"
+                      value={testValues[id] ?? ''}
+                      onChange={e => setTestValues(prev => ({ ...prev, [id]: e.target.value }))}
+                      className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {testResult !== null && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-800 dark:bg-emerald-900/20">
+              <span className="text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">Result</span>
+              <p className="mt-0.5 text-2xl font-bold text-emerald-700 dark:text-emerald-300">{testResult}{fieldForm.unit ? ` ${fieldForm.unit}` : ''}</p>
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   )
 }

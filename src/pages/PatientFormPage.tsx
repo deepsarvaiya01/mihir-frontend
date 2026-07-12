@@ -12,6 +12,7 @@ import { Input, Select } from '../components/ui/Input'
 import { patientService, type CreatePatientDto } from '../services/patients'
 import { b2bLabService } from '../services/b2bLabs'
 import { labBranchService } from '../services/labBranches'
+import { doctorService } from '../services/doctors'
 import { templateService } from '../services/templates'
 import { orderService } from '../services/orders'
 import { PageLoader } from '../components/ui/Spinner'
@@ -132,6 +133,8 @@ export default function PatientFormPage() {
 
   const { data: b2bLabs = [] } = useQuery({ queryKey: ['b2b-labs'], queryFn: b2bLabService.getAll })
   const { data: labBranches = [] } = useQuery({ queryKey: ['lab-branches'], queryFn: labBranchService.getAll })
+  const { data: doctors = [] } = useQuery({ queryKey: ['doctors'], queryFn: doctorService.getAll })
+  const activeDoctors = doctors.filter(d => d.active)
   const { data: allTemplates = [] } = useQuery({ queryKey: ['templates'], queryFn: templateService.getAll })
   const activeTemplates = allTemplates.filter(t => t.active)
 
@@ -368,9 +371,16 @@ export default function PatientFormPage() {
                   </Select>
                   <Input label="Report Date" type="date"
                     value={form.reportDate ?? ''} onChange={setField('reportDate')} />
-                  <Input label="Referring Doctor" placeholder="Dr. Name"
-                    value={form.doctorName ?? ''}
-                    onChange={e => setForm(p => ({ ...p, doctorName: toTitleCase(e.target.value) }))} />
+                  <Select label="Referring Doctor" value={form.doctorName ?? ''}
+                    onChange={e => setForm(p => ({ ...p, doctorName: e.target.value }))}>
+                    <option value="">Self</option>
+                    {form.doctorName && !activeDoctors.some(d => d.name === form.doctorName) && (
+                      <option value={form.doctorName}>{form.doctorName}</option>
+                    )}
+                    {activeDoctors.map(d => (
+                      <option key={d.id} value={d.name}>{d.name}{d.degreeName ? ` (${d.degreeName})` : ''}</option>
+                    ))}
+                  </Select>
                 </div>
               </div>
             </Card>

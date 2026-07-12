@@ -2,7 +2,7 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { PDFDocument } from 'pdf-lib'
 import QRCode from 'qrcode'
-import type { LabSettings, ActiveSignature, Logo, Order } from '../types'
+import type { LabSettings, ActiveSignature, Logo, Order, SummaryFormat } from '../types'
 import { isOutOfRange } from './rangeCheck'
 
 /* ─── Types ─────────────────────────────────────────────── */
@@ -28,7 +28,7 @@ export interface ReportOrder {
     isB2b?: boolean
     b2bLab?: { name: string; contactPerson?: string | null; city?: string | null; address?: string | null; phone?: string | null } | null
   }
-  template?: { name: string; code: string }
+  template?: { name: string; code: string; summaryTitle?: string | null; summary?: string | null; summaryFormat?: SummaryFormat }
   createdAt?: string
 }
 
@@ -163,6 +163,80 @@ function drawFooterNote(doc: jsPDF, note: string, x: number, y: number): void {
   }
 }
 
+/**
+ * Draws the test's summary/interpretation block after the results table, as a
+ * paragraph or a bulleted list depending on `format`. Whenever content would run
+ * into the reserved footer/signature zone, `onPageBreak` is called to start a
+ * fresh page (it should addPage() + redraw that page's own header) and return
+ * the Y to resume drawing at. Returns the Y position after the block.
+ */
+function drawSummarySection(
+  doc: jsPDF,
+  opts: {
+    startY: number
+    ML: number
+    MR: number
+    PAGE_W: number
+    safeBottomY: number
+    title: string
+    summary: string
+    format: SummaryFormat
+    onPageBreak: () => number
+  },
+): number {
+  let y = opts.startY
+  const CW = opts.PAGE_W - opts.ML - opts.MR
+
+  const ensureSpace = (needed: number) => {
+    if (y + needed > opts.safeBottomY) y = opts.onPageBreak()
+  }
+
+  ensureSpace(10)
+  doc.setDrawColor(200, 200, 200)
+  doc.setLineWidth(0.3)
+  doc.line(opts.ML, y, opts.PAGE_W - opts.MR, y)
+  y += 6
+
+  ensureSpace(6)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9.5)
+  doc.setTextColor(10, 10, 10)
+  doc.text(opts.title, opts.ML, y)
+  y += 5.5
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8.5)
+  doc.setTextColor(40, 40, 40)
+
+  if (opts.format === 'points') {
+    const points = opts.summary.split('\n').map(s => s.trim()).filter(Boolean)
+    for (const point of points) {
+      const lines = doc.splitTextToSize(point, CW - 6) as string[]
+      lines.forEach((line, i) => {
+        ensureSpace(4.5)
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(8.5)
+        doc.setTextColor(40, 40, 40)
+        if (i === 0) doc.text('•', opts.ML, y)
+        doc.text(line, opts.ML + 5, y)
+        y += 4.5
+      })
+    }
+  } else {
+    const lines = doc.splitTextToSize(opts.summary, CW) as string[]
+    for (const line of lines) {
+      ensureSpace(4.5)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8.5)
+      doc.setTextColor(40, 40, 40)
+      doc.text(line, opts.ML, y)
+      y += 4.5
+    }
+  }
+
+  return y
+}
+
 function downloadBlob(bytes: Uint8Array, filename: string) {
   const blob = new Blob([new Uint8Array(bytes)], { type: 'application/pdf' })
   const url = URL.createObjectURL(blob)
@@ -173,6 +247,15 @@ function downloadBlob(bytes: Uint8Array, filename: string) {
   a.click()
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
+}
+
+/** Opens a PDF in a new browser tab instead of downloading it. */
+function openPdfInNewTab(bytes: Uint8Array) {
+  const blob = new Blob([new Uint8Array(bytes)], { type: 'application/pdf' })
+  const url = URL.createObjectURL(blob)
+  window.open(url, '_blank')
+  // Give the new tab time to load the blob before revoking it
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }
 
 /* ─── Uint8Array → base64 (chunked to avoid call stack limits) ─────── */
@@ -220,28 +303,20 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
     doc.setFont('helvetica', 'bold');  doc.text('Referred by', ML, startY + 14)
     doc.setFont('helvetica', 'normal'); doc.text(`: ${p?.doctorName ?? 'Self'}`, ML + 35, startY + 14)
 
-    doc.setFont('helvetica', 'bold');  doc.text('Location', ML, startY + 21)
-    doc.setFont('helvetica', 'normal'); doc.text(`: ${p?.city ?? ''}`, ML + 35, startY + 21)
-
-    let extraY = 0
+    // Location is only meaningful for B2B referrals (shows the referring lab) — omitted otherwise
+    let bottomOffset = 19
     if (p?.isB2b && p?.b2bLab) {
-      const lab = p.b2bLab
-      doc.setFont('helvetica', 'bold');  doc.text('Ref. Lab', ML, startY + 28)
-      doc.setFont('helvetica', 'normal'); doc.text(`: ${lab.name}${lab.contactPerson ? ` (${lab.contactPerson})` : ''}`, ML + 35, startY + 28)
-      if (lab.phone) {
-        doc.setFont('helvetica', 'bold');  doc.text('Lab Phone', ML, startY + 35)
-        doc.setFont('helvetica', 'normal'); doc.text(`: ${lab.phone}`, ML + 35, startY + 35)
-        extraY = 14
-      } else {
-        extraY = 7
-      }
+      const locationValue = `${p.b2bLab.name}${p.city ? ` @${p.city}` : ''}${p.b2bLab.contactPerson ? ` (${p.b2bLab.contactPerson})` : ''}`
+      doc.setFont('helvetica', 'bold');  doc.text('Location', ML, startY + 21)
+      doc.setFont('helvetica', 'normal'); doc.text(`: ${locationValue}`, ML + 35, startY + 21)
+      bottomOffset = 26
     }
 
     doc.setDrawColor(160, 160, 160)
     doc.setLineWidth(0.3)
-    doc.line(ML, startY + 26 + extraY, PAGE_W - MR, startY + 26 + extraY)
+    doc.line(ML, startY + bottomOffset, PAGE_W - MR, startY + bottomOffset)
 
-    return startY + 26 + extraY
+    return startY + bottomOffset
   }
 
   /* ── Build table rows ── */
@@ -353,13 +428,11 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
   })
 
   /* ── Bottom border after last table row ── */
-  {
-    const tableBottom = ((doc as unknown) as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY
-    if (tableBottom) {
-      doc.setDrawColor(100, 100, 100)
-      doc.setLineWidth(0.5)
-      doc.line(ML, tableBottom, PAGE_W - MR, tableBottom)
-    }
+  const tableBottom = ((doc as unknown) as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY
+  if (tableBottom) {
+    doc.setDrawColor(100, 100, 100)
+    doc.setLineWidth(0.5)
+    doc.line(ML, tableBottom, PAGE_W - MR, tableBottom)
   }
 
   /* ── Signature / authority section, bottom-anchored on the last page ──
@@ -368,16 +441,30 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
      the degree/name/image stacked upward above it on the right. ── */
   const FOOTER_Y = PAGE_H - 24
   const SIG_RESERVED_H = 40
+  const safeBottomY = FOOTER_Y - SIG_RESERVED_H
 
   doc.setPage(doc.getNumberOfPages())
-  const finalY: number = ((doc as unknown) as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? 200
+  let contentEndY = tableBottom ?? 200
 
-  if (finalY + 6 > FOOTER_Y - SIG_RESERVED_H) {
+  /* ── Summary section (after the results table) ── */
+  const summaryText = order.template?.summary?.trim()
+  if (summaryText) {
+    contentEndY = drawSummarySection(doc, {
+      startY: contentEndY + 6,
+      ML, MR, PAGE_W,
+      safeBottomY,
+      title: order.template?.summaryTitle?.trim() || 'Summary',
+      summary: summaryText,
+      format: order.template?.summaryFormat ?? 'paragraph',
+      onPageBreak: () => { doc.addPage(); return TEMPLATE_HDR + 3 },
+    })
+  }
+
+  if (contentEndY + 6 > safeBottomY) {
     doc.addPage()
   }
 
   const sigX = PAGE_W - MR
-  const dividerY = FOOTER_Y - SIG_RESERVED_H
 
   await drawSignatureBlock(doc, {
     x: sigX,
@@ -390,11 +477,11 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
   if (options.shareUrl) {
     try {
       const qrDataUrl = await QRCode.toDataURL(options.shareUrl, { width: 60, margin: 1 })
-      doc.addImage(qrDataUrl, 'PNG', ML, dividerY + 4, 20, 20)
+      doc.addImage(qrDataUrl, 'PNG', ML, safeBottomY + 4, 20, 20)
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(6.5)
       doc.setTextColor(130, 130, 130)
-      doc.text('Scan to view report online', ML + 10, dividerY + 26, { align: 'center' })
+      doc.text('Scan to view report online', ML + 10, safeBottomY + 26, { align: 'center' })
     } catch { /* skip */ }
   }
 
@@ -462,14 +549,16 @@ export async function generateLabReportBase64(options: GenerateReportOptions): P
 
 /* ─── Receipt generator ─────────────────────────────────── */
 export interface GenerateReceiptOptions {
-  order: Order
+  /** All orders sharing one receipt (a single-element array for a lone test). */
+  orders: Order[]
   labSettings: LabSettings
   signature: ActiveSignature | null
   activeLogo?: Logo | null
 }
 
 export async function generateReceipt(options: GenerateReceiptOptions): Promise<void> {
-  const { order, labSettings, signature } = options
+  const { orders, labSettings, signature } = options
+  const order = orders[0]
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
 
@@ -480,10 +569,16 @@ export async function generateReceipt(options: GenerateReceiptOptions): Promise<
   const CW = PAGE_W - ML - MR
   const TEMPLATE_HDR = 58
 
-  const amount    = Number(order.amount    ?? 0)
-  const discount  = Number(order.discount  ?? 0)
-  const net       = Number(order.netAmount ?? 0)
+  const lineItems = orders.map(o => {
+    const amount = Number(o.amount ?? 0)
+    const discount = Number(o.discount ?? 0)
+    const net = Number(o.netAmount ?? 0)
+    return { name: o.template?.name ?? 'Diagnostic Test', amount, discount, net, discountAmt: amount - net }
+  })
+  const amount = lineItems.reduce((s, l) => s + l.amount, 0)
+  const net = lineItems.reduce((s, l) => s + l.net, 0)
   const discountAmt = amount - net
+  const discount = amount > 0 ? Math.round((discountAmt / amount) * 1000) / 10 : 0
 
   const fmt = (n: number) => `Rs. ${n.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
 
@@ -578,31 +673,39 @@ export async function generateReceipt(options: GenerateReceiptOptions): Promise<
     doc.text(`City: ${p.city}`, ML, y)
     y += 4.5
   }
+  if (p?.isB2b && p?.b2bLab) {
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(109, 40, 217)
+    doc.text(`B2B: ${p.b2bLab.name}`, ML, y)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(60, 60, 60)
+    y += 4.5
+  }
 
   y += 4
 
-  /* ── Service table ────────────────────────────────────── */
+  /* ── Service table — one row per test on this receipt ── */
   doc.setDrawColor(200, 200, 200)
   doc.setLineWidth(0.3)
   doc.line(ML, y, PAGE_W - MR, y)
   y += 5
 
   const sacCode = labSettings.lab_hsn_code ?? '998319'
-  const discLabel = discount > 0 ? `Disc (${discount}%)` : 'Disc'
+  const discLabel = discountAmt > 0 ? `Disc (${discount}%)` : 'Disc'
 
   autoTable(doc, {
     startY: y,
     margin: { left: ML, right: MR, bottom: 20 },
     head: [['Description of Service', 'SAC', 'Gross Amt', discLabel, 'Net Amt', 'GST', 'Total']],
-    body: [[
-      order.template?.name ?? 'Diagnostic Test',
+    body: lineItems.map(l => [
+      l.name,
       sacCode,
-      fmt(amount),
-      discount > 0 ? `-${fmt(discountAmt)}` : '-',
-      fmt(net),
+      fmt(l.amount),
+      l.discountAmt > 0 ? `-${fmt(l.discountAmt)}` : '-',
+      fmt(l.net),
       'Exempt',
-      fmt(net),
-    ]],
+      fmt(l.net),
+    ]),
     theme: 'plain',
     styles: {
       fontSize: 8.5,
@@ -754,16 +857,11 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
   const MR = 15
   const CW = PAGE_W - ML - MR
   const COMPACT_HDR = 18
+  // Same top gap as the letterhead report's reserved template-header zone, for a consistent look across both.
+  const TEMPLATE_HDR = 36
 
   function drawFullHeader(): number {
-    let y = 10
-    const labName = labSettings.lab_name ?? 'Diagnostic Laboratory'
-
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(15)
-    doc.setTextColor(10, 10, 10)
-    doc.text(labName, PAGE_W / 2, y, { align: 'center' })
-    y += 7
+    let y = TEMPLATE_HDR
 
     if (labSettings.lab_address) {
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(50, 50, 50)
@@ -794,15 +892,14 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
 
     const p = order.patient
     const col2X = PAGE_W - MR - 78
+    // Location is only meaningful for B2B referrals (shows the referring lab) — omitted otherwise
     const infoRows: [string, string, string, string][] = [
       ['Pt. Name',   `: ${p?.fullName ?? '—'}`,   'Receipt No.',  `: ${order.receiptNumber ?? '—'}`],
       ['Age/Gender', `: ${fmtAgeGender(p?.age ?? null, p?.gender ?? null)}`, 'Reg. On', `: ${fmtDate(order.createdAt)}`],
       ['Ref. By',    `: ${p?.doctorName ?? 'Self'}`, 'Report On', `: ${order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}`],
-      ['Location',   `: ${p?.city ?? ''}`,            '', ``],
-      ...(p?.isB2b && p?.b2bLab ? [
-        ['Ref. Lab', `: ${p.b2bLab.name}`, p.b2bLab.contactPerson ? 'Contact' : '', p.b2bLab.contactPerson ? `: ${p.b2bLab.contactPerson}` : ''],
-        ...(p.b2bLab.phone ? [['Lab Phone', `: ${p.b2bLab.phone}`, '', '']] as [string,string,string,string][] : []),
-      ] as [string,string,string,string][] : []),
+      ...(p?.isB2b && p?.b2bLab
+        ? [['Location', `: ${p.b2bLab.name}${p.city ? ` @${p.city}` : ''}${p.b2bLab.contactPerson ? ` (${p.b2bLab.contactPerson})` : ''}`, '', '']] as [string, string, string, string][]
+        : []),
     ]
 
     doc.setFontSize(9)
@@ -964,26 +1061,40 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
     isFirstGroup = false
   }
 
-  /* ── Signature on last page ── */
-  doc.setPage(doc.getNumberOfPages())
-  const finalY: number = ((doc as unknown) as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? 200
+  /* ── Signature / authority section, bottom-anchored on the last page ──
+     Same FOOTER_Y / SIG_RESERVED_H as the letterhead report, so both report
+     types share an identical bottom margin and signature placement. ── */
+  const FOOTER_Y = PAGE_H - 24
+  const SIG_RESERVED_H = 40
+  const safeBottomY = FOOTER_Y - SIG_RESERVED_H
 
-  let sigY = finalY + 14
-  if (sigY > PAGE_H - 55) {
+  doc.setPage(doc.getNumberOfPages())
+  let contentEndY: number = ((doc as unknown) as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? 200
+
+  /* ── Summary section (after the results table) ── */
+  const summaryText = order.template?.summary?.trim()
+  if (summaryText) {
+    contentEndY = drawSummarySection(doc, {
+      startY: contentEndY + 6,
+      ML, MR, PAGE_W,
+      safeBottomY,
+      title: order.template?.summaryTitle?.trim() || 'Summary',
+      summary: summaryText,
+      format: order.template?.summaryFormat ?? 'paragraph',
+      onPageBreak: () => { doc.addPage(); drawCompactHeader(); return COMPACT_HDR + 3 },
+    })
+  }
+
+  if (contentEndY + 6 > safeBottomY) {
     doc.addPage()
     drawCompactHeader()
-    sigY = COMPACT_HDR + 10
   }
 
   const sigX = PAGE_W - MR
-  doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.3)
-  doc.line(ML, sigY, PAGE_W - MR, sigY)
-  sigY += 8
 
-  const qrY = sigY
   await drawSignatureBlock(doc, {
     x: sigX,
-    y: sigY,
+    bottomY: FOOTER_Y,
     signatureUrl: signature?.imageUrl,
     doctorName: labSettings.doctor_name || signature?.name,
     doctorQual: signature?.degreeName || labSettings.doctor_qualification,
@@ -992,9 +1103,9 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
   if (options.shareUrl) {
     try {
       const qrDataUrl = await QRCode.toDataURL(options.shareUrl, { width: 60, margin: 1 })
-      doc.addImage(qrDataUrl, 'PNG', ML, qrY, 20, 20)
+      doc.addImage(qrDataUrl, 'PNG', ML, safeBottomY + 4, 20, 20)
       doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(130, 130, 130)
-      doc.text('Scan to view report online', ML + 10, qrY + 22, { align: 'center' })
+      doc.text('Scan to view report online', ML + 10, safeBottomY + 26, { align: 'center' })
     } catch { /* skip */ }
   }
 
@@ -1003,9 +1114,9 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i)
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(120, 120, 120)
-    doc.text(`Page ${i} of ${totalPages}`, ML, PAGE_H - 10, { align: 'left' })
+    doc.text(`Page ${i} of ${totalPages}`, ML, FOOTER_Y, { align: 'left' })
   }
-  drawFooterNote(doc, 'This is an Electronically Authenticated Report.', PAGE_W / 2, PAGE_H - 10)
+  drawFooterNote(doc, 'This is an Electronically Authenticated Report.', PAGE_W / 2, FOOTER_Y)
 
   return doc
 }
@@ -1041,17 +1152,13 @@ export async function generateReportBase64(options: GenerateReportOptions): Prom
   return (doc.output('datauristring') as string).split(',')[1]
 }
 
-/**
- * Generate a combined PDF for multiple tests — each test starts on its own page.
- * Falls back to individual downloads if merging fails.
- */
-export async function generateCombinedReport(
+/** Builds the merged PDF bytes for multiple tests — each test starts on its own page. */
+async function buildCombinedReportBytes(
   optionsList: GenerateReportOptions[],
-  type: 'letterhead' | 'plain' = 'plain',
-): Promise<void> {
-  if (optionsList.length === 0) return
+  type: 'letterhead' | 'plain',
+): Promise<Uint8Array> {
   if (optionsList.length === 1) {
-    return type === 'letterhead' ? generateLabReport(optionsList[0]) : generatePlainReport(optionsList[0])
+    return type === 'letterhead' ? buildLabReportBytes(optionsList[0]) : buildPlainReportDoc(optionsList[0]).then(d => new Uint8Array(d.output('arraybuffer') as ArrayBuffer))
   }
 
   const pdfBytesArray = await Promise.all(
@@ -1069,7 +1176,56 @@ export async function generateCombinedReport(
     pages.forEach(p => merged.addPage(p))
   }
 
+  return merged.save()
+}
+
+/**
+ * Generate a combined PDF for multiple tests — each test starts on its own page.
+ * Falls back to individual downloads if merging fails.
+ */
+export async function generateCombinedReport(
+  optionsList: GenerateReportOptions[],
+  type: 'letterhead' | 'plain' = 'plain',
+): Promise<void> {
+  if (optionsList.length === 0) return
+  const bytes = await buildCombinedReportBytes(optionsList, type)
   const first = optionsList[0]
   const patientSlug = first.order.patient?.fullName?.replace(/\s+/g, '-') ?? 'patient'
-  downloadBlob(await merged.save(), `report-combined-${patientSlug}.pdf`)
+  downloadBlob(bytes, `report-combined-${patientSlug}.pdf`)
+}
+
+/** Opens the combined report PDF in a new browser tab instead of downloading it. */
+export async function viewCombinedReport(
+  optionsList: GenerateReportOptions[],
+  type: 'letterhead' | 'plain' = 'plain',
+): Promise<void> {
+  if (optionsList.length === 0) return
+  const bytes = await buildCombinedReportBytes(optionsList, type)
+  openPdfInNewTab(bytes)
+}
+
+/** Fetches PDFs from the given URLs and merges them into one document, opened in a new tab. */
+export async function viewMergedAttachments(urls: string[]): Promise<void> {
+  const valid = urls.filter(Boolean)
+  if (valid.length === 0) return
+
+  if (valid.length === 1) {
+    window.open(valid[0], '_blank')
+    return
+  }
+
+  const merged = await PDFDocument.create()
+  for (const url of valid) {
+    try {
+      const res = await fetch(url)
+      if (!res.ok) continue
+      const bytes = await res.arrayBuffer()
+      const pdf = await PDFDocument.load(bytes)
+      const pages = await merged.copyPages(pdf, pdf.getPageIndices())
+      pages.forEach(p => merged.addPage(p))
+    } catch { /* skip a document that fails to fetch/parse */ }
+  }
+
+  if (merged.getPageCount() === 0) return
+  openPdfInNewTab(await merged.save())
 }

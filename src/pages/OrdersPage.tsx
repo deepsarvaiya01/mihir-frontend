@@ -19,6 +19,12 @@ import { templateService } from '../services/templates'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
 
+/** B2B column cell — shows the referring B2B lab name, or "—" if the patient isn't a B2B referral. */
+function B2bCell({ patient }: { patient?: { isB2b?: boolean; b2bLab?: { name: string } | null } | null }) {
+  if (!patient?.isB2b) return <span className="text-xs text-gray-300 dark:text-gray-600">—</span>
+  return <span className="text-sm text-violet-700 dark:text-violet-400">{patient.b2bLab?.name ?? 'B2B'}</span>
+}
+
 type StatusFilter = 'ALL' | 'PENDING' | 'IN_PROGRESS' | 'AWAITING_APPROVAL' | 'REJECTED'
 
 interface BatchForm {
@@ -37,6 +43,8 @@ const EMPTY_BATCH: BatchForm = {
   paymentType: '',
 }
 
+const TODAY = new Date().toISOString().split('T')[0]
+
 export default function OrdersPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
@@ -49,7 +57,7 @@ export default function OrdersPage() {
   const [permanentDeleteOrder, setPermanentDeleteOrder] = useState<Order | null>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
-  const [dateFrom, setDateFrom] = useState('')
+  const [dateFrom, setDateFrom] = useState(TODAY)
   const [dateTo, setDateTo]     = useState('')
   const [templateFilter, setTemplateFilter] = useState('')
   const [selectedResults, setSelectedResults] = useState<OrderResult | null>(null)
@@ -316,8 +324,14 @@ export default function OrdersPage() {
             className="rounded-xl border border-gray-200 bg-white py-2.5 px-3 text-sm text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200" />
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
             className="rounded-xl border border-gray-200 bg-white py-2.5 px-3 text-sm text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200" />
-          {(search || statusFilter !== 'ALL' || templateFilter || dateFrom || dateTo) && (
-            <button onClick={() => { setSearch(''); setStatusFilter('ALL'); setTemplateFilter(''); setDateFrom(''); setDateTo('') }}
+          {(dateFrom || dateTo) && (
+            <button onClick={() => { setDateFrom(''); setDateTo('') }}
+              className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
+              Show All
+            </button>
+          )}
+          {(search || statusFilter !== 'ALL' || templateFilter || dateFrom !== TODAY || dateTo) && (
+            <button onClick={() => { setSearch(''); setStatusFilter('ALL'); setTemplateFilter(''); setDateFrom(TODAY); setDateTo('') }}
               className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
               <X className="h-3.5 w-3.5" /> Clear
             </button>
@@ -345,6 +359,7 @@ export default function OrdersPage() {
                 <tr className="border-b border-gray-100 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/50">
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Order</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Patient</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">B2B</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Test</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Status</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Date</th>
@@ -357,7 +372,7 @@ export default function OrdersPage() {
                     const ready = canSubmitBatch(row.receipt)
                     return (
                       <tr key={`grp-${row.receipt}`} className="bg-blue-50/60 border-y border-blue-100 dark:bg-blue-900/20 dark:border-blue-900">
-                        <td colSpan={5} className="px-5 py-3">
+                        <td colSpan={6} className="px-5 py-3">
                           <div className="flex items-center gap-2 text-sm">
                             <Receipt className="h-3.5 w-3.5 text-blue-400 shrink-0" />
                             <span className="font-semibold text-blue-700 font-mono dark:text-blue-400">{row.receipt}</span>
@@ -402,6 +417,7 @@ export default function OrdersPage() {
                           <p className="text-xs text-gray-400 dark:text-gray-500">{order.patient?.patientCode ?? ''}</p>
                         )}
                       </td>
+                      <td className="px-5 py-4"><B2bCell patient={order.patient} /></td>
                       <td className="px-5 py-4 text-gray-600 max-w-[180px] truncate dark:text-gray-300">{order.template?.name ?? '—'}</td>
                       <td className="px-5 py-4"><OrderStatusBadge status={order.status} /></td>
                       <td className="px-5 py-4 text-xs text-gray-400 dark:text-gray-500">
@@ -470,6 +486,7 @@ export default function OrdersPage() {
                     <tr className="border-b border-amber-100 bg-amber-50/60 dark:border-amber-800/40 dark:bg-amber-900/20">
                       <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-amber-500 dark:text-amber-500">Order</th>
                       <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-amber-500 dark:text-amber-500">Patient</th>
+                      <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-amber-500 dark:text-amber-500">B2B</th>
                       <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-amber-500 dark:text-amber-500">Test</th>
                       <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-amber-500 dark:text-amber-500">Status</th>
                       <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-amber-500 dark:text-amber-500">Actions</th>
@@ -485,6 +502,7 @@ export default function OrdersPage() {
                           <p className="font-medium text-gray-800 dark:text-gray-200">{order.patient?.fullName ?? '—'}</p>
                           <p className="text-xs text-gray-400 dark:text-gray-500">{order.patient?.patientCode ?? ''}</p>
                         </td>
+                        <td className="px-5 py-4"><B2bCell patient={order.patient} /></td>
                         <td className="px-5 py-4 text-gray-600 max-w-[180px] truncate dark:text-gray-300">
                           {order.template?.name ?? '—'}
                         </td>

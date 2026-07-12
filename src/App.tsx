@@ -13,6 +13,7 @@ import HistoryPage from './pages/HistoryPage'
 import UsersPage from './pages/UsersPage'
 import SettingsPage from './pages/SettingsPage'
 import B2bLabsPage from './pages/B2bLabsPage'
+import DoctorsPage from './pages/DoctorsPage'
 import LabBranchesPage from './pages/LabBranchesPage'
 import PatientFormPage from './pages/PatientFormPage'
 import TemplateFormPage from './pages/TemplateFormPage'
@@ -21,6 +22,7 @@ import SignaturesPage from './pages/SignaturesPage'
 import LogosPage from './pages/LogosPage'
 import EnterResultsPage from './pages/EnterResultsPage'
 import AuditLogPage from './pages/AuditLogPage'
+import RequestLogsPage from './pages/RequestLogsPage'
 import PublicReportPage from './pages/PublicReportPage'
 import { useAuthStore } from './store/authStore'
 import { useThemeStore } from './store/themeStore'
@@ -74,10 +76,12 @@ export default function App() {
             <Route path="/history" element={<RoleRoute roles={['SUPER_ADMIN', 'LAB_USER']}><HistoryPage /></RoleRoute>} />
             <Route path="/users" element={<RoleRoute roles={['SUPER_ADMIN']}><UsersPage /></RoleRoute>} />
             <Route path="/b2b-labs" element={<RoleRoute roles={['SUPER_ADMIN']}><B2bLabsPage /></RoleRoute>} />
+            <Route path="/doctors" element={<RoleRoute roles={['SUPER_ADMIN']}><DoctorsPage /></RoleRoute>} />
             <Route path="/lab-branches" element={<RoleRoute roles={['SUPER_ADMIN']}><LabBranchesPage /></RoleRoute>} />
             <Route path="/signatures" element={<RoleRoute roles={['SUPER_ADMIN']}><SignaturesPage /></RoleRoute>} />
             <Route path="/logos" element={<RoleRoute roles={['SUPER_ADMIN']}><LogosPage /></RoleRoute>} />
             <Route path="/audit" element={<RoleRoute roles={['SUPER_ADMIN']}><AuditLogPage /></RoleRoute>} />
+            <Route path="/request-logs" element={<RoleRoute roles={['SUPER_ADMIN']}><RequestLogsPage /></RoleRoute>} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
