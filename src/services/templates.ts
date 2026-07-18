@@ -55,10 +55,12 @@ export const templateService = {
       unit?: string
       options?: string[]
       formulaJson?: string
+      displayOrder?: number
       referenceRange?: string
       referenceRangeMale?: string
       referenceRangeFemale?: string
       isSectionHeader?: boolean
+      isMainHeader?: boolean
     }
   ): Promise<TestTemplate> => {
     const { data } = await api.patch(`/tests/templates/${templateId}/fields/${fieldId}`, payload)
@@ -78,10 +80,12 @@ export const templateService = {
       unit?: string
       options?: string[]
       formulaJson?: string
+      displayOrder?: number
       referenceRange?: string
       referenceRangeMale?: string
       referenceRangeFemale?: string
       isSectionHeader?: boolean
+      isMainHeader?: boolean
     }
   ): Promise<TestTemplate> => {
     const { data } = await api.post(`/tests/templates/${templateId}/fields`, payload)

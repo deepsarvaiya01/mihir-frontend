@@ -325,9 +325,9 @@ export default function SignaturesPage() {
   })
 
   const deactivateMut = useMutation({
-    mutationFn: signatureService.deactivateAll,
+    mutationFn: signatureService.deactivate,
     onSuccess: () => {
-      toast.success('Active signature cleared')
+      toast.success('Signature deactivated')
       qc.invalidateQueries({ queryKey: ['signatures'] })
     },
     onError: (err) => toastError(err, 'Failed to deactivate signature'),
@@ -371,7 +371,7 @@ export default function SignaturesPage() {
     <div>
       <Header
         title="Signature Management"
-        subtitle="Upload signature images and mark one as active for lab reports"
+        subtitle="Upload signature images and mark one or more as active for lab reports"
         action={
           <div className="flex items-center gap-2">
             <Button
@@ -405,9 +405,9 @@ export default function SignaturesPage() {
             <p className="mt-0.5 text-2xl font-bold text-gray-900 dark:text-white">{signatures.length}</p>
           </div>
           <div className={`rounded-2xl border px-5 py-4 shadow-sm ${activeCount > 0 ? 'border-blue-100 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/30' : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800'}`}>
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Active</p>
-            <p className={`mt-0.5 text-lg font-bold ${activeCount > 0 ? 'text-blue-700 dark:text-blue-400' : 'text-gray-400 dark:text-gray-600'}`}>
-              {activeCount > 0 ? signatures.find(s => s.isActive)?.name : '—'}
+            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Active ({activeCount})</p>
+            <p className={`mt-0.5 truncate text-lg font-bold ${activeCount > 0 ? 'text-blue-700 dark:text-blue-400' : 'text-gray-400 dark:text-gray-600'}`}>
+              {activeCount > 0 ? signatures.filter(s => s.isActive).map(s => s.name).join(', ') : '—'}
             </p>
           </div>
         </div>
@@ -444,7 +444,7 @@ export default function SignaturesPage() {
                 sig={sig}
                 busy={busy}
                 onActivate={id => activateMut.mutate(id)}
-                onDeactivate={() => deactivateMut.mutate()}
+                onDeactivate={() => deactivateMut.mutate(sig.id)}
                 onEdit={sig => setEditSig(sig)}
                 onDelete={sig => setDeleteSig(sig)}
               />

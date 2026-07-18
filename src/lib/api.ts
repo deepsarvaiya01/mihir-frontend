@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { toast } from 'sonner'
 
 const BASE_URL =
   import.meta.env.VITE_API_URL ??
@@ -65,9 +66,21 @@ api.interceptors.response.use(
         const newToken = await refreshing
         original.headers.Authorization = `Bearer ${newToken}`
         return api(original)
-      } catch {
+      } catch (refreshErr) {
+        // Another tab sharing this localStorage may have already refreshed
+        // successfully while our own attempt lost the rotation race — check
+        // before treating this as a real logout.
+        const latest = localStorage.getItem('lab_access_token')
+        if (latest && !expiresSoon(latest, 0)) {
+          original.headers.Authorization = `Bearer ${latest}`
+          return api(original)
+        }
         localStorage.removeItem('lab_access_token')
         localStorage.removeItem('lab_refresh_token')
+        const reason = (refreshErr as { response?: { data?: { message?: string } } })?.response?.data?.message
+        if (reason === 'SESSION_REVOKED_ELSEWHERE') {
+          toast.info('You were signed out because this account was signed in from another device or browser.')
+        }
         window.location.href = '/login'
       }
     }

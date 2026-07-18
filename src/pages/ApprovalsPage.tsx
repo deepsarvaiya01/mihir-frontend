@@ -364,7 +364,7 @@ export default function ApprovalsPage() {
     queryFn: orderService.getAll,
   })
   const { data: labSettings = {} } = useQuery({ queryKey: ['lab-settings'], queryFn: labSettingsService.getAll })
-  const { data: activeSignature = null } = useQuery({ queryKey: ['active-signature'], queryFn: signatureService.getActive })
+  const { data: activeSignatures = [] } = useQuery({ queryKey: ['active-signature'], queryFn: signatureService.getActive })
   const { data: activeLogo = null } = useQuery({ queryKey: ['logos', 'active'], queryFn: logoService.getActive })
 
   const testOptions = Array.from(new Set(orders.map(o => o.template?.name).filter((n): n is string => !!n))).sort()
@@ -424,8 +424,9 @@ export default function ApprovalsPage() {
         results: data.results.map(r => ({
           fieldName: r.fieldName, fieldType: r.fieldType, value: r.value,
           unit: r.unit ?? null, referenceRange: r.referenceRange ?? null, isSectionHeader: r.isSectionHeader ?? false,
+          isMainHeader: r.isMainHeader ?? false,
         })),
-        labSettings, signature: activeSignature, activeLogo,
+        labSettings, signatures: activeSignatures, activeLogo,
       }).then(() => toast.success('Report downloaded')).catch(() => toast.error('Failed to generate report'))
     },
     onError: (err) => toastError(err, 'Failed to generate report'),

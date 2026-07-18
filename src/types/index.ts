@@ -7,7 +7,7 @@ export type SummaryFormat = 'paragraph' | 'points'
 
 export interface UserProfile { id: number; name: string; email: string; role: UserRole }
 export interface DashboardSummary { superAdmins: number; labUsers: number; templates: number; activeTemplates: number; patients: number; orders: number; completedOrders: number; pendingOrders: number }
-export interface TestTemplateField { id: number; fieldName: string; fieldType: FieldType; required: boolean; optionsJson: string | null; unit: string | null; displayOrder: number; referenceRange: string | null; referenceRangeMale: string | null; referenceRangeFemale: string | null; isSectionHeader: boolean }
+export interface TestTemplateField { id: number; fieldName: string; fieldType: FieldType; required: boolean; optionsJson: string | null; unit: string | null; displayOrder: number; referenceRange: string | null; referenceRangeMale: string | null; referenceRangeFemale: string | null; isSectionHeader: boolean; isMainHeader: boolean }
 export interface TestTemplateB2bPrice { id: number; b2bLabId: number; amount: number }
 export interface TestTemplate { id: number; name: string; code: string; active: boolean; amount: number; summaryTitle: string | null; summary: string | null; summaryFormat: SummaryFormat; fields: TestTemplateField[]; b2bPrices: TestTemplateB2bPrice[] }
 
@@ -38,7 +38,7 @@ export interface Order {
 }
 
 export interface OrderFormData { order: Order; fields: TestTemplateField[] }
-export interface HistoryResult { fieldId?: number; fieldName: string; fieldType: FieldType; value: string | number | boolean | null; unit?: string | null; referenceRange?: string | null; isSectionHeader?: boolean }
+export interface HistoryResult { fieldId?: number; fieldName: string; fieldType: FieldType; value: string | number | boolean | null; unit?: string | null; referenceRange?: string | null; isSectionHeader?: boolean; isMainHeader?: boolean }
 export interface LabSettings { lab_name?: string; lab_address?: string; lab_email?: string; lab_phone?: string; lab_timing?: string; lab_logo_base64?: string; doctor_name?: string; doctor_qualification?: string; lab_gstin?: string; lab_hsn_code?: string }
 export interface ActiveSignature { id: number; name: string; degreeName?: string | null; imageUrl: string; isActive: boolean }
 export interface Logo { id: number; name: string; imageUrl: string; isActive: boolean; createdAt: string; deletedAt?: string | null }

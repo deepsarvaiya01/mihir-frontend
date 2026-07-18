@@ -201,7 +201,7 @@ export default function BillingPage() {
     queryKey: ['lab-settings'],
     queryFn: labSettingsService.getAll,
   })
-  const { data: activeSignature = null } = useQuery({
+  const { data: activeSignatures = [] } = useQuery({
     queryKey: ['active-signature'],
     queryFn: signatureService.getActive,
   })
@@ -241,9 +241,10 @@ export default function BillingPage() {
         unit: r.unit ?? null,
         referenceRange: r.referenceRange ?? null,
         isSectionHeader: r.isSectionHeader ?? false,
+        isMainHeader: r.isMainHeader ?? false,
       })),
       labSettings,
-      signature: activeSignature,
+      signatures: activeSignatures,
       activeLogo,
     }))
   }
@@ -289,7 +290,7 @@ export default function BillingPage() {
 
   const printReceiptMutation = useMutation({
     mutationFn: (orders: Order[]) =>
-      generateReceipt({ orders, labSettings, signature: activeSignature, activeLogo }),
+      generateReceipt({ orders, labSettings, signatures: activeSignatures, activeLogo }),
     onSuccess: () => toast.success('Receipt downloaded'),
     onError: (err) => toastError(err, 'Failed to generate receipt'),
   })
@@ -313,9 +314,10 @@ export default function BillingPage() {
           unit: r.unit ?? null,
           referenceRange: r.referenceRange ?? null,
           isSectionHeader: r.isSectionHeader ?? false,
+          isMainHeader: r.isMainHeader ?? false,
         })),
         labSettings,
-        signature: activeSignature,
+        signatures: activeSignatures,
         activeLogo,
       }))
       generateCombinedReport(optionsList, 'plain')
@@ -551,15 +553,12 @@ export default function BillingPage() {
                             <Pencil className="h-4 w-4" />
                           </IBtn>
 
-                          {/* Receipt — disabled until payment is not PENDING */}
+                          {/* Receipt — generatable regardless of payment or approval status */}
                           <IBtn
-                            title={primary.paymentStatus === 'PENDING' ? 'Receipt unavailable until payment is made' : 'Download Receipt'}
+                            title="Download Receipt"
                             onClick={() => printReceiptMutation.mutate(group)}
-                            disabled={primary.paymentStatus === 'PENDING'}
                             loading={printReceiptMutation.isPending && printReceiptMutation.variables?.[0]?.id === primary.id}
-                            color={primary.paymentStatus === 'PENDING'
-                              ? 'text-gray-300 cursor-not-allowed dark:text-gray-600'
-                              : 'text-amber-500 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/30'}
+                            color="text-amber-500 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-900/30"
                           >
                             <Receipt className="h-4 w-4" />
                           </IBtn>

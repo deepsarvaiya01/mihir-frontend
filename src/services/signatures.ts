@@ -28,9 +28,9 @@ export const signatureService = {
     return Array.isArray(data) ? data : []
   },
 
-  getActive: async (): Promise<Signature | null> => {
+  getActive: async (): Promise<Signature[]> => {
     const { data } = await api.get('/signatures/active')
-    return data ?? null
+    return Array.isArray(data) ? data : []
   },
 
   create: async (dto: CreateSignatureDto): Promise<Signature> => {
@@ -45,6 +45,11 @@ export const signatureService = {
 
   activate: async (id: number): Promise<Signature> => {
     const { data } = await api.patch(`/signatures/${id}/activate`)
+    return data
+  },
+
+  deactivate: async (id: number): Promise<Signature> => {
+    const { data } = await api.patch(`/signatures/${id}/deactivate`)
     return data
   },
 

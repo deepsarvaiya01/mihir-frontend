@@ -13,6 +13,7 @@ export interface ReportResult {
   unit: string | null
   referenceRange: string | null
   isSectionHeader: boolean
+  isMainHeader?: boolean
 }
 
 export interface ReportOrder {
@@ -36,7 +37,8 @@ export interface GenerateReportOptions {
   order: ReportOrder
   results: ReportResult[]
   labSettings: LabSettings
-  signature: ActiveSignature | null
+  /** Every currently-active signature — all are rendered side by side on the report */
+  signatures: ActiveSignature[]
   /** Active logo from the Logo Manager — takes precedence over lab_logo_base64 in labSettings */
   activeLogo?: Logo | null
   shareUrl?: string
@@ -84,7 +86,7 @@ const SIG_AUTH_H = 4   // "Authorized Signatory" line slot (always the bottom-mo
 
 /**
  * Draws the standard bottom-right sign-off block used on reports and receipts:
- * signature image, "Dr. <Name>" line, degree/qualification line, then an
+ * signature image, doctor name line, degree/qualification line, then an
  * "Authorized Signatory" caption.
  *
  * Pass either `y` (draw downward starting there) or `bottomY` (stack the block
@@ -100,17 +102,18 @@ async function drawSignatureBlock(
     signatureUrl?: string | null
     doctorName?: string | null
     doctorQual?: string | null
+    /** Set false to reserve the caption's slot without drawing it — used when multiple signatures share one caption. */
+    showCaption?: boolean
   },
 ): Promise<number> {
-  const { x } = opts
+  const { x, showCaption = true } = opts
 
   let imgData: string | null = null
   if (opts.signatureUrl) {
     try { imgData = await fetchImageAsDataUri(opts.signatureUrl) } catch { imgData = null }
   }
 
-  const rawName = opts.doctorName?.trim()
-  const displayName = rawName ? (/^dr\.?\s/i.test(rawName) ? rawName : `Dr. ${rawName}`) : ''
+  const displayName = opts.doctorName?.trim() ?? ''
   const hasQual = !!opts.doctorQual
 
   let y: number
@@ -142,13 +145,89 @@ async function drawSignatureBlock(
     y += SIG_LINE_H
   }
 
-  doc.setFont('helvetica', 'italic')
-  doc.setFontSize(7.5)
-  doc.setTextColor(130, 130, 130)
-  doc.text('Authorized Signatory', x, y + 4, { align: 'right' })
+  if (showCaption) {
+    doc.setFont('helvetica', 'italic')
+    doc.setFontSize(7.5)
+    doc.setTextColor(130, 130, 130)
+    doc.text('Authorized Signatory', x, y + 4, { align: 'right' })
+  }
   y += SIG_AUTH_H
 
   return y
+}
+
+/**
+ * Draws every active signature side by side, packed tightly as a single
+ * right-aligned group (not spread across the full page width), with ONE
+ * shared "Authorized Signatory" caption centered underneath — never one per
+ * signature. Pass either `y` (draw downward) or `bottomY` (bottom-anchor),
+ * same convention as `drawSignatureBlock`. Falls back to a single text-only
+ * block from `labSettings` when no signature is active.
+ */
+async function drawSignatureBlocks(
+  doc: jsPDF,
+  opts: {
+    y?: number
+    bottomY?: number
+    ML: number
+    MR: number
+    PAGE_W: number
+    signatures: ActiveSignature[]
+    labSettings: LabSettings
+  },
+): Promise<void> {
+  const { y, bottomY, ML, MR, PAGE_W, signatures, labSettings } = opts
+
+  if (signatures.length === 0) {
+    await drawSignatureBlock(doc, {
+      x: PAGE_W - MR,
+      y, bottomY,
+      doctorName: labSettings.doctor_name,
+      doctorQual: labSettings.doctor_qualification,
+    })
+    return
+  }
+
+  if (signatures.length === 1) {
+    const sig = signatures[0]
+    await drawSignatureBlock(doc, {
+      x: PAGE_W - MR,
+      y, bottomY,
+      signatureUrl: sig.imageUrl,
+      doctorName: sig.name,
+      doctorQual: sig.degreeName,
+    })
+    return
+  }
+
+  // Multiple signatures: pack them close together as one group anchored to
+  // the right margin (same edge the single-signature layout always used),
+  // and suppress each block's own caption in favor of a single shared one
+  // drawn at that same right-aligned spot.
+  const CW = PAGE_W - ML - MR
+  const slotW = Math.min(50, Math.max(20, (CW - 90) / (signatures.length - 1)))
+  const anchors = signatures.map((_, i) => (PAGE_W - MR) - (signatures.length - 1 - i) * slotW)
+
+  const endYs: number[] = []
+  for (let i = 0; i < signatures.length; i++) {
+    const sig = signatures[i]
+    const endY = await drawSignatureBlock(doc, {
+      x: anchors[i],
+      y, bottomY,
+      signatureUrl: sig.imageUrl,
+      doctorName: sig.name,
+      doctorQual: sig.degreeName,
+      showCaption: false,
+    })
+    endYs.push(endY)
+  }
+
+  const captionBaselineY = Math.max(...endYs) - SIG_AUTH_H + 4
+
+  doc.setFont('helvetica', 'italic')
+  doc.setFontSize(7.5)
+  doc.setTextColor(130, 130, 130)
+  doc.text('Authorized Signatory', PAGE_W - MR, captionBaselineY, { align: 'right' })
 }
 
 /** Draws a centered footer note on every page of the document at the given (x, y). */
@@ -269,7 +348,7 @@ function uint8ToBase64(bytes: Uint8Array): string {
 
 /* ─── Main generator ────────────────────────────────────── */
 async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint8Array> {
-  const { order, results, labSettings, signature } = options
+  const { order, results, labSettings, signatures } = options
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
 
@@ -320,7 +399,7 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
   }
 
   /* ── Build table rows ── */
-  interface RowMeta { isSectionHeader: boolean; isOutOfRange: boolean }
+  interface RowMeta { isSectionHeader: boolean; isMainHeader: boolean; isOutOfRange: boolean }
   const rowMetas: RowMeta[] = []
   type CellDef = { content: string; colSpan?: number; styles?: object }
   const tableBody: (string | CellDef)[][] = []
@@ -330,14 +409,14 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
       tableBody.push([{
         content: r.fieldName,
         colSpan: 4,
-        styles: { fontStyle: 'bold', halign: 'center' },
+        styles: { fontStyle: 'bold', halign: r.isMainHeader ? 'center' : 'left' },
       }])
-      rowMetas.push({ isSectionHeader: true, isOutOfRange: false })
+      rowMetas.push({ isSectionHeader: true, isMainHeader: !!r.isMainHeader, isOutOfRange: false })
     } else {
       const valStr = r.value !== null && r.value !== undefined ? String(r.value) : ''
       const oor = isOutOfRange(r.value, r.referenceRange)
       tableBody.push([r.fieldName, valStr, r.unit ?? '', r.referenceRange ?? ''])
-      rowMetas.push({ isSectionHeader: false, isOutOfRange: oor })
+      rowMetas.push({ isSectionHeader: false, isMainHeader: false, isOutOfRange: oor })
     }
   }
 
@@ -408,7 +487,9 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
         const row = tableBody[data.row.index]
         const text = typeof row[0] === 'object' ? (row[0] as CellDef).content : String(row[0])
         const tw2 = doc.getTextWidth(text)
-        const tx = data.cell.x + (data.cell.width - tw2) / 2
+        const tx = meta.isMainHeader
+          ? data.cell.x + (data.cell.width - tw2) / 2
+          : data.cell.x + data.cell.padding('left')
         const ty = data.cell.y + data.cell.height - data.cell.padding('bottom') - 0.5
         doc.setDrawColor(15, 15, 15)
         doc.setLineWidth(0.25)
@@ -464,15 +545,7 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
     doc.addPage()
   }
 
-  const sigX = PAGE_W - MR
-
-  await drawSignatureBlock(doc, {
-    x: sigX,
-    bottomY: FOOTER_Y,
-    signatureUrl: signature?.imageUrl,
-    doctorName: labSettings.doctor_name || signature?.name,
-    doctorQual: signature?.degreeName || labSettings.doctor_qualification,
-  })
+  await drawSignatureBlocks(doc, { bottomY: FOOTER_Y, ML, MR, PAGE_W, signatures, labSettings })
 
   if (options.shareUrl) {
     try {
@@ -552,13 +625,17 @@ export interface GenerateReceiptOptions {
   /** All orders sharing one receipt (a single-element array for a lone test). */
   orders: Order[]
   labSettings: LabSettings
-  signature: ActiveSignature | null
+  /** Every currently-active signature — all are rendered side by side on the receipt */
+  signatures: ActiveSignature[]
   activeLogo?: Logo | null
 }
 
 export async function generateReceipt(options: GenerateReceiptOptions): Promise<void> {
-  const { orders, labSettings, signature } = options
+  const { orders, labSettings, signatures } = options
   const order = orders[0]
+  // All tests on one receipt share a single receipt number — resolve it from
+  // whichever order actually has it set, rather than assuming orders[0] does.
+  const receiptNumber = orders.find(o => o.receiptNumber)?.receiptNumber ?? null
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
 
@@ -599,7 +676,7 @@ export async function generateReceipt(options: GenerateReceiptOptions): Promise<
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(8.5)
   doc.setTextColor(80, 80, 80)
-  doc.text(`Receipt #: ${order.receiptNumber ?? 'PENDING'}`, PAGE_W - MR, y - 5, { align: 'right' })
+  doc.text(`Receipt #: ${receiptNumber ?? '—'}`, PAGE_W - MR, y - 5, { align: 'right' })
   doc.text(`Date: ${dateStr}`, PAGE_W - MR, y, { align: 'right' })
 
   y += 5
@@ -656,9 +733,7 @@ export async function generateReceipt(options: GenerateReceiptOptions): Promise<
   if (p?.age || p?.gender) {
     doc.text(fmtAgeGender(p.age ?? null, p.gender ?? null), ML, y)
   }
-  if (order.receiptNumber) {
-    doc.text(`Receipt #: ${order.receiptNumber}`, col2X, y)
-  }
+  doc.text(`Receipt #: ${receiptNumber ?? '—'}`, col2X, y)
   y += 4.5
 
   if (p?.doctorName) {
@@ -795,15 +870,7 @@ export async function generateReceipt(options: GenerateReceiptOptions): Promise<
   doc.line(ML, y, PAGE_W - MR, y)
   y += 8
 
-  const sigX = PAGE_W - MR
-
-  await drawSignatureBlock(doc, {
-    x: sigX,
-    y,
-    signatureUrl: signature?.imageUrl,
-    doctorName: labSettings.doctor_name || signature?.name,
-    doctorQual: signature?.degreeName || labSettings.doctor_qualification,
-  })
+  await drawSignatureBlocks(doc, { y, ML, MR, PAGE_W, signatures, labSettings })
 
   /* ── Footer note ──────────────────────────────────────── */
   doc.setFont('helvetica', 'normal')
@@ -816,7 +883,7 @@ export async function generateReceipt(options: GenerateReceiptOptions): Promise<
 
   /* ── Merge with payment template ─────────────────────── */
   const patientSlug = order.patient?.fullName?.replace(/\s+/g, '-') ?? 'patient'
-  const filename = `receipt-${order.receiptNumber ?? order.id}-${patientSlug}.pdf`
+  const filename = `receipt-${receiptNumber ?? order.id}-${patientSlug}.pdf`
 
   try {
     const templateRes = await fetch('/Payment.pdf')
@@ -848,7 +915,7 @@ export async function generateReceipt(options: GenerateReceiptOptions): Promise<
 
 /* ─── Plain B&W report generator ───────────────────────── */
 async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPDF> {
-  const { order, results, labSettings, signature } = options
+  const { order, results, labSettings, signatures } = options
 
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const PAGE_W = 210
@@ -882,39 +949,40 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
       y += 4.5
     }
 
-    y += 1
-    doc.setDrawColor(10, 10, 10); doc.setLineWidth(0.8)
+    y += 3
+    doc.setDrawColor(160, 160, 160); doc.setLineWidth(0.3)
     doc.line(ML, y, PAGE_W - MR, y)
-    y += 1.5
-    doc.setLineWidth(0.2)
-    doc.line(ML, y, PAGE_W - MR, y)
-    y += 5
+    y += 8
 
     const p = order.patient
-    const col2X = PAGE_W - MR - 78
-    // Location is only meaningful for B2B referrals (shows the referring lab) — omitted otherwise
-    const infoRows: [string, string, string, string][] = [
-      ['Pt. Name',   `: ${p?.fullName ?? '—'}`,   'Receipt No.',  `: ${order.receiptNumber ?? '—'}`],
-      ['Age/Gender', `: ${fmtAgeGender(p?.age ?? null, p?.gender ?? null)}`, 'Reg. On', `: ${fmtDate(order.createdAt)}`],
-      ['Ref. By',    `: ${p?.doctorName ?? 'Self'}`, 'Report On', `: ${order.createdAt ? new Date(order.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}`],
-      ...(p?.isB2b && p?.b2bLab
-        ? [['Location', `: ${p.b2bLab.name}${p.city ? ` @${p.city}` : ''}${p.b2bLab.contactPerson ? ` (${p.b2bLab.contactPerson})` : ''}`, '', '']] as [string, string, string, string][]
-        : []),
-    ]
+    const col2X = PAGE_W - MR - 75
 
     doc.setFontSize(9)
-    for (const [l1, v1, l2, v2] of infoRows) {
-      doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text(l1, ML, y)
-      doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(v1, ML + 26, y)
-      doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text(l2, col2X, y)
-      doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(v2, col2X + 26, y)
-      y += 5.5
+
+    doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text("Patient's Name", ML, y)
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${p?.fullName ?? '—'}`, ML + 35, y)
+    doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text('Receipt No.', col2X, y)
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${order.receiptNumber ?? '—'}`, col2X + 24, y)
+
+    doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text('Age / Gender', ML, y + 7)
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${fmtAgeGender(p?.age ?? null, p?.gender ?? null)}`, ML + 35, y + 7)
+    doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text('Date', col2X, y + 7)
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${fmtDate(order.createdAt)}`, col2X + 24, y + 7)
+
+    doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text('Referred by', ML, y + 14)
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${p?.doctorName ?? 'Self'}`, ML + 35, y + 14)
+
+    // Location is only meaningful for B2B referrals (shows the referring lab) — omitted otherwise
+    let bottomOffset = 19
+    if (p?.isB2b && p?.b2bLab) {
+      const locationValue = `${p.b2bLab.name}${p.city ? ` @${p.city}` : ''}${p.b2bLab.contactPerson ? ` (${p.b2bLab.contactPerson})` : ''}`
+      doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text('Location', ML, y + 21)
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${locationValue}`, ML + 35, y + 21)
+      bottomOffset = 26
     }
 
-    doc.setLineWidth(0.2); doc.setDrawColor(10, 10, 10)
-    doc.line(ML, y, PAGE_W - MR, y)
-    y += 1.5
-    doc.setLineWidth(0.8)
+    y += bottomOffset
+    doc.setDrawColor(160, 160, 160); doc.setLineWidth(0.3)
     doc.line(ML, y, PAGE_W - MR, y)
     y += 5
 
@@ -931,22 +999,6 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
     doc.line(ML, 13.5, PAGE_W - MR, 13.5)
   }
 
-  /* ── Split results into section groups ── */
-  type SectionGroup = { title: string | null; rows: ReportResult[] }
-  const groups: SectionGroup[] = []
-  let curr: SectionGroup = { title: null, rows: [] }
-
-  for (const r of results) {
-    if (r.isSectionHeader) {
-      if (curr.rows.length > 0 || curr.title !== null) groups.push(curr)
-      curr = { title: r.fieldName, rows: [] }
-    } else {
-      curr.rows.push(r)
-    }
-  }
-  if (curr.rows.length > 0 || curr.title !== null) groups.push(curr)
-  if (groups.length === 0) groups.push({ title: null, rows: results })
-
   /* ── Draw page 1 header + test title ── */
   const headerBottom = drawFullHeader()
   const testName = order.template?.name ?? 'Test Results'
@@ -957,108 +1009,100 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
   doc.setLineWidth(0.35); doc.setDrawColor(10, 10, 10)
   doc.line(PAGE_W / 2 - testTw / 2, headerBottom + 1.5, PAGE_W / 2 + testTw / 2, headerBottom + 1.5)
 
-  /* ── Render each section group ── */
-  type RowMeta = { isSectionHeader: boolean; isOutOfRange: boolean }
+  /* ── Build table rows — headers and fields flow together on one continuous
+     table, same as the letterhead report, instead of a forced page break
+     per section header. ── */
+  interface RowMeta { isSectionHeader: boolean; isMainHeader: boolean; isOutOfRange: boolean }
   type CellDef = { content: string; colSpan?: number; styles?: object }
+  const tableBody: (string | CellDef)[][] = []
+  const rowMetas: RowMeta[] = []
 
-  let isFirstGroup = true
-
-  for (const group of groups) {
-    const startY = isFirstGroup ? headerBottom + 8 : COMPACT_HDR + 3
-
-    if (!isFirstGroup) {
-      doc.addPage()
-      drawCompactHeader()
-    }
-
-    const body: (string | CellDef)[][] = []
-    const metas: RowMeta[] = []
-
-    if (group.title) {
-      body.push([{ content: group.title, colSpan: 4, styles: { fontStyle: 'bold', halign: 'center' } }])
-      metas.push({ isSectionHeader: true, isOutOfRange: false })
-    }
-
-    for (const r of group.rows) {
+  for (const r of results) {
+    if (r.isSectionHeader) {
+      tableBody.push([{
+        content: r.fieldName,
+        colSpan: 4,
+        styles: { fontStyle: 'bold', halign: r.isMainHeader ? 'center' : 'left' },
+      }])
+      rowMetas.push({ isSectionHeader: true, isMainHeader: !!r.isMainHeader, isOutOfRange: false })
+    } else {
       const valStr = r.value !== null && r.value !== undefined ? String(r.value) : ''
       const oor = isOutOfRange(r.value, r.referenceRange)
-      body.push([r.fieldName, valStr, r.unit ?? '', r.referenceRange ?? ''])
-      metas.push({ isSectionHeader: false, isOutOfRange: oor })
+      tableBody.push([r.fieldName, valStr, r.unit ?? '', r.referenceRange ?? ''])
+      rowMetas.push({ isSectionHeader: false, isMainHeader: false, isOutOfRange: oor })
     }
+  }
 
-    const rowMetas = metas
-
-    autoTable(doc, {
-      startY,
-      margin: { top: COMPACT_HDR + 3, left: ML, right: MR, bottom: 20 },
-      head: [['Parameter', 'Result', 'Unit', 'Biological Ref. Interval']],
-      body,
-      showHead: 'firstPage',
-      theme: 'plain',
-      styles: {
-        fontSize: 8.5,
-        cellPadding: { top: 2.5, bottom: 2.5, left: 2.5, right: 2.5 },
-        lineWidth: 0,
-        textColor: [15, 15, 15],
-        font: 'helvetica',
-      },
-      headStyles: {
-        fontStyle: 'bold',
-        fontSize: 8.5,
-        fillColor: [255, 255, 255],
-        textColor: [15, 15, 15],
-        lineWidth: { top: 0.5, bottom: 0.5 },
-        lineColor: [100, 100, 100],
-      },
-      columnStyles: {
-        0: { cellWidth: 70 },
-        1: { cellWidth: 28 },
-        2: { cellWidth: 28 },
-        3: { cellWidth: CW - 70 - 28 - 28 },
-      },
-      didDrawPage(data) {
-        if ((data as any).pageCount > 1) drawCompactHeader()
-      },
-      willDrawCell(data) {
-        if (data.section !== 'body') return
-        const meta = rowMetas[data.row.index]
-        if (!meta) return
-        if (meta.isOutOfRange && data.column.index === 1) data.cell.styles.fontStyle = 'bold'
-      },
-      didDrawCell(data) {
-        if (data.section !== 'body') return
-        const meta = rowMetas[data.row.index]
-        if (!meta) return
-        if (meta.isSectionHeader && data.column.index === 0) {
-          const row = body[data.row.index]
-          const text = typeof row[0] === 'object' ? (row[0] as CellDef).content : String(row[0])
-          const tw2 = doc.getTextWidth(text)
-          const tx = data.cell.x + (data.cell.width - tw2) / 2
-          const ty = data.cell.y + data.cell.height - data.cell.padding('bottom') - 0.5
-          doc.setDrawColor(15, 15, 15); doc.setLineWidth(0.25)
-          doc.line(tx, ty, tx + tw2, ty)
-        }
-        if (meta.isOutOfRange && data.column.index === 1) {
-          const text = String(data.cell.text ?? '')
-          const tx = data.cell.x + data.cell.padding('left')
-          const ty = data.cell.y + data.cell.height - data.cell.padding('bottom') - 0.5
-          doc.setDrawColor(15, 15, 15); doc.setLineWidth(0.25)
-          doc.line(tx, ty, tx + doc.getTextWidth(text), ty)
-        }
-      },
-    })
-
-    /* ── Bottom border after last row of this section ── */
-    {
-      const tableBottom = ((doc as unknown) as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY
-      if (tableBottom) {
-        doc.setDrawColor(100, 100, 100)
-        doc.setLineWidth(0.5)
-        doc.line(ML, tableBottom, PAGE_W - MR, tableBottom)
+  autoTable(doc, {
+    startY: headerBottom + 8,
+    margin: { top: COMPACT_HDR + 3, left: ML, right: MR, bottom: 20 },
+    head: [['Parameter', 'Result', 'Unit', 'Biological Ref. Interval']],
+    body: tableBody as Parameters<typeof autoTable>[1]['body'],
+    showHead: 'firstPage',
+    theme: 'plain',
+    styles: {
+      fontSize: 8.5,
+      cellPadding: { top: 2.5, bottom: 2.5, left: 2.5, right: 2.5 },
+      lineWidth: 0,
+      textColor: [15, 15, 15],
+      font: 'helvetica',
+    },
+    headStyles: {
+      fontStyle: 'bold',
+      fontSize: 8.5,
+      fillColor: [255, 255, 255],
+      textColor: [15, 15, 15],
+      lineWidth: { top: 0.5, bottom: 0.5 },
+      lineColor: [100, 100, 100],
+    },
+    columnStyles: {
+      0: { cellWidth: 70 },
+      1: { cellWidth: 28 },
+      2: { cellWidth: 28 },
+      3: { cellWidth: CW - 70 - 28 - 28 },
+    },
+    didDrawPage(data) {
+      if ((data as any).pageCount > 1) drawCompactHeader()
+    },
+    willDrawCell(data) {
+      if (data.section !== 'body') return
+      const meta = rowMetas[data.row.index]
+      if (!meta) return
+      if (meta.isOutOfRange && data.column.index === 1) data.cell.styles.fontStyle = 'bold'
+    },
+    didDrawCell(data) {
+      if (data.section !== 'body') return
+      const meta = rowMetas[data.row.index]
+      if (!meta) return
+      if (meta.isSectionHeader && data.column.index === 0) {
+        const row = tableBody[data.row.index]
+        const text = typeof row[0] === 'object' ? (row[0] as CellDef).content : String(row[0])
+        const tw2 = doc.getTextWidth(text)
+        const tx = meta.isMainHeader
+          ? data.cell.x + (data.cell.width - tw2) / 2
+          : data.cell.x + data.cell.padding('left')
+        const ty = data.cell.y + data.cell.height - data.cell.padding('bottom') - 0.5
+        doc.setDrawColor(15, 15, 15); doc.setLineWidth(0.25)
+        doc.line(tx, ty, tx + tw2, ty)
       }
-    }
+      if (meta.isOutOfRange && data.column.index === 1) {
+        const text = String(data.cell.text ?? '')
+        const tx = data.cell.x + data.cell.padding('left')
+        const ty = data.cell.y + data.cell.height - data.cell.padding('bottom') - 0.5
+        doc.setDrawColor(15, 15, 15); doc.setLineWidth(0.25)
+        doc.line(tx, ty, tx + doc.getTextWidth(text), ty)
+      }
+    },
+  })
 
-    isFirstGroup = false
+  /* ── Bottom border after the last table row ── */
+  {
+    const tableBottom = ((doc as unknown) as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY
+    if (tableBottom) {
+      doc.setDrawColor(100, 100, 100)
+      doc.setLineWidth(0.5)
+      doc.line(ML, tableBottom, PAGE_W - MR, tableBottom)
+    }
   }
 
   /* ── Signature / authority section, bottom-anchored on the last page ──
@@ -1090,15 +1134,7 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
     drawCompactHeader()
   }
 
-  const sigX = PAGE_W - MR
-
-  await drawSignatureBlock(doc, {
-    x: sigX,
-    bottomY: FOOTER_Y,
-    signatureUrl: signature?.imageUrl,
-    doctorName: labSettings.doctor_name || signature?.name,
-    doctorQual: signature?.degreeName || labSettings.doctor_qualification,
-  })
+  await drawSignatureBlocks(doc, { bottomY: FOOTER_Y, ML, MR, PAGE_W, signatures, labSettings })
 
   if (options.shareUrl) {
     try {
@@ -1157,12 +1193,21 @@ async function buildCombinedReportBytes(
   optionsList: GenerateReportOptions[],
   type: 'letterhead' | 'plain',
 ): Promise<Uint8Array> {
-  if (optionsList.length === 1) {
-    return type === 'letterhead' ? buildLabReportBytes(optionsList[0]) : buildPlainReportDoc(optionsList[0]).then(d => new Uint8Array(d.output('arraybuffer') as ArrayBuffer))
+  // Every test in a combined report belongs to the same receipt — resolve one
+  // shared receipt number up front so every section shows the identical value,
+  // even if an individual order's own record is missing it.
+  const sharedReceiptNumber = optionsList.find(o => o.order.receiptNumber)?.order.receiptNumber ?? null
+  const normalizedList = optionsList.map(opt => ({
+    ...opt,
+    order: { ...opt.order, receiptNumber: sharedReceiptNumber },
+  }))
+
+  if (normalizedList.length === 1) {
+    return type === 'letterhead' ? buildLabReportBytes(normalizedList[0]) : buildPlainReportDoc(normalizedList[0]).then(d => new Uint8Array(d.output('arraybuffer') as ArrayBuffer))
   }
 
   const pdfBytesArray = await Promise.all(
-    optionsList.map(opt =>
+    normalizedList.map(opt =>
       type === 'letterhead'
         ? buildLabReportBytes(opt)
         : buildPlainReportDoc(opt).then(d => new Uint8Array(d.output('arraybuffer') as ArrayBuffer))

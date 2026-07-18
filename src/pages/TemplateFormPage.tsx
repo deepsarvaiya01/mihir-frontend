@@ -109,6 +109,7 @@ function FormCard({ children }: { children: React.ReactNode }) {
 const emptyFieldForm = {
   fieldName: '', fieldType: 'text' as FieldType, required: false,
   options: '', unit: '', referenceRangeMale: '', referenceRangeFemale: '', isSectionHeader: false,
+  isMainHeader: false, displayOrder: '',
   formulaFirstKind: 'field' as FormulaOperandKind,
   formulaFirstFieldId: '', formulaFirstValue: '',
   formulaPairs: [] as FormulaPair[],
@@ -117,10 +118,10 @@ const emptyFieldForm = {
 }
 
 function fieldToForm(field: TestTemplateField): typeof emptyFieldForm {
-  if (field.isSectionHeader) {
-    return { ...emptyFieldForm, fieldName: field.fieldName, isSectionHeader: true }
+  if (field.isSectionHeader || field.isMainHeader) {
+    return { ...emptyFieldForm, fieldName: field.fieldName, isSectionHeader: field.isSectionHeader, isMainHeader: field.isMainHeader, displayOrder: String(field.displayOrder) }
   }
-  const base = { ...emptyFieldForm, fieldName: field.fieldName, fieldType: field.fieldType, required: field.required, unit: field.unit ?? '', referenceRangeMale: field.referenceRangeMale ?? '', referenceRangeFemale: field.referenceRangeFemale ?? '' }
+  const base = { ...emptyFieldForm, fieldName: field.fieldName, fieldType: field.fieldType, required: field.required, unit: field.unit ?? '', referenceRangeMale: field.referenceRangeMale ?? '', referenceRangeFemale: field.referenceRangeFemale ?? '', displayOrder: String(field.displayOrder) }
   if (field.fieldType === 'select' && field.optionsJson) {
     try { base.options = (JSON.parse(field.optionsJson) as string[]).join(', ') } catch {}
   }
@@ -241,10 +242,13 @@ export default function TemplateFormPage() {
   }
 
   function buildAddFieldDto(pf: typeof emptyFieldForm) {
-    if (pf.isSectionHeader) return { fieldName: pf.fieldName, fieldType: 'text' as FieldType, required: false, isSectionHeader: true }
+    const displayOrder = pf.displayOrder ? Number(pf.displayOrder) : undefined
+    if (pf.isSectionHeader || pf.isMainHeader) {
+      return { fieldName: pf.fieldName, fieldType: 'text' as FieldType, required: false, isSectionHeader: pf.isSectionHeader, isMainHeader: pf.isMainHeader, displayOrder }
+    }
     return {
       fieldName: pf.fieldName, fieldType: pf.fieldType,
-      required: pf.required, unit: pf.unit || undefined,
+      required: pf.required, unit: pf.unit || undefined, displayOrder,
       options: pf.fieldType === 'select' ? pf.options.split(',').map(o => o.trim()).filter(Boolean) : undefined,
       referenceRangeMale: pf.referenceRangeMale || undefined,
       referenceRangeFemale: pf.referenceRangeFemale || undefined,
@@ -288,16 +292,17 @@ export default function TemplateFormPage() {
   const addFieldMutation = useMutation({
     mutationFn: () => {
       if (!isEdit || !id) throw new Error('Save the template first')
-      if (fieldForm.isSectionHeader) {
+      const displayOrder = fieldForm.displayOrder ? Number(fieldForm.displayOrder) : undefined
+      if (fieldForm.isSectionHeader || fieldForm.isMainHeader) {
         return templateService.addField(Number(id), {
           fieldName: fieldForm.fieldName, fieldType: 'text', required: false,
-          isSectionHeader: true,
+          isSectionHeader: fieldForm.isSectionHeader, isMainHeader: fieldForm.isMainHeader, displayOrder,
         })
       }
       if (fieldForm.fieldType === 'calculated') {
         return templateService.addField(Number(id), {
           fieldName: fieldForm.fieldName, fieldType: 'calculated', required: false,
-          unit: fieldForm.unit || undefined,
+          unit: fieldForm.unit || undefined, displayOrder,
           formulaJson: buildFormulaJson(fieldForm.formulaFirstKind, fieldForm.formulaFirstFieldId, fieldForm.formulaFirstValue, fieldForm.formulaPairs, fieldForm.formulaGroupStart, fieldForm.formulaGroupEnd),
           referenceRangeMale: fieldForm.referenceRangeMale || undefined,
           referenceRangeFemale: fieldForm.referenceRangeFemale || undefined,
@@ -305,7 +310,7 @@ export default function TemplateFormPage() {
       }
       return templateService.addField(Number(id), {
         fieldName: fieldForm.fieldName, fieldType: fieldForm.fieldType,
-        required: fieldForm.required, unit: fieldForm.unit || undefined,
+        required: fieldForm.required, unit: fieldForm.unit || undefined, displayOrder,
         options: fieldForm.fieldType === 'select'
           ? fieldForm.options.split(',').map(o => o.trim()).filter(Boolean) : undefined,
         referenceRangeMale: fieldForm.referenceRangeMale || undefined,
@@ -325,15 +330,17 @@ export default function TemplateFormPage() {
   const updateFieldMutation = useMutation({
     mutationFn: () => {
       if (!isEdit || !id || !editingField) throw new Error('No field selected')
-      if (fieldForm.isSectionHeader) {
+      const displayOrder = fieldForm.displayOrder ? Number(fieldForm.displayOrder) : undefined
+      if (fieldForm.isSectionHeader || fieldForm.isMainHeader) {
         return templateService.updateField(Number(id), editingField.id, {
-          fieldName: fieldForm.fieldName, fieldType: 'text', required: false, isSectionHeader: true,
+          fieldName: fieldForm.fieldName, fieldType: 'text', required: false,
+          isSectionHeader: fieldForm.isSectionHeader, isMainHeader: fieldForm.isMainHeader, displayOrder,
         })
       }
       if (fieldForm.fieldType === 'calculated') {
         return templateService.updateField(Number(id), editingField.id, {
           fieldName: fieldForm.fieldName, fieldType: 'calculated', required: false,
-          unit: fieldForm.unit || undefined,
+          unit: fieldForm.unit || undefined, displayOrder,
           formulaJson: buildFormulaJson(fieldForm.formulaFirstKind, fieldForm.formulaFirstFieldId, fieldForm.formulaFirstValue, fieldForm.formulaPairs, fieldForm.formulaGroupStart, fieldForm.formulaGroupEnd),
           referenceRangeMale: fieldForm.referenceRangeMale || undefined,
           referenceRangeFemale: fieldForm.referenceRangeFemale || undefined,
@@ -341,7 +348,7 @@ export default function TemplateFormPage() {
       }
       return templateService.updateField(Number(id), editingField.id, {
         fieldName: fieldForm.fieldName, fieldType: fieldForm.fieldType,
-        required: fieldForm.required, unit: fieldForm.unit || undefined,
+        required: fieldForm.required, unit: fieldForm.unit || undefined, displayOrder,
         options: fieldForm.fieldType === 'select'
           ? fieldForm.options.split(',').map(o => o.trim()).filter(Boolean) : undefined,
         referenceRangeMale: fieldForm.referenceRangeMale || undefined,
@@ -415,7 +422,7 @@ export default function TemplateFormPage() {
     }
 
     // Edit mode: call API
-    if (fieldForm.isSectionHeader) {
+    if (fieldForm.isSectionHeader || fieldForm.isMainHeader) {
       editingField ? updateFieldMutation.mutate() : addFieldMutation.mutate(); return
     }
     if (fieldForm.fieldType === 'calculated') {
@@ -563,6 +570,7 @@ export default function TemplateFormPage() {
                         <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 w-28">Type</th>
                         <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 w-24">Unit</th>
                         <th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 w-40">Ref Range (M / F)</th>
+                        <th className="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 w-16" title="Report display order">Order</th>
                         <th className="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 w-10">Req</th>
                         <th className="w-16" />
                       </tr>
@@ -575,12 +583,12 @@ export default function TemplateFormPage() {
                               <td className="px-3 py-2.5">
                                 <div className="flex items-center gap-1.5">
                                   {field.fieldType === 'calculated' && <Calculator className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
-                                  <span className={`font-medium ${field.isSectionHeader ? 'text-blue-700 dark:text-blue-400' : 'text-gray-800 dark:text-gray-100'}`}>{field.fieldName}</span>
+                                  <span className={`font-medium ${field.isMainHeader ? 'text-amber-700 dark:text-amber-400' : field.isSectionHeader ? 'text-blue-700 dark:text-blue-400' : 'text-gray-800 dark:text-gray-100'}`}>{field.fieldName}</span>
                                 </div>
                               </td>
                               <td className="px-3 py-2.5">
-                                <Badge variant={field.isSectionHeader ? 'default' : fieldTypeBadgeVariants[field.fieldType]}>
-                                  {field.isSectionHeader ? 'Section' : fieldTypeLabels[field.fieldType]}
+                                <Badge variant={field.isMainHeader ? 'warning' : field.isSectionHeader ? 'default' : fieldTypeBadgeVariants[field.fieldType]}>
+                                  {field.isMainHeader ? 'Main Header' : field.isSectionHeader ? 'Section' : fieldTypeLabels[field.fieldType]}
                                 </Badge>
                               </td>
                               <td className="px-3 py-2.5 text-xs text-gray-500 dark:text-gray-400">{field.unit || <span className="text-gray-300 dark:text-gray-600">—</span>}</td>
@@ -592,6 +600,7 @@ export default function TemplateFormPage() {
                                   </span>
                                 ) : <span className="text-gray-300 dark:text-gray-600">—</span>}
                               </td>
+                              <td className="px-3 py-2.5 text-center text-xs text-gray-500 dark:text-gray-400">{field.displayOrder}</td>
                               <td className="px-3 py-2.5 text-center text-xs">
                                 {field.required ? <span className="font-bold text-emerald-500">✓</span> : <span className="text-gray-300 dark:text-gray-600">—</span>}
                               </td>
@@ -608,15 +617,23 @@ export default function TemplateFormPage() {
                               <tr className="bg-blue-50/40 dark:bg-blue-900/10">
                                 <td className="px-2 py-2">
                                   <div className="flex items-center gap-1.5">
-                                    <input type="checkbox" checked={fieldForm.isSectionHeader}
-                                      onChange={e => setFieldForm(p => ({ ...p, isSectionHeader: e.target.checked, required: false }))}
-                                      className="h-3 w-3 shrink-0 rounded accent-blue-600" title="Section Header" />
-                                    <Input size="sm" placeholder={fieldForm.isSectionHeader ? 'e.g. RBC Indices :' : 'e.g. Hemoglobin'}
+                                    <div className="flex shrink-0 overflow-hidden rounded-lg border border-gray-300 text-[10px] font-semibold dark:border-gray-600">
+                                      <button type="button" title="Regular field"
+                                        onClick={() => setFieldForm(p => ({ ...p, isSectionHeader: false, isMainHeader: false }))}
+                                        className={`px-1.5 py-1 transition-colors ${!fieldForm.isSectionHeader && !fieldForm.isMainHeader ? 'bg-blue-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300'}`}>Field</button>
+                                      <button type="button" title="Section header — multiple allowed, each with its own Order"
+                                        onClick={() => setFieldForm(p => ({ ...p, isSectionHeader: true, isMainHeader: false, required: false }))}
+                                        className={`border-l border-gray-300 px-1.5 py-1 transition-colors dark:border-gray-600 ${fieldForm.isSectionHeader ? 'bg-blue-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300'}`}>Header</button>
+                                      <button type="button" title="Main header — only one per template, always shown first"
+                                        onClick={() => setFieldForm(p => ({ ...p, isSectionHeader: false, isMainHeader: true, required: false }))}
+                                        className={`border-l border-gray-300 px-1.5 py-1 transition-colors dark:border-gray-600 ${fieldForm.isMainHeader ? 'bg-amber-500 text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300'}`}>Main</button>
+                                    </div>
+                                    <Input size="sm" placeholder={fieldForm.isMainHeader ? 'e.g. Complete Blood Count' : fieldForm.isSectionHeader ? 'e.g. RBC Indices :' : 'e.g. Hemoglobin'}
                                       value={fieldForm.fieldName} onChange={e => setFieldForm(p => ({ ...p, fieldName: toTitleCase(e.target.value) }))} />
                                   </div>
                                 </td>
                                 <td className="px-2 py-2">
-                                  {!fieldForm.isSectionHeader && (
+                                  {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
                                     <Select size="sm" value={fieldForm.fieldType}
                                       onChange={e => setFieldForm(p => ({ ...p, fieldType: e.target.value as FieldType, formulaFirstFieldId: '', formulaPairs: [], formulaGroupStart: null, formulaGroupEnd: null }))}>
                                       {(Object.entries(fieldTypeLabels) as [FieldType, string][])
@@ -625,13 +642,13 @@ export default function TemplateFormPage() {
                                   )}
                                 </td>
                                 <td className="px-2 py-2">
-                                  {!fieldForm.isSectionHeader && (
+                                  {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
                                     <Input size="sm" placeholder="e.g. mg/dL" value={fieldForm.unit}
                                       onChange={e => setFieldForm(p => ({ ...p, unit: e.target.value }))} />
                                   )}
                                 </td>
                                 <td className="px-2 py-2">
-                                  {!fieldForm.isSectionHeader && (
+                                  {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
                                     <div className="flex flex-col gap-1">
                                       <Input size="sm" placeholder="♂ Male range" value={fieldForm.referenceRangeMale}
                                         onChange={e => setFieldForm(p => ({ ...p, referenceRangeMale: e.target.value }))} />
@@ -640,8 +657,13 @@ export default function TemplateFormPage() {
                                     </div>
                                   )}
                                 </td>
+                                <td className="px-2 py-2">
+                                  <input type="number" placeholder="1" value={fieldForm.displayOrder}
+                                    onChange={e => setFieldForm(p => ({ ...p, displayOrder: e.target.value }))}
+                                    className="w-14 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-center text-sm outline-none focus:border-blue-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100" />
+                                </td>
                                 <td className="px-2 py-2 text-center">
-                                  {!fieldForm.isSectionHeader && fieldForm.fieldType !== 'calculated' && fieldForm.fieldType !== 'checkbox' && (
+                                  {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && fieldForm.fieldType !== 'calculated' && fieldForm.fieldType !== 'checkbox' && (
                                     <input type="checkbox" checked={fieldForm.required}
                                       onChange={e => setFieldForm(p => ({ ...p, required: e.target.checked }))}
                                       className="h-3.5 w-3.5 accent-blue-600" />
@@ -663,11 +685,11 @@ export default function TemplateFormPage() {
                           <Fragment key={i}>
                             <tr className={`group ${editingPendingIndex === i ? 'bg-blue-50/30 dark:bg-blue-900/15' : 'hover:bg-gray-50/60 dark:hover:bg-gray-700/20'}`}>
                               <td className="px-3 py-2.5">
-                                <span className={`font-medium ${pf.isSectionHeader ? 'text-blue-700 dark:text-blue-400' : 'text-gray-800 dark:text-gray-100'}`}>{pf.fieldName}</span>
+                                <span className={`font-medium ${pf.isMainHeader ? 'text-amber-700 dark:text-amber-400' : pf.isSectionHeader ? 'text-blue-700 dark:text-blue-400' : 'text-gray-800 dark:text-gray-100'}`}>{pf.fieldName}</span>
                               </td>
                               <td className="px-3 py-2.5">
-                                <Badge variant={pf.isSectionHeader ? 'default' : fieldTypeBadgeVariants[pf.fieldType]}>
-                                  {pf.isSectionHeader ? 'Section' : fieldTypeLabels[pf.fieldType]}
+                                <Badge variant={pf.isMainHeader ? 'warning' : pf.isSectionHeader ? 'default' : fieldTypeBadgeVariants[pf.fieldType]}>
+                                  {pf.isMainHeader ? 'Main Header' : pf.isSectionHeader ? 'Section' : fieldTypeLabels[pf.fieldType]}
                                 </Badge>
                               </td>
                               <td className="px-3 py-2.5 text-xs text-gray-500 dark:text-gray-400">{pf.unit || <span className="text-gray-300 dark:text-gray-600">—</span>}</td>
@@ -679,6 +701,7 @@ export default function TemplateFormPage() {
                                   </span>
                                 ) : <span className="text-gray-300 dark:text-gray-600">—</span>}
                               </td>
+                              <td className="px-3 py-2.5 text-center text-xs text-gray-500 dark:text-gray-400">{pf.displayOrder}</td>
                               <td className="px-3 py-2.5 text-center text-xs">
                                 {pf.required ? <span className="font-bold text-emerald-500">✓</span> : <span className="text-gray-300 dark:text-gray-600">—</span>}
                               </td>
@@ -695,15 +718,23 @@ export default function TemplateFormPage() {
                               <tr className="bg-blue-50/40 dark:bg-blue-900/10">
                                 <td className="px-2 py-2">
                                   <div className="flex items-center gap-1.5">
-                                    <input type="checkbox" checked={fieldForm.isSectionHeader}
-                                      onChange={e => setFieldForm(p => ({ ...p, isSectionHeader: e.target.checked, required: false }))}
-                                      className="h-3 w-3 shrink-0 rounded accent-blue-600" title="Section Header" />
-                                    <Input size="sm" placeholder={fieldForm.isSectionHeader ? 'e.g. RBC Indices :' : 'e.g. Hemoglobin'}
+                                    <div className="flex shrink-0 overflow-hidden rounded-lg border border-gray-300 text-[10px] font-semibold dark:border-gray-600">
+                                      <button type="button" title="Regular field"
+                                        onClick={() => setFieldForm(p => ({ ...p, isSectionHeader: false, isMainHeader: false }))}
+                                        className={`px-1.5 py-1 transition-colors ${!fieldForm.isSectionHeader && !fieldForm.isMainHeader ? 'bg-blue-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300'}`}>Field</button>
+                                      <button type="button" title="Section header — multiple allowed, each with its own Order"
+                                        onClick={() => setFieldForm(p => ({ ...p, isSectionHeader: true, isMainHeader: false, required: false }))}
+                                        className={`border-l border-gray-300 px-1.5 py-1 transition-colors dark:border-gray-600 ${fieldForm.isSectionHeader ? 'bg-blue-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300'}`}>Header</button>
+                                      <button type="button" title="Main header — only one per template, always shown first"
+                                        onClick={() => setFieldForm(p => ({ ...p, isSectionHeader: false, isMainHeader: true, required: false }))}
+                                        className={`border-l border-gray-300 px-1.5 py-1 transition-colors dark:border-gray-600 ${fieldForm.isMainHeader ? 'bg-amber-500 text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300'}`}>Main</button>
+                                    </div>
+                                    <Input size="sm" placeholder={fieldForm.isMainHeader ? 'e.g. Complete Blood Count' : fieldForm.isSectionHeader ? 'e.g. RBC Indices :' : 'e.g. Hemoglobin'}
                                       value={fieldForm.fieldName} onChange={e => setFieldForm(p => ({ ...p, fieldName: toTitleCase(e.target.value) }))} />
                                   </div>
                                 </td>
                                 <td className="px-2 py-2">
-                                  {!fieldForm.isSectionHeader && (
+                                  {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
                                     <Select size="sm" value={fieldForm.fieldType}
                                       onChange={e => setFieldForm(p => ({ ...p, fieldType: e.target.value as FieldType, formulaFirstFieldId: '', formulaPairs: [], formulaGroupStart: null, formulaGroupEnd: null }))}>
                                       {(Object.entries(fieldTypeLabels) as [FieldType, string][])
@@ -713,13 +744,13 @@ export default function TemplateFormPage() {
                                   )}
                                 </td>
                                 <td className="px-2 py-2">
-                                  {!fieldForm.isSectionHeader && (
+                                  {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
                                     <Input size="sm" placeholder="e.g. mg/dL" value={fieldForm.unit}
                                       onChange={e => setFieldForm(p => ({ ...p, unit: e.target.value }))} />
                                   )}
                                 </td>
                                 <td className="px-2 py-2">
-                                  {!fieldForm.isSectionHeader && (
+                                  {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
                                     <div className="flex flex-col gap-1">
                                       <Input size="sm" placeholder="♂ Male range" value={fieldForm.referenceRangeMale}
                                         onChange={e => setFieldForm(p => ({ ...p, referenceRangeMale: e.target.value }))} />
@@ -728,8 +759,13 @@ export default function TemplateFormPage() {
                                     </div>
                                   )}
                                 </td>
+                                <td className="px-2 py-2">
+                                  <input type="number" placeholder="1" value={fieldForm.displayOrder}
+                                    onChange={e => setFieldForm(p => ({ ...p, displayOrder: e.target.value }))}
+                                    className="w-14 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-center text-sm outline-none focus:border-blue-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100" />
+                                </td>
                                 <td className="px-2 py-2 text-center">
-                                  {!fieldForm.isSectionHeader && fieldForm.fieldType !== 'calculated' && fieldForm.fieldType !== 'checkbox' && (
+                                  {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && fieldForm.fieldType !== 'calculated' && fieldForm.fieldType !== 'checkbox' && (
                                     <input type="checkbox" checked={fieldForm.required}
                                       onChange={e => setFieldForm(p => ({ ...p, required: e.target.checked }))}
                                       className="h-3.5 w-3.5 accent-blue-600" />
@@ -753,15 +789,23 @@ export default function TemplateFormPage() {
                         <tr className="bg-blue-50/40 dark:bg-blue-900/10 border-t border-blue-100 dark:border-blue-900/40">
                           <td className="px-2 py-2">
                             <div className="flex items-center gap-1.5">
-                              <input type="checkbox" checked={fieldForm.isSectionHeader}
-                                onChange={e => setFieldForm(p => ({ ...p, isSectionHeader: e.target.checked, required: false }))}
-                                className="h-3 w-3 shrink-0 rounded accent-blue-600" title="Section Header" />
-                              <Input size="sm" placeholder={fieldForm.isSectionHeader ? 'e.g. RBC Indices :' : 'e.g. Hemoglobin'}
+                              <div className="flex shrink-0 overflow-hidden rounded-lg border border-gray-300 text-[10px] font-semibold dark:border-gray-600">
+                                <button type="button" title="Regular field"
+                                  onClick={() => setFieldForm(p => ({ ...p, isSectionHeader: false, isMainHeader: false }))}
+                                  className={`px-1.5 py-1 transition-colors ${!fieldForm.isSectionHeader && !fieldForm.isMainHeader ? 'bg-blue-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300'}`}>Field</button>
+                                <button type="button" title="Section header — multiple allowed, each with its own Order"
+                                  onClick={() => setFieldForm(p => ({ ...p, isSectionHeader: true, isMainHeader: false, required: false }))}
+                                  className={`border-l border-gray-300 px-1.5 py-1 transition-colors dark:border-gray-600 ${fieldForm.isSectionHeader ? 'bg-blue-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300'}`}>Header</button>
+                                <button type="button" title="Main header — only one per template, always shown first"
+                                  onClick={() => setFieldForm(p => ({ ...p, isSectionHeader: false, isMainHeader: true, required: false }))}
+                                  className={`border-l border-gray-300 px-1.5 py-1 transition-colors dark:border-gray-600 ${fieldForm.isMainHeader ? 'bg-amber-500 text-white' : 'bg-white text-gray-500 hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300'}`}>Main</button>
+                              </div>
+                              <Input size="sm" placeholder={fieldForm.isMainHeader ? 'e.g. Complete Blood Count' : fieldForm.isSectionHeader ? 'e.g. RBC Indices :' : 'e.g. Hemoglobin'}
                                 value={fieldForm.fieldName} onChange={e => setFieldForm(p => ({ ...p, fieldName: toTitleCase(e.target.value) }))} />
                             </div>
                           </td>
                           <td className="px-2 py-2">
-                            {!fieldForm.isSectionHeader && (
+                            {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
                               <Select size="sm" value={fieldForm.fieldType}
                                 onChange={e => setFieldForm(p => ({ ...p, fieldType: e.target.value as FieldType, formulaFirstFieldId: '', formulaPairs: [], formulaGroupStart: null, formulaGroupEnd: null }))}>
                                 {(Object.entries(fieldTypeLabels) as [FieldType, string][])
@@ -771,13 +815,13 @@ export default function TemplateFormPage() {
                             )}
                           </td>
                           <td className="px-2 py-2">
-                            {!fieldForm.isSectionHeader && (
+                            {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
                               <Input size="sm" placeholder="e.g. mg/dL" value={fieldForm.unit}
                                 onChange={e => setFieldForm(p => ({ ...p, unit: e.target.value }))} />
                             )}
                           </td>
                           <td className="px-2 py-2">
-                            {!fieldForm.isSectionHeader && (
+                            {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
                               <div className="flex flex-col gap-1">
                                 <Input size="sm" placeholder="♂ Male range" value={fieldForm.referenceRangeMale}
                                   onChange={e => setFieldForm(p => ({ ...p, referenceRangeMale: e.target.value }))} />
@@ -786,8 +830,13 @@ export default function TemplateFormPage() {
                               </div>
                             )}
                           </td>
+                          <td className="px-2 py-2">
+                            <input type="number" placeholder="1" value={fieldForm.displayOrder}
+                              onChange={e => setFieldForm(p => ({ ...p, displayOrder: e.target.value }))}
+                              className="w-14 rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-center text-sm outline-none focus:border-blue-400 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100" />
+                          </td>
                           <td className="px-2 py-2 text-center">
-                            {!fieldForm.isSectionHeader && fieldForm.fieldType !== 'calculated' && fieldForm.fieldType !== 'checkbox' && (
+                            {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && fieldForm.fieldType !== 'calculated' && fieldForm.fieldType !== 'checkbox' && (
                               <input type="checkbox" checked={fieldForm.required}
                                 onChange={e => setFieldForm(p => ({ ...p, required: e.target.checked }))}
                                 className="h-3.5 w-3.5 accent-blue-600" />
@@ -809,7 +858,7 @@ export default function TemplateFormPage() {
                   </table>
 
                   {/* Dropdown options — below table for select type */}
-                  {addFieldOpen && fieldForm.fieldType === 'select' && !fieldForm.isSectionHeader && (
+                  {addFieldOpen && fieldForm.fieldType === 'select' && !fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
                     <div className="border-t border-gray-200 dark:border-gray-700 bg-blue-50/30 dark:bg-blue-900/5 px-4 py-3">
                       <Input size="sm" label="Dropdown Options" placeholder="Option 1, Option 2, Option 3"
                         value={fieldForm.options} onChange={e => setFieldForm(p => ({ ...p, options: e.target.value }))}
@@ -818,7 +867,7 @@ export default function TemplateFormPage() {
                   )}
 
                   {/* Formula builder — below table for calculated type */}
-                  {addFieldOpen && fieldForm.fieldType === 'calculated' && (
+                  {addFieldOpen && fieldForm.fieldType === 'calculated' && !fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
                     <div className="border-t border-amber-200 bg-amber-50/50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
                       <div className="mb-3 flex items-center gap-2">
                         <Calculator className="h-4 w-4 text-amber-600 dark:text-amber-400" />
