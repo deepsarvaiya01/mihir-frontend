@@ -61,7 +61,7 @@ export const orderService = {
 
   createBatch: async (payload: {
     patientId: number
-    orders: Array<{ templateId: number; isEmergency?: boolean }>
+    orders: Array<{ templateId?: number; profileId?: number; isEmergency?: boolean }>
     discount?: number
     paymentStatus?: 'PENDING' | 'PAID' | 'PARTIAL'
     paymentType?: 'CASH' | 'CHEQUE' | 'ONLINE'

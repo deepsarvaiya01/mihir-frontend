@@ -10,6 +10,7 @@ export interface DashboardSummary { superAdmins: number; labUsers: number; templ
 export interface TestTemplateField { id: number; fieldName: string; fieldType: FieldType; required: boolean; optionsJson: string | null; unit: string | null; displayOrder: number; referenceRange: string | null; referenceRangeMale: string | null; referenceRangeFemale: string | null; isSectionHeader: boolean; isMainHeader: boolean }
 export interface TestTemplateB2bPrice { id: number; b2bLabId: number; amount: number }
 export interface TestTemplate { id: number; name: string; code: string; active: boolean; amount: number; summaryTitle: string | null; summary: string | null; summaryFormat: SummaryFormat; fields: TestTemplateField[]; b2bPrices: TestTemplateB2bPrice[] }
+export interface TestProfile { id: number; name: string; code: string; active: boolean; amount: number; templates: TestTemplate[]; deletedAt?: string | null }
 
 export interface B2bLab { id: number; name: string; contactPerson: string | null; phone: string | null; email: string | null; address: string | null; city: string | null; active: boolean; deletedAt?: string | null }
 export interface PatientDocument { id: number; patientId: number; name: string; url: string; createdAt: string }
@@ -45,4 +46,4 @@ export interface Logo { id: number; name: string; imageUrl: string; isActive: bo
 export interface OrderResult { order: Order; results: HistoryResult[] }
 export interface HistoryItem { orderId: number; testName: string; testCode: string; status: string; createdAt: string; results: HistoryResult[] }
 export interface PatientHistory { patient: Patient; history: HistoryItem[] }
-export interface LoginResponse { accessToken: string; refreshToken: string; user: UserProfile }
+export interface LoginResponse { accessToken: string; user: UserProfile }

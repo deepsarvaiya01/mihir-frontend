@@ -16,6 +16,7 @@ import { orderService } from '../services/orders'
 import type { Order, OrderResult, PaymentStatus, PaymentType } from '../types'
 import { patientService } from '../services/patients'
 import { templateService } from '../services/templates'
+import { profileService } from '../services/profiles'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
 
@@ -29,7 +30,7 @@ type StatusFilter = 'ALL' | 'PENDING' | 'IN_PROGRESS' | 'AWAITING_APPROVAL' | 'R
 
 interface BatchForm {
   patientId: string
-  selectedIds: number[]
+  selectedItems: Array<{ kind: 'template' | 'profile'; id: number }>
   discount: string
   paymentStatus: PaymentStatus | ''
   paymentType: PaymentType | ''
@@ -37,7 +38,7 @@ interface BatchForm {
 
 const EMPTY_BATCH: BatchForm = {
   patientId: '',
-  selectedIds: [],
+  selectedItems: [],
   discount: '',
   paymentStatus: '',
   paymentType: '',
@@ -70,6 +71,7 @@ export default function OrdersPage() {
   const { data: orders = [], isLoading } = useQuery({ queryKey: ['orders'], queryFn: orderService.getAll })
   const { data: patients = [] } = useQuery({ queryKey: ['patients'], queryFn: () => patientService.getAll() })
   const { data: templates = [] } = useQuery({ queryKey: ['templates'], queryFn: templateService.getAll })
+  const { data: profiles = [] } = useQuery({ queryKey: ['profiles'], queryFn: profileService.getAll })
 
   const { data: archivedOrders = [] } = useQuery({
     queryKey: ['orders', 'archived'],
@@ -78,6 +80,13 @@ export default function OrdersPage() {
   })
 
   const activeTemplates = templates.filter(t => t.active)
+  const activeProfiles = profiles.filter(p => p.active)
+
+  // Profiles (packages) listed first, then individual tests — one combined, searchable list.
+  const pickableItems = useMemo(() => [
+    ...activeProfiles.map(p => ({ kind: 'profile' as const, id: p.id, name: p.name, code: p.code, price: Number(p.amount), testCount: p.templates.length })),
+    ...activeTemplates.map(t => ({ kind: 'template' as const, id: t.id, name: t.name, code: t.code, price: Number(t.amount ?? 0), testCount: null as number | null })),
+  ], [activeProfiles, activeTemplates])
 
   // Filtered lists for the create modal
   const filteredPatients = useMemo(() =>
@@ -93,30 +102,48 @@ export default function OrdersPage() {
 
   const filteredTests = useMemo(() =>
     testSearch
-      ? activeTemplates.filter(t =>
-          t.name.toLowerCase().includes(testSearch.toLowerCase()) ||
-          t.code.toLowerCase().includes(testSearch.toLowerCase())
+      ? pickableItems.filter(it =>
+          it.name.toLowerCase().includes(testSearch.toLowerCase()) ||
+          it.code.toLowerCase().includes(testSearch.toLowerCase())
         )
-      : activeTemplates,
-    [activeTemplates, testSearch]
+      : pickableItems,
+    [pickableItems, testSearch]
   )
 
-  // Total amount for selected tests
+  // Total amount for selected items
   const selectedTemplates = useMemo(
-    () => activeTemplates.filter(t => batchForm.selectedIds.includes(t.id)),
-    [activeTemplates, batchForm.selectedIds]
+    () => pickableItems.filter(it => batchForm.selectedItems.some(s => s.kind === it.kind && s.id === it.id)),
+    [pickableItems, batchForm.selectedItems]
   )
-  const subtotal = selectedTemplates.reduce((s, t) => s + Number(t.amount ?? 0), 0)
+  const subtotal = selectedTemplates.reduce((s, it) => s + it.price, 0)
   const discountPct = parseFloat(batchForm.discount) || 0
   const total = Math.round(subtotal * (1 - discountPct / 100) * 100) / 100
 
-  const toggleTest = (id: number) => {
-    setBatchForm(prev => ({
-      ...prev,
-      selectedIds: prev.selectedIds.includes(id)
-        ? prev.selectedIds.filter(x => x !== id)
-        : [...prev.selectedIds, id],
-    }))
+  // Tests that belong to a currently-selected profile — disabled individually to avoid double-booking the same test.
+  const disabledTemplateInfo = new Map<number, string>()
+  for (const sel of batchForm.selectedItems) {
+    if (sel.kind !== 'profile') continue
+    const profile = activeProfiles.find(p => p.id === sel.id)
+    if (!profile) continue
+    for (const t of profile.templates) {
+      if (!disabledTemplateInfo.has(t.id)) disabledTemplateInfo.set(t.id, profile.name)
+    }
+  }
+
+  const toggleTest = (kind: 'template' | 'profile', id: number) => {
+    if (kind === 'template' && disabledTemplateInfo.has(id)) return
+    setBatchForm(prev => {
+      if (prev.selectedItems.some(s => s.kind === kind && s.id === id)) {
+        return { ...prev, selectedItems: prev.selectedItems.filter(s => !(s.kind === kind && s.id === id)) }
+      }
+      if (kind === 'profile') {
+        // Selecting a profile supersedes any of its member tests already picked individually
+        const memberIds = new Set(activeProfiles.find(p => p.id === id)?.templates.map(t => t.id) ?? [])
+        const withoutMembers = prev.selectedItems.filter(s => !(s.kind === 'template' && memberIds.has(s.id)))
+        return { ...prev, selectedItems: [...withoutMembers, { kind, id }] }
+      }
+      return { ...prev, selectedItems: [...prev.selectedItems, { kind, id }] }
+    })
   }
 
   const openCreate = () => {
@@ -130,10 +157,10 @@ export default function OrdersPage() {
   const createBatch = useMutation({
     mutationFn: () => {
       if (!batchForm.patientId) throw new Error('Select a patient')
-      if (batchForm.selectedIds.length === 0) throw new Error('Select at least one test')
+      if (batchForm.selectedItems.length === 0) throw new Error('Select at least one test')
       return orderService.createBatch({
         patientId: Number(batchForm.patientId),
-        orders: batchForm.selectedIds.map(id => ({ templateId: id })),
+        orders: batchForm.selectedItems.map(s => s.kind === 'profile' ? { profileId: s.id } : { templateId: s.id }),
         discount: discountPct || undefined,
         paymentStatus: (batchForm.paymentStatus || undefined) as PaymentStatus | undefined,
         paymentType: (batchForm.paymentType || undefined) as PaymentType | undefined,
@@ -545,11 +572,11 @@ export default function OrdersPage() {
             <Button variant="secondary" onClick={() => setCreateOpen(false)}>Cancel</Button>
             <Button
               loading={createBatch.isPending}
-              disabled={!batchForm.patientId || batchForm.selectedIds.length === 0}
+              disabled={!batchForm.patientId || batchForm.selectedItems.length === 0}
               icon={<CheckSquare className="h-4 w-4" />}
               onClick={() => createBatch.mutate()}
             >
-              Create {batchForm.selectedIds.length > 0 ? `${batchForm.selectedIds.length} ` : ''}Order{batchForm.selectedIds.length !== 1 ? 's' : ''}
+              Create {batchForm.selectedItems.length > 0 ? `${batchForm.selectedItems.length} ` : ''}Order{batchForm.selectedItems.length !== 1 ? 's' : ''}
             </Button>
           </>
         }
@@ -604,37 +631,54 @@ export default function OrdersPage() {
               <div className="max-h-64 overflow-y-auto rounded-xl border border-gray-200 divide-y divide-gray-100 dark:border-gray-600 dark:divide-gray-700">
                 {filteredTests.length === 0 ? (
                   <div className="px-4 py-8 text-center text-sm text-gray-400">No active tests found</div>
-                ) : filteredTests.map(t => {
-                  const checked = batchForm.selectedIds.includes(t.id)
+                ) : filteredTests.map(it => {
+                  const checked = batchForm.selectedItems.some(s => s.kind === it.kind && s.id === it.id)
+                  const coveredByProfile = it.kind === 'template' ? disabledTemplateInfo.get(it.id) : undefined
                   return (
                     <label
-                      key={t.id}
-                      className={`flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors ${
-                        checked ? 'bg-blue-50 dark:bg-blue-900/30' : 'hover:bg-gray-50 dark:hover:bg-gray-700/40'
+                      key={`${it.kind}-${it.id}`}
+                      title={coveredByProfile ? `Already included in the "${coveredByProfile}" package` : undefined}
+                      className={`flex items-center gap-3 px-4 py-3 transition-colors ${
+                        coveredByProfile
+                          ? 'cursor-not-allowed bg-gray-50 opacity-50 dark:bg-gray-800/40'
+                          : `cursor-pointer ${checked ? 'bg-blue-50 dark:bg-blue-900/30' : 'hover:bg-gray-50 dark:hover:bg-gray-700/40'}`
                       }`}
                     >
                       <input
                         type="checkbox" checked={checked}
-                        onChange={() => toggleTest(t.id)}
+                        disabled={!!coveredByProfile}
+                        onChange={() => toggleTest(it.kind, it.id)}
                         className="h-4 w-4 rounded accent-blue-600 shrink-0"
                       />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-gray-800 dark:text-gray-200">{t.name}</p>
-                        <p className="text-xs text-gray-400 dark:text-gray-500">{t.code}</p>
+                        <div className="flex items-center gap-1.5">
+                          {it.kind === 'profile' && (
+                            <span className="shrink-0 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+                              Package · {it.testCount}
+                            </span>
+                          )}
+                          <p className="truncate text-sm font-semibold text-gray-800 dark:text-gray-200">{it.name}</p>
+                          {coveredByProfile && (
+                            <span className="shrink-0 rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-gray-700 dark:text-gray-400">
+                              In {coveredByProfile}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">{it.code}</p>
                       </div>
-                      {Number(t.amount) > 0 && (
+                      {it.price > 0 && (
                         <span className="shrink-0 text-sm font-semibold text-gray-700 dark:text-gray-300">
-                          ₹{Number(t.amount).toLocaleString()}
+                          ₹{it.price.toLocaleString()}
                         </span>
                       )}
                     </label>
                   )
                 })}
               </div>
-              {batchForm.selectedIds.length > 0 && (
+              {batchForm.selectedItems.length > 0 && (
                 <button
                   className="self-start text-xs text-gray-400 hover:text-red-500"
-                  onClick={() => setBatchForm(p => ({ ...p, selectedIds: [] }))}
+                  onClick={() => setBatchForm(p => ({ ...p, selectedItems: [] }))}
                 >
                   Clear selection
                 </button>
@@ -647,7 +691,7 @@ export default function OrdersPage() {
                 Order Summary
               </label>
 
-              {batchForm.selectedIds.length === 0 ? (
+              {batchForm.selectedItems.length === 0 ? (
                 <div className="flex flex-1 flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 px-4 py-10 text-center dark:border-gray-600">
                   <FlaskConical className="mb-2 h-8 w-8 text-gray-300" />
                   <p className="text-sm text-gray-400">Select tests on the left</p>
@@ -656,16 +700,16 @@ export default function OrdersPage() {
                 <div className="flex flex-col gap-3">
                   {/* Selected tests list */}
                   <div className="rounded-xl border border-gray-200 divide-y divide-gray-100 overflow-hidden dark:border-gray-600 dark:divide-gray-700">
-                    {selectedTemplates.map(t => (
-                      <div key={t.id} className="flex items-center gap-3 px-4 py-2.5">
+                    {selectedTemplates.map(it => (
+                      <div key={`${it.kind}-${it.id}`} className="flex items-center gap-3 px-4 py-2.5">
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-gray-800 dark:text-gray-200">{t.name}</p>
-                          <p className="text-xs text-gray-400 dark:text-gray-500">{t.code}</p>
+                          <p className="truncate text-sm font-medium text-gray-800 dark:text-gray-200">{it.name}</p>
+                          <p className="text-xs text-gray-400 dark:text-gray-500">{it.code}</p>
                         </div>
                         <span className="shrink-0 text-sm text-gray-600 dark:text-gray-300">
-                          ₹{Number(t.amount).toLocaleString()}
+                          ₹{it.price.toLocaleString()}
                         </span>
-                        <button onClick={() => toggleTest(t.id)} className="shrink-0 text-gray-300 hover:text-red-400">
+                        <button onClick={() => toggleTest(it.kind, it.id)} className="shrink-0 text-gray-300 hover:text-red-400">
                           <X className="h-3.5 w-3.5" />
                         </button>
                       </div>

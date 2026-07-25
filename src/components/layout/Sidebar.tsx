@@ -4,7 +4,7 @@ import {
   LayoutDashboard, FlaskConical, Users, ClipboardList,
   History, LogOut, FlaskRound, ChevronRight,
   UserCog, Settings, Building2, MapPin, Receipt, PanelLeft,
-  PenLine, ImageIcon, Shield, ListTree, Stethoscope,
+  PenLine, ImageIcon, Shield, ListTree, Stethoscope, Layers,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '../../store/authStore'
@@ -29,6 +29,7 @@ const dashboardItem: NavItem = {
 
 const adminItems: NavItem[] = [
   { to: '/templates',    label: 'Test Catalogue',     icon: <FlaskConical className="h-4 w-4" /> },
+  { to: '/profiles',     label: 'Profile Management', icon: <Layers className="h-4 w-4" /> },
   { to: '/users',        label: 'User Management',    icon: <UserCog className="h-4 w-4" /> },
   { to: '/b2b-labs',     label: 'B2B Partners',       icon: <Building2 className="h-4 w-4" /> },
   { to: '/doctors',      label: 'Doctors',            icon: <Stethoscope className="h-4 w-4" /> },

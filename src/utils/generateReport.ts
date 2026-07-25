@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
-import { PDFDocument } from 'pdf-lib'
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import QRCode from 'qrcode'
 import type { LabSettings, ActiveSignature, Logo, Order, SummaryFormat } from '../types'
 import { isOutOfRange } from './rangeCheck'
@@ -950,7 +950,7 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
     }
 
     y += 3
-    doc.setDrawColor(160, 160, 160); doc.setLineWidth(0.3)
+    doc.setDrawColor(10, 10, 10); doc.setLineWidth(0.4)
     doc.line(ML, y, PAGE_W - MR, y)
     y += 8
 
@@ -982,7 +982,7 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
     }
 
     y += bottomOffset
-    doc.setDrawColor(160, 160, 160); doc.setLineWidth(0.3)
+    doc.setDrawColor(10, 10, 10); doc.setLineWidth(0.4)
     doc.line(ML, y, PAGE_W - MR, y)
     y += 5
 
@@ -1188,6 +1188,57 @@ export async function generateReportBase64(options: GenerateReportOptions): Prom
   return (doc.output('datauristring') as string).split(',')[1]
 }
 
+const MM_TO_PT = 72 / 25.4
+const FOOTER_Y_MM = 297 - 24 // matches FOOTER_Y in both single-report builders
+const FOOTER_ML_MM = 15
+
+/**
+ * Each per-test builder stamps its OWN "Page X of Y" — correct only for that
+ * single test's document. Once multiple tests are merged into one combined
+ * report those numbers are wrong for the whole document (every page reads
+ * "Page 1 of 1", etc.) — this whites out that footer strip on every merged
+ * page and restamps correct, combined-wide numbering + footer note directly
+ * on the final PDF.
+ */
+async function restampCombinedFooters(pdf: PDFDocument, footerNote: string): Promise<void> {
+  const font = await pdf.embedFont(StandardFonts.Helvetica)
+  const italicFont = await pdf.embedFont(StandardFonts.HelveticaOblique)
+  const pages = pdf.getPages()
+  const total = pages.length
+
+  pages.forEach((page, idx) => {
+    const { width, height } = page.getSize()
+    const baselineY = height - FOOTER_Y_MM * MM_TO_PT
+
+    // White out the old (wrong) per-test footer row before restamping
+    page.drawRectangle({
+      x: 0,
+      y: baselineY - 3 * MM_TO_PT,
+      width,
+      height: 7 * MM_TO_PT,
+      color: rgb(1, 1, 1),
+    })
+
+    page.drawText(`Page ${idx + 1} of ${total}`, {
+      x: FOOTER_ML_MM * MM_TO_PT,
+      y: baselineY,
+      size: 8,
+      font,
+      color: rgb(140 / 255, 140 / 255, 140 / 255),
+    })
+
+    const noteSize = 7
+    const noteWidth = italicFont.widthOfTextAtSize(footerNote, noteSize)
+    page.drawText(footerNote, {
+      x: (width - noteWidth) / 2,
+      y: baselineY,
+      size: noteSize,
+      font: italicFont,
+      color: rgb(150 / 255, 150 / 255, 150 / 255),
+    })
+  })
+}
+
 /** Builds the merged PDF bytes for multiple tests — each test starts on its own page. */
 async function buildCombinedReportBytes(
   optionsList: GenerateReportOptions[],
@@ -1220,6 +1271,11 @@ async function buildCombinedReportBytes(
     const pages = await merged.copyPages(pdf, pdf.getPageIndices())
     pages.forEach(p => merged.addPage(p))
   }
+
+  const footerNote = type === 'letterhead'
+    ? 'This is a computer-generated report and does not require a physical signature.'
+    : 'This is an Electronically Authenticated Report.'
+  await restampCombinedFooters(merged, footerNote)
 
   return merged.save()
 }

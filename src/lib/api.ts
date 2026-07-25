@@ -10,79 +10,27 @@ export const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-// Single shared refresh promise — prevents concurrent calls from each firing their own refresh
-let refreshing: Promise<string> | null = null
-
-/** Decode JWT exp claim (milliseconds). Returns 0 on any parse error. */
-function tokenExpiry(token: string): number {
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]))
-    return (payload.exp as number) * 1000
-  } catch {
-    return 0
-  }
-}
-
-/** True if the token will expire within `bufferMs` (default 2 min). */
-function expiresSoon(token: string, bufferMs = 2 * 60 * 1000): boolean {
-  const exp = tokenExpiry(token)
-  return exp > 0 && Date.now() >= exp - bufferMs
-}
-
-async function doRefresh(): Promise<string> {
-  const rt = localStorage.getItem('lab_refresh_token')
-  if (!rt) throw new Error('No refresh token stored')
-  const { data } = await axios.post(`${BASE_URL}/auth/refresh`, { refreshToken: rt })
-  localStorage.setItem('lab_access_token', data.accessToken as string)
-  localStorage.setItem('lab_refresh_token', data.refreshToken as string)
-  return data.accessToken as string
-}
-
-// ── Request interceptor: proactively refresh if token expires within 2 min ──
-api.interceptors.request.use(async (config) => {
+api.interceptors.request.use((config) => {
   const token = localStorage.getItem('lab_access_token')
-  if (token && expiresSoon(token)) {
-    if (!refreshing) {
-      refreshing = doRefresh().finally(() => { refreshing = null })
-    }
-    try { await refreshing } catch { /* fall through — 401 handler will handle it */ }
-  }
-  const latest = localStorage.getItem('lab_access_token')
-  if (latest) config.headers.Authorization = `Bearer ${latest}`
+  if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
 
-// ── Response interceptor: fallback for any 401 that slips through ──
+// Any 401 (expired token, or another login elsewhere revoked this session)
+// signs the user out immediately — no silent refresh to mask the failure.
 api.interceptors.response.use(
   (res) => res,
-  async (error) => {
-    const original = error.config
-    if (error.response?.status === 401 && !original._retry) {
-      original._retry = true
-      try {
-        if (!refreshing) {
-          refreshing = doRefresh().finally(() => { refreshing = null })
-        }
-        const newToken = await refreshing
-        original.headers.Authorization = `Bearer ${newToken}`
-        return api(original)
-      } catch (refreshErr) {
-        // Another tab sharing this localStorage may have already refreshed
-        // successfully while our own attempt lost the rotation race — check
-        // before treating this as a real logout.
-        const latest = localStorage.getItem('lab_access_token')
-        if (latest && !expiresSoon(latest, 0)) {
-          original.headers.Authorization = `Bearer ${latest}`
-          return api(original)
-        }
-        localStorage.removeItem('lab_access_token')
-        localStorage.removeItem('lab_refresh_token')
-        const reason = (refreshErr as { response?: { data?: { message?: string } } })?.response?.data?.message
-        if (reason === 'SESSION_REVOKED_ELSEWHERE') {
-          toast.info('You were signed out because this account was signed in from another device or browser.')
-        }
-        window.location.href = '/login'
-      }
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('lab_access_token')
+      localStorage.removeItem('lab_last_activity')
+      const reason = error.response?.data?.message
+      toast.info(
+        reason === 'SESSION_REVOKED_ELSEWHERE'
+          ? 'You were signed out because this account was signed in from another device or browser.'
+          : 'Your session has expired. Please sign in again.',
+      )
+      window.location.href = '/login'
     }
     return Promise.reject(error)
   },

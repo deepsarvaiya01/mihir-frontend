@@ -540,7 +540,7 @@ export default function TemplateFormPage() {
               </div>
             </div>
             <textarea
-              rows={summaryFormat === 'points' ? 4 : 2}
+              rows={summaryFormat === 'points' ? 7 : 5}
               placeholder={summaryFormat === 'points'
                 ? 'One point per line, e.g.:\nElevated levels may indicate...\nRecommend follow-up in 2 weeks...'
                 : 'Enter test summary, clinical notes, or interpretation guidelines...'}

@@ -14,6 +14,7 @@ import { b2bLabService } from '../services/b2bLabs'
 import { labBranchService } from '../services/labBranches'
 import { doctorService } from '../services/doctors'
 import { templateService } from '../services/templates'
+import { profileService } from '../services/profiles'
 import { orderService } from '../services/orders'
 import { PageLoader } from '../components/ui/Spinner'
 import { toast } from 'sonner'
@@ -119,7 +120,7 @@ export default function PatientFormPage() {
   const qc = useQueryClient()
 
   const [form, setForm] = useState<PatientFormState>(emptyForm)
-  const [selectedTests, setSelectedTests] = useState<Array<{ templateId: number }>>([])
+  const [selectedTests, setSelectedTests] = useState<Array<{ kind: 'template' | 'profile'; id: number }>>([])
   const [discount, setDiscount] = useState(0)
   const [paymentStatus, setPaymentStatus] = useState<'PENDING' | 'PAID' | 'PARTIAL'>('PENDING')
   const [paymentType, setPaymentType] = useState<'CASH' | 'CHEQUE' | 'ONLINE'>('CASH')
@@ -137,6 +138,8 @@ export default function PatientFormPage() {
   const activeDoctors = doctors.filter(d => d.active)
   const { data: allTemplates = [] } = useQuery({ queryKey: ['templates'], queryFn: templateService.getAll })
   const activeTemplates = allTemplates.filter(t => t.active)
+  const { data: allProfiles = [] } = useQuery({ queryKey: ['profiles'], queryFn: profileService.getAll })
+  const activeProfiles = allProfiles.filter(p => p.active)
 
   const { data: existingPatient, isLoading: loadingPatient } = useQuery({
     queryKey: ['patient', id],
@@ -157,14 +160,40 @@ export default function PatientFormPage() {
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setForm(p => ({ ...p, [key]: e.target.value }))
 
-  const toggleTest = (templateId: number) =>
-    setSelectedTests(prev =>
-      prev.find(t => t.templateId === templateId)
-        ? prev.filter(t => t.templateId !== templateId)
-        : [...prev, { templateId }]
-    )
+  // Tests that belong to a currently-selected profile — disabled individually to avoid double-booking the same test.
+  const disabledTemplateInfo = new Map<number, string>()
+  for (const sel of selectedTests) {
+    if (sel.kind !== 'profile') continue
+    const profile = activeProfiles.find(p => p.id === sel.id)
+    if (!profile) continue
+    for (const t of profile.templates) {
+      if (!disabledTemplateInfo.has(t.id)) disabledTemplateInfo.set(t.id, profile.name)
+    }
+  }
 
-  const getTestPrice = (tmpl: typeof activeTemplates[0]): number => {
+  const toggleTest = (kind: 'template' | 'profile', id: number) => {
+    if (kind === 'template' && disabledTemplateInfo.has(id)) return
+    setSelectedTests(prev => {
+      if (prev.find(t => t.kind === kind && t.id === id)) {
+        return prev.filter(t => !(t.kind === kind && t.id === id))
+      }
+      if (kind === 'profile') {
+        // Selecting a profile supersedes any of its member tests already picked individually
+        const memberIds = new Set(activeProfiles.find(p => p.id === id)?.templates.map(t => t.id) ?? [])
+        const withoutMembers = prev.filter(t => !(t.kind === 'template' && memberIds.has(t.id)))
+        return [...withoutMembers, { kind, id }]
+      }
+      return [...prev, { kind, id }]
+    })
+  }
+
+  const getItemPrice = (kind: 'template' | 'profile', id: number): number => {
+    if (kind === 'profile') {
+      const profile = activeProfiles.find(p => p.id === id)
+      return profile ? Number(profile.amount) : 0
+    }
+    const tmpl = activeTemplates.find(t => t.id === id)
+    if (!tmpl) return 0
     if (form.isB2b && form.b2bLabId) {
       const b2bPrice = tmpl.b2bPrices?.find(p => p.b2bLabId === Number(form.b2bLabId))
       if (b2bPrice) return Number(b2bPrice.amount)
@@ -172,15 +201,18 @@ export default function PatientFormPage() {
     return Number(tmpl.amount)
   }
 
-  const filteredTemplatesForDropdown = activeTemplates.filter(t =>
-    t.name.toLowerCase().includes(testSearch.toLowerCase()) ||
-    t.code.toLowerCase().includes(testSearch.toLowerCase())
+  // Profiles (packages) are listed first, then individual tests — one combined, searchable list.
+  const pickableItems = [
+    ...activeProfiles.map(p => ({ kind: 'profile' as const, id: p.id, name: p.name, code: p.code, testCount: p.templates.length })),
+    ...activeTemplates.map(t => ({ kind: 'template' as const, id: t.id, name: t.name, code: t.code, testCount: null as number | null })),
+  ]
+
+  const filteredTemplatesForDropdown = pickableItems.filter(it =>
+    it.name.toLowerCase().includes(testSearch.toLowerCase()) ||
+    it.code.toLowerCase().includes(testSearch.toLowerCase())
   )
 
-  const subtotal = selectedTests.reduce((sum, sel) => {
-    const tmpl = activeTemplates.find(t => t.id === sel.templateId)
-    return sum + (tmpl ? getTestPrice(tmpl) : 0)
-  }, 0)
+  const subtotal = selectedTests.reduce((sum, sel) => sum + getItemPrice(sel.kind, sel.id), 0)
   const discountAmt = Math.round(subtotal * discount / 100)
   const netAmount = subtotal - discountAmt
 
@@ -258,7 +290,7 @@ export default function PatientFormPage() {
       if (selectedTests.length > 0) {
         const result = await orderService.createBatch({
           patientId: patient.id,
-          orders: selectedTests.map(s => ({ templateId: s.templateId })),
+          orders: selectedTests.map(s => s.kind === 'profile' ? { profileId: s.id } : { templateId: s.id }),
           discount, paymentStatus, paymentType,
         })
         toast.success(`Patient registered · ${selectedTests.length} test(s) · Receipt: ${result.receiptNumber}`)
@@ -584,7 +616,7 @@ export default function PatientFormPage() {
                     )}
                   </div>
 
-                  {activeTemplates.length === 0 ? (
+                  {pickableItems.length === 0 ? (
                     <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 py-10 text-center dark:border-gray-700">
                       <FlaskConical className="mb-2 h-7 w-7 text-gray-200 dark:text-gray-600" />
                       <p className="text-sm font-medium text-gray-400">No active templates</p>
@@ -610,20 +642,25 @@ export default function PatientFormPage() {
                           <div className="px-4 py-8 text-center text-sm text-gray-400">
                             No tests match "{testSearch}"
                           </div>
-                        ) : filteredTemplatesForDropdown.map((tmpl, idx) => {
-                          const isSelected = !!selectedTests.find(t => t.templateId === tmpl.id)
-                          const price = getTestPrice(tmpl)
+                        ) : filteredTemplatesForDropdown.map((item, idx) => {
+                          const isSelected = !!selectedTests.find(t => t.kind === item.kind && t.id === item.id)
+                          const coveredByProfile = item.kind === 'template' ? disabledTemplateInfo.get(item.id) : undefined
+                          const price = getItemPrice(item.kind, item.id)
                           return (
                             <button
-                              key={tmpl.id}
+                              key={`${item.kind}-${item.id}`}
                               type="button"
-                              onClick={() => toggleTest(tmpl.id)}
+                              disabled={!!coveredByProfile}
+                              title={coveredByProfile ? `Already included in the "${coveredByProfile}" package` : undefined}
+                              onClick={() => toggleTest(item.kind, item.id)}
                               className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors ${
                                 idx > 0 ? 'border-t border-gray-50 dark:border-gray-700/60' : ''
                               } ${
-                                isSelected
-                                  ? 'bg-blue-50/80 hover:bg-blue-100/80 dark:bg-blue-900/20 dark:hover:bg-blue-900/30'
-                                  : 'bg-white hover:bg-gray-50/80 dark:bg-transparent dark:hover:bg-gray-700/20'
+                                coveredByProfile
+                                  ? 'cursor-not-allowed bg-gray-50 opacity-50 dark:bg-gray-800/40'
+                                  : isSelected
+                                    ? 'bg-blue-50/80 hover:bg-blue-100/80 dark:bg-blue-900/20 dark:hover:bg-blue-900/30'
+                                    : 'bg-white hover:bg-gray-50/80 dark:bg-transparent dark:hover:bg-gray-700/20'
                               }`}
                             >
                               <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 transition-all ${
@@ -638,12 +675,24 @@ export default function PatientFormPage() {
                                 )}
                               </div>
                               <div className="min-w-0 flex-1">
-                                <p className={`truncate text-sm font-medium leading-tight ${
-                                  isSelected ? 'text-blue-800 dark:text-blue-300' : 'text-gray-700 dark:text-gray-200'
-                                }`}>
-                                  {tmpl.name}
-                                </p>
-                                <p className="mt-0.5 font-mono text-xs text-gray-400">{tmpl.code}</p>
+                                <div className="flex items-center gap-1.5">
+                                  {item.kind === 'profile' && (
+                                    <span className="shrink-0 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+                                      Package · {item.testCount}
+                                    </span>
+                                  )}
+                                  <p className={`truncate text-sm font-medium leading-tight ${
+                                    isSelected ? 'text-blue-800 dark:text-blue-300' : 'text-gray-700 dark:text-gray-200'
+                                  }`}>
+                                    {item.name}
+                                  </p>
+                                  {coveredByProfile && (
+                                    <span className="shrink-0 rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-gray-700 dark:text-gray-400">
+                                      In {coveredByProfile}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="mt-0.5 font-mono text-xs text-gray-400">{item.code}</p>
                               </div>
                               <span className={`shrink-0 text-sm font-semibold ${
                                 isSelected ? 'text-blue-700 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'

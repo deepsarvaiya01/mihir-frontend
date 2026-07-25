@@ -6,6 +6,7 @@ import { AppLayout } from './components/layout/AppLayout'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import TemplatesPage from './pages/TemplatesPage'
+import ProfilesPage from './pages/ProfilesPage'
 import PatientsPage from './pages/PatientsPage'
 import OrdersPage from './pages/OrdersPage'
 import ApprovalsPage from './pages/ApprovalsPage'
@@ -66,6 +67,7 @@ export default function App() {
             <Route path="/templates" element={<RoleRoute roles={['SUPER_ADMIN']}><TemplatesPage /></RoleRoute>} />
             <Route path="/templates/new" element={<RoleRoute roles={['SUPER_ADMIN']}><TemplateFormPage /></RoleRoute>} />
             <Route path="/templates/:id/edit" element={<RoleRoute roles={['SUPER_ADMIN']}><TemplateFormPage /></RoleRoute>} />
+            <Route path="/profiles" element={<RoleRoute roles={['SUPER_ADMIN']}><ProfilesPage /></RoleRoute>} />
             <Route path="/approvals" element={<RoleRoute roles={['SUPER_ADMIN']}><ApprovalsPage /></RoleRoute>} />
             <Route path="/patients" element={<RoleRoute roles={['SUPER_ADMIN', 'LAB_USER']}><PatientsPage /></RoleRoute>} />
             <Route path="/patients/new" element={<RoleRoute roles={['SUPER_ADMIN', 'LAB_USER']}><PatientFormPage /></RoleRoute>} />
