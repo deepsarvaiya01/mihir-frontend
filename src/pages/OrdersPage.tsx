@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, ClipboardList, Search, FileText, ChevronDown,
   Trash2, RotateCcw, ExternalLink, Paperclip, FlaskConical,
-  X, CheckSquare, SendHorizonal, Receipt, Archive,
+  X, CheckSquare, SendHorizonal, Archive,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
@@ -24,6 +24,22 @@ import { toastError } from '../lib/errors'
 function B2bCell({ patient }: { patient?: { isB2b?: boolean; b2bLab?: { name: string } | null } | null }) {
   if (!patient?.isB2b) return <span className="text-xs text-gray-300 dark:text-gray-600">—</span>
   return <span className="text-sm text-violet-700 dark:text-violet-400">{patient.b2bLab?.name ?? 'B2B'}</span>
+}
+
+/** Status column for a collapsed receipt row — one badge if every test shares a status, otherwise one badge per distinct status with a count. */
+function GroupStatusSummary({ orders }: { orders: Order[] }) {
+  const statuses = Array.from(new Set(orders.map(o => o.status)))
+  if (statuses.length === 1) return <OrderStatusBadge status={statuses[0]} />
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {statuses.map(s => (
+        <span key={s} className="inline-flex items-center gap-1">
+          <OrderStatusBadge status={s} />
+          <span className="text-[10px] text-gray-400">×{orders.filter(o => o.status === s).length}</span>
+        </span>
+      ))}
+    </div>
+  )
 }
 
 type StatusFilter = 'ALL' | 'PENDING' | 'IN_PROGRESS' | 'AWAITING_APPROVAL' | 'REJECTED'
@@ -53,6 +69,7 @@ export default function OrdersPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [viewResultsOpen, setViewResultsOpen] = useState(false)
   const [deleteOrder, setDeleteOrder] = useState<Order | null>(null)
+  const [deleteGroupOrders, setDeleteGroupOrders] = useState<Order[] | null>(null)
   const [reopenOrder, setReopenOrder] = useState<Order | null>(null)
   const [showArchived, setShowArchived] = useState(false)
   const [permanentDeleteOrder, setPermanentDeleteOrder] = useState<Order | null>(null)
@@ -189,6 +206,16 @@ export default function OrdersPage() {
     onError: (err) => toastError(err, 'Failed to delete order'),
   })
 
+  const removeGroupMutation = useMutation({
+    mutationFn: (ids: number[]) => Promise.all(ids.map(id => orderService.delete(id))),
+    onSuccess: (_, ids) => {
+      qc.invalidateQueries({ queryKey: ['orders'] })
+      setDeleteGroupOrders(null)
+      toast.success(`${ids.length} test${ids.length !== 1 ? 's' : ''} deleted`)
+    },
+    onError: (err) => toastError(err, 'Failed to delete order'),
+  })
+
   const reopenMutation = useMutation({
     mutationFn: (id: number) => orderService.reopen(id),
     onSuccess: (order) => {
@@ -254,14 +281,14 @@ export default function OrdersPage() {
     return map
   }, [activeOrders])
 
-  // Build flat list of rows: group-header rows + individual order rows
+  // Build flat list of rows: one row per receipt (all its tests collapsed together), one row per unreceipted single order
   const tableRows = useMemo(() => {
     type Row =
-      | { kind: 'group'; receipt: string; patient: string; totalTests: number }
-      | { kind: 'order'; order: Order; grouped: boolean }
+      | { kind: 'group'; receipt: string; orders: Order[] }
+      | { kind: 'single'; order: Order }
 
     const rows: Row[] = []
-    let lastReceipt: string | null = null
+    const seenReceipts = new Set<string>()
 
     // Sort: receipts together, then by id desc
     const sorted = [...filtered].sort((a, b) => {
@@ -275,20 +302,14 @@ export default function OrdersPage() {
     for (const order of sorted) {
       const receipt = order.receiptNumber
       const groupOrders = receipt ? receiptMap.get(receipt) ?? [] : []
-      const isMultiGroup = groupOrders.length > 1
 
-      if (isMultiGroup && receipt && receipt !== lastReceipt) {
-        rows.push({
-          kind: 'group',
-          receipt,
-          patient: order.patient?.fullName ?? '—',
-          totalTests: groupOrders.length,
-        })
-        lastReceipt = receipt
-      } else if (!isMultiGroup) {
-        lastReceipt = null
+      if (receipt && groupOrders.length > 1) {
+        if (seenReceipts.has(receipt)) continue
+        seenReceipts.add(receipt)
+        rows.push({ kind: 'group', receipt, orders: groupOrders })
+      } else {
+        rows.push({ kind: 'single', order })
       }
-      rows.push({ kind: 'order', order, grouped: isMultiGroup })
     }
     return rows
   }, [filtered, receiptMap])
@@ -396,32 +417,69 @@ export default function OrdersPage() {
               <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
                 {tableRows.map((row) => {
                   if (row.kind === 'group') {
-                    const ready = canSubmitBatch(row.receipt)
+                    const group = row.orders
+                    const primary = group[0]
+                    const testNames = group.map(o => o.template?.name).filter(Boolean).join(', ')
+                    const editableOrder = group.find(o => o.status === 'PENDING' || o.status === 'IN_PROGRESS')
+                    const readyToSubmit = canSubmitBatch(row.receipt)
+                    const allAwaiting = group.every(o => o.status === 'AWAITING_APPROVAL')
+                    const firstRejected = group.find(o => o.status === 'REJECTED')
+                    const allPending = group.every(o => o.status === 'PENDING')
+
                     return (
-                      <tr key={`grp-${row.receipt}`} className="bg-blue-50/60 border-y border-blue-100 dark:bg-blue-900/20 dark:border-blue-900">
-                        <td colSpan={6} className="px-5 py-3">
-                          <div className="flex items-center gap-2 text-sm">
-                            <Receipt className="h-3.5 w-3.5 text-blue-400 shrink-0" />
-                            <span className="font-semibold text-blue-700 font-mono dark:text-blue-400">{row.receipt}</span>
-                            <span className="text-gray-500 dark:text-gray-400">·</span>
-                            <span className="font-medium text-gray-700 dark:text-gray-200">{row.patient}</span>
-                            <span className="text-gray-400 text-xs dark:text-gray-500">({row.totalTests} tests)</span>
-                            {!ready && (
-                              <span className="ml-2 text-xs text-gray-400 italic dark:text-gray-500">Enter results for all tests, then submit</span>
+                      <tr key={`grp-${row.receipt}`} className="hover:bg-gray-50/50 transition-colors dark:hover:bg-gray-700/30">
+                        <td className="px-5 py-4">
+                          <span className="font-bold text-gray-700 dark:text-gray-200">{row.receipt}</span>
+                        </td>
+                        <td className="px-5 py-4">
+                          <p className="font-medium text-gray-800 dark:text-gray-200">{primary.patient?.fullName ?? '—'}</p>
+                          <p className="text-xs text-gray-400 dark:text-gray-500">{primary.patient?.patientCode ?? ''}</p>
+                        </td>
+                        <td className="px-5 py-4"><B2bCell patient={primary.patient} /></td>
+                        <td className="px-5 py-4 text-gray-600 max-w-[200px] truncate dark:text-gray-300" title={testNames || undefined}>
+                          {testNames || '—'} <span className="text-xs text-gray-400">({group.length})</span>
+                        </td>
+                        <td className="px-5 py-4"><GroupStatusSummary orders={group} /></td>
+                        <td className="px-5 py-4 text-xs text-gray-400 dark:text-gray-500">
+                          {primary.createdAt ? new Date(primary.createdAt).toLocaleDateString() : '—'}
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="flex flex-wrap justify-end gap-2">
+                            {editableOrder && (
+                              <Button size="sm" variant="secondary" icon={<ExternalLink className="h-3.5 w-3.5" />}
+                                onClick={() => navigate(`/orders/${editableOrder.id}/enter-results`)}>
+                                Enter Results
+                              </Button>
+                            )}
+                            {readyToSubmit && (
+                              <Button size="sm" icon={<SendHorizonal className="h-3.5 w-3.5" />}
+                                loading={batchSubmitMut.isPending && batchSubmitMut.variables === row.receipt}
+                                onClick={() => batchSubmitMut.mutate(row.receipt)}>
+                                Submit All for Approval
+                              </Button>
+                            )}
+                            {allAwaiting && (
+                              <Button size="sm" variant="ghost" icon={<FileText className="h-3.5 w-3.5" />}
+                                loading={loadOrderResults.isPending && loadOrderResults.variables === primary.id}
+                                onClick={() => loadOrderResults.mutate(primary.id)}>
+                                View Submitted
+                              </Button>
+                            )}
+                            {firstRejected && (
+                              <Button size="sm" variant="secondary" icon={<RotateCcw className="h-3.5 w-3.5" />}
+                                onClick={() => setReopenOrder(firstRejected)}>
+                                Re-open
+                              </Button>
+                            )}
+                            {allPending && (
+                              <Button size="sm" variant="ghost"
+                                icon={<Trash2 className="h-3.5 w-3.5 text-red-500" />}
+                                className="text-red-500 hover:bg-red-50"
+                                onClick={() => setDeleteGroupOrders(group)}>
+                                Delete
+                              </Button>
                             )}
                           </div>
-                        </td>
-                        <td className="px-5 py-3 text-right">
-                          {ready && (
-                            <Button
-                              size="sm"
-                              icon={<SendHorizonal className="h-3.5 w-3.5" />}
-                              loading={batchSubmitMut.isPending && batchSubmitMut.variables === row.receipt}
-                              onClick={() => batchSubmitMut.mutate(row.receipt)}
-                            >
-                              Submit All for Approval
-                            </Button>
-                          )}
                         </td>
                       </tr>
                     )
@@ -429,20 +487,13 @@ export default function OrdersPage() {
 
                   const order = row.order
                   return (
-                    <tr key={order.id} className={`hover:bg-gray-50/50 transition-colors dark:hover:bg-gray-700/30 ${row.grouped ? 'bg-white dark:bg-gray-800' : ''}`}>
-                      <td className={`px-5 py-4 ${row.grouped ? 'pl-9' : ''}`}>
+                    <tr key={order.id} className="hover:bg-gray-50/50 transition-colors dark:hover:bg-gray-700/30">
+                      <td className="px-5 py-4">
                         <span className="font-bold text-gray-700 dark:text-gray-200">{order.receiptNumber ?? order.template?.name ?? '—'}</span>
                       </td>
                       <td className="px-5 py-4">
-                        {!row.grouped && (
-                          <>
-                            <p className="font-medium text-gray-800 dark:text-gray-200">{order.patient?.fullName ?? '—'}</p>
-                            <p className="text-xs text-gray-400 dark:text-gray-500">{order.patient?.patientCode ?? ''}</p>
-                          </>
-                        )}
-                        {row.grouped && (
-                          <p className="text-xs text-gray-400 dark:text-gray-500">{order.patient?.patientCode ?? ''}</p>
-                        )}
+                        <p className="font-medium text-gray-800 dark:text-gray-200">{order.patient?.fullName ?? '—'}</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">{order.patient?.patientCode ?? ''}</p>
                       </td>
                       <td className="px-5 py-4"><B2bCell patient={order.patient} /></td>
                       <td className="px-5 py-4 text-gray-600 max-w-[180px] truncate dark:text-gray-300">{order.template?.name ?? '—'}</td>
@@ -864,6 +915,15 @@ export default function OrdersPage() {
         title="Archive Order"
         message={`Archive Order #${deleteOrder?.id}? The order will be moved to the archive and can be restored later.`}
         confirmLabel="Archive Order" variant="danger" loading={removeOrder.isPending}
+      />
+
+      {/* Archive Receipt (all tests) Confirm */}
+      <ConfirmModal
+        open={!!deleteGroupOrders} onClose={() => setDeleteGroupOrders(null)}
+        onConfirm={() => deleteGroupOrders && removeGroupMutation.mutate(deleteGroupOrders.map(o => o.id))}
+        title="Archive Receipt"
+        message={`Archive all ${deleteGroupOrders?.length ?? 0} tests on this receipt? They will be moved to the archive and can be restored later.`}
+        confirmLabel="Archive All" variant="danger" loading={removeGroupMutation.isPending}
       />
 
       {/* Permanent Delete Confirm */}

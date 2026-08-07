@@ -2,8 +2,9 @@ import { api } from '../lib/api'
 import type { LoginResponse, UserProfile } from '../types'
 
 export const authService = {
-  login: async (email: string, password: string): Promise<LoginResponse> => {
-    const { data } = await api.post('/auth/login', { email, password })
+  /** `identifier` may be either the user's email address or their username. */
+  login: async (identifier: string, password: string): Promise<LoginResponse> => {
+    const { data } = await api.post('/auth/login', { identifier, password })
     return data
   },
 

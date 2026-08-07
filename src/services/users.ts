@@ -5,6 +5,7 @@ export interface UserRecord {
   id: number
   name: string
   email: string
+  username: string | null
   role: UserRole
   isActive: boolean
 }
@@ -12,6 +13,7 @@ export interface UserRecord {
 export interface CreateUserDto {
   name: string
   email: string
+  username?: string
   password: string
   role: UserRole
 }
@@ -19,6 +21,7 @@ export interface CreateUserDto {
 export interface UpdateUserDto {
   name?: string
   email?: string
+  username?: string
   password?: string
   role?: UserRole
 }

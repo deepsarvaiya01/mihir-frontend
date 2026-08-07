@@ -29,4 +29,28 @@
 @layer utilities {
   /* Sidebar semi-transparent hover on dark background */
   .hover\:bg-white\/8:hover { background-color: rgba(255, 255, 255, 0.08); }
+
+  /* Slow-drifting aurora blobs — login page background */
+  @keyframes aurora-float-1 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(40px, -30px) scale(1.12); }
+    66% { transform: translate(-30px, 25px) scale(0.94); }
+  }
+  @keyframes aurora-float-2 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(-55px, 35px) scale(1.15); }
+  }
+  @keyframes aurora-float-3 {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(35px, 30px) scale(1.08); }
+  }
+  .animate-aurora-1 { animation: aurora-float-1 19s ease-in-out infinite; }
+  .animate-aurora-2 { animation: aurora-float-2 23s ease-in-out infinite; }
+  .animate-aurora-3 { animation: aurora-float-3 27s ease-in-out infinite; }
+
+  @keyframes fade-in-up {
+    from { opacity: 0; transform: translateY(18px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fade-in-up { animation: fade-in-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) both; }
 }

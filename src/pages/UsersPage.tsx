@@ -23,7 +23,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
   LAB_USER: 'Lab User',
 }
 
-const emptyCreate: CreateUserDto = { name: '', email: '', password: '', role: 'LAB_USER' }
+const emptyCreate: CreateUserDto = { name: '', email: '', username: '', password: '', role: 'LAB_USER' }
 
 export default function UsersPage() {
   const qc = useQueryClient()
@@ -35,7 +35,7 @@ export default function UsersPage() {
   const [showArchived, setShowArchived] = useState(false)
   const [permanentDeleteUser, setPermanentDeleteUser] = useState<UserRecord | null>(null)
   const [createForm, setCreateForm] = useState<CreateUserDto>(emptyCreate)
-  const [editForm, setEditForm] = useState<UpdateUserDto & { password: string }>({ name: '', email: '', password: '', role: 'LAB_USER' })
+  const [editForm, setEditForm] = useState<UpdateUserDto & { password: string }>({ name: '', email: '', username: '', password: '', role: 'LAB_USER' })
 
   const { data: users = [], isLoading } = useQuery({ queryKey: ['users'], queryFn: userService.getAll })
   const { data: archivedUsers = [], isLoading: isLoadingArchived } = useQuery({
@@ -108,12 +108,12 @@ export default function UsersPage() {
 
   const openEdit = (u: UserRecord) => {
     setEditUser(u)
-    setEditForm({ name: u.name, email: u.email, password: '', role: u.role })
+    setEditForm({ name: u.name, email: u.email, username: u.username ?? '', password: '', role: u.role })
   }
 
   const handleUpdate = () => {
     if (!editUser) return
-    const dto: UpdateUserDto = { name: editForm.name, email: editForm.email, role: editForm.role }
+    const dto: UpdateUserDto = { name: editForm.name, email: editForm.email, username: editForm.username, role: editForm.role }
     if (editForm.password) dto.password = editForm.password
     update.mutate({ id: editUser.id, dto })
   }
@@ -176,7 +176,7 @@ export default function UsersPage() {
                       </div>
                       <div>
                         <p className="font-semibold text-gray-800">{u.name}</p>
-                        <p className="text-xs text-gray-400">{u.email}</p>
+                        <p className="text-xs text-gray-400">{u.username ? `@${u.username}` : u.email}</p>
                       </div>
                     </div>
                   </DataTableTd>
@@ -320,6 +320,9 @@ export default function UsersPage() {
             onChange={e => setCreateForm(p => ({ ...p, name: toTitleCase(e.target.value) }))} required />
           <Input label="Email" type="email" placeholder="user@lab.com" value={createForm.email}
             onChange={e => setCreateForm(p => ({ ...p, email: e.target.value }))} required />
+          <Input label="Username" placeholder="e.g. ramesh.shah (optional)" value={createForm.username ?? ''}
+            hint="Lets this user sign in with a username instead of email"
+            onChange={e => setCreateForm(p => ({ ...p, username: e.target.value }))} />
           <Input label="Password" type="password" placeholder="Minimum 6 characters" value={createForm.password}
             hint="At least 6 characters"
             onChange={e => setCreateForm(p => ({ ...p, password: e.target.value }))} required />
@@ -342,6 +345,9 @@ export default function UsersPage() {
         <div className="space-y-4">
           <Input label="Full Name" value={editForm.name ?? ''} onChange={e => setEditForm(p => ({ ...p, name: toTitleCase(e.target.value) }))} />
           <Input label="Email" value={editForm.email ?? ''} onChange={e => setEditForm(p => ({ ...p, email: e.target.value }))} />
+          <Input label="Username" placeholder="Optional" value={editForm.username ?? ''}
+            hint="Lets this user sign in with a username instead of email"
+            onChange={e => setEditForm(p => ({ ...p, username: e.target.value }))} />
           <Input label="New Password" type="password" value={editForm.password} placeholder="Leave blank to keep current"
             onChange={e => setEditForm(p => ({ ...p, password: e.target.value }))} />
           <Select label="Role" value={editForm.role ?? 'LAB_USER'} onChange={e => setEditForm(p => ({ ...p, role: e.target.value as UserRole }))}>

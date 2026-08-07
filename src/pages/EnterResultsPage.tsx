@@ -240,6 +240,10 @@ export default function EnterResultsPage() {
 
   const [values, setValues] = useState<Record<number, SectionValues>>({})
   const [attachments, setAttachments] = useState<Record<number, Attachment>>({})
+  const [activeIndex, setActiveIndex] = useState(0)
+
+  // Reset the active tab when navigating to a different order/receipt
+  useEffect(() => { setActiveIndex(0) }, [orderId])
 
   /* ── Fetch the primary order (also tells us the receipt number) ── */
   const { data: form, isLoading, isError } = useQuery({
@@ -301,6 +305,28 @@ export default function EnterResultsPage() {
   const sections: Array<{ orderId: number; data: OrderFormData }> = batchOrderIds
     .map((oid, idx) => ({ orderId: oid, data: formQueries[idx]?.data }))
     .filter((s): s is { orderId: number; data: OrderFormData } => !!s.data)
+
+  /** Tab status for one section: locked (already submitted), complete, partial, or empty. */
+  function sectionStatus(s: { orderId: number; data: OrderFormData }): 'locked' | 'complete' | 'partial' | 'empty' {
+    const order = s.data.order
+    if (order.status === 'APPROVED' || order.status === 'AWAITING_APPROVAL') return 'locked'
+    const inputFields = s.data.fields.filter(f => !f.isSectionHeader && f.fieldType !== 'calculated')
+    if (inputFields.length === 0) return 'empty'
+    const sectionValues = values[s.orderId] ?? {}
+    const filled = inputFields.filter(f => {
+      const v = sectionValues[f.id]
+      return v !== undefined && v !== ''
+    }).length
+    if (filled === 0) return 'empty'
+    return filled === inputFields.length ? 'complete' : 'partial'
+  }
+
+  const activeSectionIndex = Math.min(activeIndex, Math.max(sections.length - 1, 0))
+  const completeSectionCount = sections.filter(s => {
+    const st = sectionStatus(s)
+    return st === 'complete' || st === 'locked'
+  }).length
+  const overallPct = sections.length > 0 ? Math.round((completeSectionCount / sections.length) * 100) : 0
 
   /* ── Initialise values: blank for fresh (PENDING) orders ── */
   useEffect(() => {
@@ -472,12 +498,13 @@ export default function EnterResultsPage() {
   return (
     <div>
       <Header
-        title={isBatch ? `Enter Results — ${form.order.receiptNumber} (${sections.length} tests)` : `Enter Results — ${form.order.receiptNumber ?? form.order.template?.name}`}
-        subtitle={`${patient?.fullName ?? ''}${isBatch ? '' : ` · ${form.order.template?.name ?? ''}`}`}
+        title={isBatch
+          ? `Enter Results — ${form.order.receiptNumber} (${sections.length} tests) · ${patient?.fullName ?? ''}`
+          : `Enter Results — ${form.order.receiptNumber ?? form.order.template?.name} · ${patient?.fullName ?? ''}`}
         action={<OrderStatusBadge status={form.order.status} />}
       />
 
-      <PageContent maxWidth="4xl" className="space-y-6">
+      <PageContent maxWidth="6xl" className="space-y-6">
 
         {/* Patient info (shown once, shared across all sections) */}
         <FormCard title="Patient Information" icon={<User className="h-4 w-4" />}>
@@ -503,8 +530,44 @@ export default function EnterResultsPage() {
           </div>
         </FormCard>
 
-        {/* One section per test in the batch (or just the single order) */}
-        {sections.map(s => {
+        {/* Test tabs — jump between tests instead of scrolling through all of them */}
+        {sections.length > 1 && (
+          <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div className="flex flex-wrap gap-1.5">
+              {sections.map((s, i) => {
+                const status = sectionStatus(s)
+                const active = i === activeSectionIndex
+                return (
+                  <button
+                    key={s.orderId}
+                    onClick={() => setActiveIndex(i)}
+                    className={`flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-medium transition-colors ${
+                      active
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700/60'
+                    }`}
+                  >
+                    {status === 'complete' && <CheckCircle2 className={`h-3.5 w-3.5 shrink-0 ${active ? 'text-white' : 'text-emerald-500'}`} />}
+                    {status === 'locked' && <Lock className={`h-3.5 w-3.5 shrink-0 ${active ? 'text-white' : 'text-amber-500'}`} />}
+                    <span className="max-w-[160px] truncate">{s.data.order.template?.name ?? `Test ${i + 1}`}</span>
+                  </button>
+                )
+              })}
+            </div>
+            <div className="mt-3 flex items-center gap-2.5 border-t border-gray-100 pt-3 dark:border-gray-700">
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700">
+                <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${overallPct}%` }} />
+              </div>
+              <span className="shrink-0 text-xs font-medium text-gray-400 dark:text-gray-500">
+                {completeSectionCount} / {sections.length} tests filled
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Active test's fields (only one section is shown at a time when there are several) */}
+        {sections[activeSectionIndex] && (() => {
+          const s = sections[activeSectionIndex]
           const order = s.data.order
           const fields = s.data.fields
           const locked = order.status === 'APPROVED' || order.status === 'AWAITING_APPROVAL'
@@ -576,7 +639,7 @@ export default function EnterResultsPage() {
               </FormCard>
             </div>
           )
-        })}
+        })()}
 
         {/* Read-only context: other tests on this receipt already submitted/approved/rejected */}
         {lockedSiblings.length > 0 && (

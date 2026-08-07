@@ -631,7 +631,7 @@ export interface GenerateReceiptOptions {
 }
 
 export async function generateReceipt(options: GenerateReceiptOptions): Promise<void> {
-  const { orders, labSettings, signatures } = options
+  const { orders } = options
   const order = orders[0]
   // All tests on one receipt share a single receipt number — resolve it from
   // whichever order actually has it set, rather than assuming orders[0] does.
@@ -640,246 +640,135 @@ export async function generateReceipt(options: GenerateReceiptOptions): Promise<
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
 
   const PAGE_W = 210
-  const PAGE_H = 297
   const ML = 15
   const MR = 15
   const CW = PAGE_W - ML - MR
   const TEMPLATE_HDR = 58
 
-  const lineItems = orders.map(o => {
-    const amount = Number(o.amount ?? 0)
-    const discount = Number(o.discount ?? 0)
-    const net = Number(o.netAmount ?? 0)
-    return { name: o.template?.name ?? 'Diagnostic Test', amount, discount, net, discountAmt: amount - net }
-  })
-  const amount = lineItems.reduce((s, l) => s + l.amount, 0)
-  const net = lineItems.reduce((s, l) => s + l.net, 0)
-  const discountAmt = amount - net
-  const discount = amount > 0 ? Math.round((discountAmt / amount) * 1000) / 10 : 0
+  const lineItems = orders.map(o => ({
+    label: [o.template?.code, o.template?.name].filter(Boolean).join(' - ') || 'Diagnostic Test',
+    amount: Number(o.netAmount ?? o.amount ?? 0),
+  }))
+  const grossTotal = orders.reduce((s, o) => s + Number(o.amount ?? 0), 0)
+  const netTotal = lineItems.reduce((s, l) => s + l.amount, 0)
+  const discountAmt = grossTotal - netTotal
 
-  const fmt = (n: number) => `Rs. ${n.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+  const fmt = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-  let y = TEMPLATE_HDR + 6
+  const fmtGenderAge = (gender: string | null, age: number | null): string => {
+    const g = gender ? (gender.toLowerCase().startsWith('m') ? 'Male' : 'Female') : null
+    const parts = [g, age ? `${age} Yrs` : null].filter(Boolean)
+    return parts.length > 0 ? parts.join('/') : '—'
+  }
 
-  /* ── Title + receipt meta ─────────────────────────────── */
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(17)
-  doc.setTextColor(10, 10, 10)
-  doc.text('TAX INVOICE', ML, y)
-
-  const dateStr = order.createdAt
-    ? new Date(order.createdAt).toLocaleDateString('en-IN', {
-        day: '2-digit', month: 'short', year: 'numeric',
-      })
-    : '—'
-
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8.5)
-  doc.setTextColor(80, 80, 80)
-  doc.text(`Receipt #: ${receiptNumber ?? '—'}`, PAGE_W - MR, y - 5, { align: 'right' })
-  doc.text(`Date: ${dateStr}`, PAGE_W - MR, y, { align: 'right' })
-
-  y += 5
-
-  doc.setDrawColor(30, 30, 30)
-  doc.setLineWidth(0.5)
-  doc.line(ML, y, PAGE_W - MR, y)
-  y += 8
-
-  /* ── Bill To / Payment Info columns ──────────────────── */
-  const col2X = ML + CW / 2 + 10
-
-  // Column labels
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7.5)
-  doc.setTextColor(120, 120, 120)
-  doc.text('BILL TO', ML, y)
-  doc.text('PAYMENT', col2X, y)
-  y += 5
+  const fmtBillDate = (iso?: string): string => {
+    if (!iso) return '—'
+    const d = new Date(iso)
+    const datePart = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-')
+    const timePart = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false })
+    return `${datePart} ${timePart}`
+  }
 
   const p = order.patient
+  let y = TEMPLATE_HDR + 4
 
-  // Patient name (large)
+  /* ── Title ─────────────────────────────────────────────── */
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10.5)
+  doc.setFontSize(16)
   doc.setTextColor(10, 10, 10)
-  doc.text(p?.fullName ?? '—', ML, y)
-
-  // Payment status — coloured
-  const statusRgb: Record<string, [number, number, number]> = {
-    PAID:    [5,  150, 105],
-    PENDING: [217, 119,  6],
-    PARTIAL: [59,  130, 246],
-  }
-  const sRgb = statusRgb[order.paymentStatus] ?? [60, 60, 60]
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10.5)
-  doc.setTextColor(sRgb[0], sRgb[1], sRgb[2])
-  doc.text(order.paymentStatus, col2X, y)
-  y += 5.5
-
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8.5)
-  doc.setTextColor(60, 60, 60)
-
-  if (p?.patientCode) {
-    doc.text(`Code: ${p.patientCode}`, ML, y)
-  }
-  if (order.paymentType) {
-    doc.text(`Method: ${order.paymentType.charAt(0) + order.paymentType.slice(1).toLowerCase()}`, col2X, y)
-  }
-  y += 4.5
-
-  if (p?.age || p?.gender) {
-    doc.text(fmtAgeGender(p.age ?? null, p.gender ?? null), ML, y)
-  }
-  doc.text(`Receipt #: ${receiptNumber ?? '—'}`, col2X, y)
-  y += 4.5
-
-  if (p?.doctorName) {
-    doc.text(`Ref: Dr. ${p.doctorName}`, ML, y)
-    y += 4.5
-  }
-  if (p?.phoneNumber) {
-    doc.text(`Phone: ${p.phoneNumber}`, ML, y)
-    y += 4.5
-  }
-  if (p?.city) {
-    doc.text(`City: ${p.city}`, ML, y)
-    y += 4.5
-  }
-  if (p?.isB2b && p?.b2bLab) {
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(109, 40, 217)
-    doc.text(`B2B: ${p.b2bLab.name}`, ML, y)
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(60, 60, 60)
-    y += 4.5
-  }
-
-  y += 4
-
-  /* ── Service table — one row per test on this receipt ── */
-  doc.setDrawColor(200, 200, 200)
-  doc.setLineWidth(0.3)
+  doc.text('BILL', PAGE_W / 2, y, { align: 'center' })
+  y += 3
+  doc.setDrawColor(10, 10, 10)
+  doc.setLineWidth(0.5)
   doc.line(ML, y, PAGE_W - MR, y)
-  y += 5
+  y += 7
 
-  const sacCode = labSettings.lab_hsn_code ?? '998319'
-  const discLabel = discountAmt > 0 ? `Disc (${discount}%)` : 'Disc'
+  /* ── Two-column info grid ──────────────────────────────── */
+  const col2X = ML + CW / 2 + 5
+  const labelW = 28
 
+  doc.setFontSize(9)
+  const infoRow = (x: number, label: string, value: string, rowY: number) => {
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(10, 10, 10)
+    doc.text(label, x, rowY)
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30)
+    doc.text(`: ${value}`, x + labelW, rowY)
+  }
+
+  infoRow(ML, 'Name', p?.fullName ?? '—', y)
+  infoRow(col2X, 'Bill No.', receiptNumber ?? '—', y)
+  y += 6
+  infoRow(ML, 'Gender/Age', fmtGenderAge(p?.gender ?? null, p?.age ?? null), y)
+  infoRow(col2X, 'Bill Date', fmtBillDate(order.createdAt), y)
+  y += 6
+  infoRow(ML, 'Mobile', p?.phoneNumber ?? '—', y)
+  infoRow(col2X, 'Patient ID', p?.patientCode ?? '—', y)
+  y += 6
+  infoRow(ML, 'Ref By', p?.doctorName ?? 'Self', y)
+  y += 10
+
+  /* ── Test table — one row per test on this receipt ─────── */
   autoTable(doc, {
     startY: y,
     margin: { left: ML, right: MR, bottom: 20 },
-    head: [['Description of Service', 'SAC', 'Gross Amt', discLabel, 'Net Amt', 'GST', 'Total']],
-    body: lineItems.map(l => [
-      l.name,
-      sacCode,
-      fmt(l.amount),
-      l.discountAmt > 0 ? `-${fmt(l.discountAmt)}` : '-',
-      fmt(l.net),
-      'Exempt',
-      fmt(l.net),
-    ]),
+    head: [['Test Name', 'Remarks', 'MRP Amount']],
+    body: lineItems.map(l => [l.label, '', fmt(l.amount)]),
     theme: 'plain',
     styles: {
       fontSize: 8.5,
-      cellPadding: { top: 4, bottom: 4, left: 3, right: 3 },
-      lineColor: [210, 210, 210],
-      lineWidth: 0.15,
+      cellPadding: { top: 3.5, bottom: 3.5, left: 3, right: 3 },
+      lineWidth: 0,
       textColor: [15, 15, 15],
       font: 'helvetica',
     },
     headStyles: {
       fontStyle: 'bold',
-      fontSize: 7.5,
-      fillColor: [248, 250, 252] as [number, number, number],
-      textColor: [80, 80, 80] as [number, number, number],
-      lineWidth: { bottom: 0.5 },
-      lineColor: [180, 180, 180],
+      fontSize: 8,
+      fillColor: [255, 255, 255] as [number, number, number],
+      textColor: [10, 10, 10] as [number, number, number],
+      lineWidth: { top: 0.4, bottom: 0.4 },
+      lineColor: [10, 10, 10],
     },
     columnStyles: {
-      0: { cellWidth: 52 },
-      1: { cellWidth: 17 },
-      2: { cellWidth: 24, halign: 'right' },
-      3: { cellWidth: 20, halign: 'right' },
-      4: { cellWidth: 26, halign: 'right' },
-      5: { cellWidth: 18, halign: 'center' },
-      6: { cellWidth: CW - 52 - 17 - 24 - 20 - 26 - 18, halign: 'right', fontStyle: 'bold' },
+      0: { cellWidth: CW - 30 - 40 },
+      1: { cellWidth: 30 },
+      2: { cellWidth: 40, halign: 'right' },
     },
   })
 
   const afterTable: number = ((doc as unknown) as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? y + 20
+  y = afterTable + 3
 
-  y = afterTable + 6
-
-  /* ── GST exempt note ──────────────────────────────────── */
-  doc.setFont('helvetica', 'italic')
-  doc.setFontSize(7.5)
-  doc.setTextColor(70, 130, 90)
-  doc.text(
-    `* Pathology & diagnostic services are GST-exempt under Notification 12/2017-CT(Rate) - SAC ${sacCode}`,
-    ML, y,
-  )
-  y += 10
-
-  /* ── Totals block ─────────────────────────────────────── */
-  const totalsRightX = PAGE_W - MR
-  const totalsLabelX = totalsRightX - 68
-
-  doc.setDrawColor(200, 200, 200)
-  doc.setLineWidth(0.3)
-  doc.line(totalsLabelX - 3, y - 3, totalsRightX, y - 3)
-
-  const row = (
-    label: string,
-    value: string,
-    bold = false,
-    rgb: [number, number, number] = [60, 60, 60],
-  ) => {
-    doc.setFont('helvetica', bold ? 'bold' : 'normal')
-    doc.setFontSize(bold ? 9.5 : 8.5)
-    doc.setTextColor(rgb[0], rgb[1], rgb[2])
-    doc.text(label, totalsLabelX, y)
-    doc.text(value, totalsRightX, y, { align: 'right' })
-    y += bold ? 6.5 : 5
-  }
-
-  if (discount > 0) {
-    row('Gross Amount',          fmt(amount))
-    row(`Discount (${discount}%)`, `-${fmt(discountAmt)}`, false, [5, 150, 105])
-    row('Taxable Amount',        fmt(net))
-  } else {
-    row('Taxable Amount',        fmt(net))
-  }
-  row('GST Amount', 'Rs. 0.00')
-
-  y += 1
-  doc.setDrawColor(20, 20, 20)
-  doc.setLineWidth(0.5)
-  doc.line(totalsLabelX - 3, y - 2, totalsRightX, y - 2)
-  y += 3
-
-  row('TOTAL AMOUNT', fmt(net), true, [10, 10, 10])
-
-  y += 10
-
-  /* ── Signature block ──────────────────────────────────── */
-  doc.setDrawColor(200, 200, 200)
-  doc.setLineWidth(0.3)
+  doc.setDrawColor(10, 10, 10)
+  doc.setLineWidth(0.4)
   doc.line(ML, y, PAGE_W - MR, y)
-  y += 8
+  y += 6
 
-  await drawSignatureBlocks(doc, { y, ML, MR, PAGE_W, signatures, labSettings })
+  /* ── Total ─────────────────────────────────────────────── */
+  const totalsRightX = PAGE_W - MR
+  const totalsLabelX = totalsRightX - 55
 
-  /* ── Footer note ──────────────────────────────────────── */
+  if (discountAmt > 0) {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(60, 60, 60)
+    doc.text('Gross Amount', totalsLabelX, y)
+    doc.text(fmt(grossTotal), totalsRightX, y, { align: 'right' })
+    y += 5
+    doc.setTextColor(5, 150, 105)
+    doc.text('Discount', totalsLabelX, y)
+    doc.text(`-${fmt(discountAmt)}`, totalsRightX, y, { align: 'right' })
+    y += 6
+  }
+
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(10, 10, 10)
+  doc.text('Bill Amount', totalsLabelX, y)
+  doc.text(fmt(netTotal), totalsRightX, y, { align: 'right' })
+  y += 10
+
+  /* ── Footer note — no signature required on this format ── */
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7)
-  doc.setTextColor(160, 160, 160)
-  doc.text(
-    'This is a computer-generated Tax Invoice. For queries, contact the laboratory directly.',
-    PAGE_W / 2, PAGE_H - 10, { align: 'center' },
-  )
+  doc.setTextColor(140, 140, 140)
+  doc.text('This is a computer-generated bill and does not require a signature.', ML, y)
 
   /* ── Merge with payment template ─────────────────────── */
   const patientSlug = order.patient?.fullName?.replace(/\s+/g, '-') ?? 'patient'
