@@ -65,4 +65,50 @@
     50% { transform: translateY(-6px); }
   }
   .animate-logo-float { animation: logo-float 5s ease-in-out infinite; }
+
+  /* Login page — clinical brand stage */
+  .login-root {
+    font-family: 'Manrope', 'Inter', system-ui, sans-serif;
+  }
+  .font-login-display {
+    font-family: 'Syne', 'Manrope', system-ui, sans-serif;
+  }
+
+  @keyframes login-enter {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .login-enter {
+    animation: login-enter 0.75s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  @keyframes login-wave-drift {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(-18px); }
+  }
+  .login-wave {
+    animation: login-wave-drift 14s ease-in-out infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  .login-wave-line {
+    stroke-dasharray: 1200;
+    stroke-dashoffset: 1200;
+    animation: login-draw-line 2.2s cubic-bezier(0.16, 1, 0.3, 1) forwards,
+      login-wave-drift 14s ease-in-out 2.2s infinite;
+  }
+  @keyframes login-draw-line {
+    to { stroke-dashoffset: 0; }
+  }
+
+  @keyframes login-orbit {
+    0%, 100% { transform: scale(1); opacity: 0.7; }
+    50% { transform: scale(1.06); opacity: 1; }
+  }
+  .login-orbit { animation: login-orbit 7s ease-in-out infinite; }
+  .login-orbit-delay { animation: login-orbit 7s ease-in-out 1.4s infinite; }
+
+  .login-input:focus {
+    box-shadow: 0 1px 0 0 #0a4d57;
+  }
 }

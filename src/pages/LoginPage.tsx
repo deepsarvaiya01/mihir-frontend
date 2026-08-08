@@ -1,6 +1,6 @@
 import { type FormEvent, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, ArrowRight, Mail, Lock, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, ArrowRight, Loader2 } from 'lucide-react'
 import { authService } from '../services/auth'
 import { useAuthStore } from '../store/authStore'
 import { toast } from 'sonner'
@@ -13,6 +13,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [logoFailed, setLogoFailed] = useState(false)
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault()
@@ -30,131 +31,191 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen w-full bg-white">
-      {/* ── Left — full-height brand panel ────────────────────── */}
-      <div className="relative hidden w-1/2 shrink-0 flex-col overflow-hidden bg-gradient-to-br from-[#0a3d91] via-[#0e63c4] to-[#0a9e6e] lg:flex">
-        {/* Fine grid-line texture */}
+    <div className="login-root flex min-h-screen w-full">
+      {/* ── Brand stage (full-bleed) ─────────────────────────── */}
+      <aside className="relative hidden min-h-screen w-[54%] shrink-0 overflow-hidden lg:flex lg:flex-col">
         <div
-          className="pointer-events-none absolute inset-0 opacity-[0.07]"
+          className="absolute inset-0"
           style={{
-            backgroundImage:
-              'linear-gradient(rgba(255,255,255,0.9) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.9) 1px, transparent 1px)',
-            backgroundSize: '48px 48px',
+            background:
+              'radial-gradient(ellipse 90% 70% at 20% 15%, #1a6b78 0%, transparent 55%), radial-gradient(ellipse 70% 80% at 90% 90%, #0d4a52 0%, transparent 50%), linear-gradient(155deg, #06343c 0%, #0a4d57 42%, #0c5f5a 100%)',
           }}
         />
-        {/* Slow-drifting glow orbs for depth */}
-        <div className="animate-aurora-1 pointer-events-none absolute -left-20 top-1/4 h-[26rem] w-[26rem] rounded-full bg-white/10 blur-[110px]" />
-        <div className="animate-aurora-2 pointer-events-none absolute -right-16 bottom-0 h-[22rem] w-[22rem] rounded-full bg-emerald-300/20 blur-[110px]" />
-        {/* Large soft ring for premium, editorial feel */}
-        <div className="pointer-events-none absolute -bottom-40 -right-40 h-[34rem] w-[34rem] rounded-full border border-white/10" />
-        <div className="pointer-events-none absolute -bottom-24 -right-24 h-72 w-72 rounded-full border border-white/10" />
 
-        {/* Centerpiece — lab illustration, logo, orbit rings + soft glow */}
-        <div className="relative z-10 flex flex-1 flex-col items-center justify-center">
-          {/* Diagnostic-lab line-art illustration */}
-          <svg
-            viewBox="0 0 260 170"
-            className="animate-logo-float mb-6 h-36 w-auto opacity-90"
+        {/* Soft specimen-grid texture */}
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.14]"
+          style={{
+            backgroundImage:
+              'linear-gradient(rgba(255,255,255,0.35) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.35) 1px, transparent 1px)',
+            backgroundSize: '56px 56px',
+            maskImage: 'radial-gradient(ellipse 75% 70% at 40% 45%, black 20%, transparent 75%)',
+          }}
+        />
+
+        {/* Assay waveform — visual anchor */}
+        <svg
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-[55%] w-full opacity-40"
+          viewBox="0 0 800 360"
+          preserveAspectRatio="none"
+          aria-hidden
+        >
+          <defs>
+            <linearGradient id="waveFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="rgba(255,255,255,0.18)" />
+              <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+            </linearGradient>
+          </defs>
+          <path
+            className="login-wave"
+            d="M0 220 C80 180 120 260 200 210 C280 160 320 280 400 200 C480 120 520 250 600 190 C680 130 720 240 800 180 L800 360 L0 360 Z"
+            fill="url(#waveFill)"
+          />
+          <path
+            className="login-wave-line"
+            d="M0 220 C80 180 120 260 200 210 C280 160 320 280 400 200 C480 120 520 250 600 190 C680 130 720 240 800 180"
             fill="none"
-          >
-            {/* DNA helix */}
-            <g stroke="rgba(255,255,255,0.55)" strokeWidth="2.2" strokeLinecap="round">
-              <path d="M22 8c20 18-20 34 0 52s-20 34 0 52s-20 34 0 52" />
-              <path d="M50 8c-20 18 20 34 0 52s20 34 0 52s20 34 0 52" />
-              <line x1="22" y1="18" x2="50" y2="18" strokeWidth="1.6" opacity="0.7" />
-              <line x1="22" y1="60" x2="50" y2="60" strokeWidth="1.6" opacity="0.7" />
-              <line x1="22" y1="102" x2="50" y2="102" strokeWidth="1.6" opacity="0.7" />
-              <line x1="22" y1="144" x2="50" y2="144" strokeWidth="1.6" opacity="0.7" />
-            </g>
-            {/* Test tube with liquid + bubbles */}
-            <g strokeLinejoin="round">
-              <path
-                d="M150 14h34v40l28 96c3 10-5 20-16 20h-58c-11 0-19-10-16-20l28-96z"
-                stroke="rgba(255,255,255,0.7)"
-                strokeWidth="2.4"
-                fill="rgba(255,255,255,0.06)"
-              />
-              <path
-                d="M139 118l-9 32c-3 10 5 20 16 20h58c11 0 19-10 16-20l-9-32z"
-                fill="rgba(255,255,255,0.18)"
-              />
-              <line x1="143" y1="14" x2="217" y2="14" stroke="rgba(255,255,255,0.7)" strokeWidth="2.4" strokeLinecap="round" />
-              <circle cx="163" cy="150" r="4.5" fill="rgba(255,255,255,0.55)" />
-              <circle cx="180" cy="132" r="3" fill="rgba(255,255,255,0.4)" />
-              <circle cx="196" cy="155" r="5.5" fill="rgba(255,255,255,0.35)" />
-              <circle cx="178" cy="160" r="2.5" fill="rgba(255,255,255,0.45)" />
-            </g>
-          </svg>
+            stroke="rgba(255,255,255,0.55)"
+            strokeWidth="2"
+            vectorEffect="non-scaling-stroke"
+          />
+          {/* Precision tick marks */}
+          {[100, 200, 300, 400, 500, 600, 700].map((x) => (
+            <line
+              key={x}
+              x1={x}
+              y1="320"
+              x2={x}
+              y2="340"
+              stroke="rgba(255,255,255,0.25)"
+              strokeWidth="1.5"
+            />
+          ))}
+        </svg>
 
-          <div className="animate-fade-in-up relative flex items-center justify-center">
-            {/* Orbit rings around the logo */}
-            <div className="pointer-events-none absolute h-[20rem] w-[20rem] rounded-full border border-white/15" />
-            <div className="pointer-events-none absolute h-[15.5rem] w-[15.5rem] rounded-full border border-white/20" />
-            {/* Soft pulsing glow behind the card */}
-            <div className="animate-glow-pulse pointer-events-none absolute h-52 w-52 rounded-full bg-white/30 blur-3xl" />
+        {/* Floating precision rings */}
+        <div className="login-orbit pointer-events-none absolute right-[8%] top-[18%] h-48 w-48 rounded-full border border-white/15" />
+        <div className="login-orbit-delay pointer-events-none absolute right-[12%] top-[22%] h-32 w-32 rounded-full border border-white/20" />
 
-            <div className="relative rounded-[26px] bg-white px-10 py-8 shadow-2xl shadow-black/20">
-              <img src="/Rameshwar.png" alt="Rameshwar Diagnostic Laboratory" className="h-14 w-auto" />
-            </div>
+        <div className="relative z-10 flex flex-1 flex-col justify-between px-12 py-12 xl:px-16">
+          <div className="login-enter flex items-center gap-3">
+            {!logoFailed && (
+              <img
+                src="/Rameshwar.png"
+                alt=""
+                className="h-11 w-auto brightness-0 invert"
+                onError={() => setLogoFailed(true)}
+              />
+            )}
+            <span className="font-login-display text-[15px] font-semibold tracking-wide text-white/90">
+              LabOps
+            </span>
           </div>
 
-          <div className="animate-fade-in-up relative z-10 mt-8 flex items-center gap-3">
-            <span className="h-px w-8 bg-white/40" />
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-white/70">LabOps Console</p>
-            <span className="h-px w-8 bg-white/40" />
+          <div className="login-enter max-w-lg pb-6" style={{ animationDelay: '120ms' }}>
+            <p className="mb-4 font-login-display text-[11px] font-semibold uppercase tracking-[0.28em] text-teal-100/70">
+              Diagnostic operations
+            </p>
+            <h1 className="font-login-display text-[2.75rem] font-semibold leading-[1.08] tracking-tight text-white xl:text-[3.25rem]">
+              Rameshwar
+              <span className="mt-1 block font-normal text-teal-100/85">
+                Diagnostic Laboratory
+              </span>
+            </h1>
+            <p className="mt-6 max-w-sm text-[15px] leading-relaxed text-teal-50/75">
+              Secure access to orders, results, and reporting — built for precision lab workflows.
+            </p>
           </div>
+
+          <p className="login-enter text-xs text-white/40" style={{ animationDelay: '220ms' }}>
+            Authorized staff only · Encrypted session
+          </p>
         </div>
-      </div>
+      </aside>
 
-      {/* ── Right — login form, full height, centered ─────────── */}
-      <div className="flex w-full flex-col items-center justify-center bg-white px-6 py-12 lg:w-1/2">
-        <div className="animate-fade-in-up w-full max-w-sm">
-          {/* Mobile-only logo */}
-          <img src="/Rameshwar.png" alt="Rameshwar Diagnostic Laboratory" className="mb-10 h-10 w-auto lg:hidden" />
+      {/* ── Sign-in panel ────────────────────────────────────── */}
+      <main className="relative flex w-full flex-col justify-center px-6 py-12 sm:px-10 lg:w-[46%] lg:px-14 xl:px-20">
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              'linear-gradient(180deg, #eef3f4 0%, #f6f8f9 48%, #e8eef0 100%)',
+          }}
+        />
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.4]"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle at 1px 1px, rgba(10, 77, 87, 0.07) 1px, transparent 0)',
+            backgroundSize: '22px 22px',
+          }}
+        />
 
-          <h2 className="text-[28px] font-bold tracking-tight text-gray-900">Welcome back</h2>
-          <p className="mt-2 text-sm text-gray-500">Login to your LabOps dashboard</p>
-
-          <form onSubmit={handleLogin} className="mt-8 space-y-4">
-            {/* Email or Username */}
+        <div className="login-enter relative z-10 mx-auto w-full max-w-[380px]">
+          {/* Mobile brand */}
+          <div className="mb-10 flex flex-col items-start gap-3 lg:hidden">
+            {!logoFailed && (
+              <img
+                src="/Rameshwar.png"
+                alt="Rameshwar Diagnostic Laboratory"
+                className="h-10 w-auto"
+                onError={() => setLogoFailed(true)}
+              />
+            )}
             <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-400">
-                Email or Username
+              <p className="font-login-display text-xl font-semibold tracking-tight text-[#0a4d57]">
+                Rameshwar Diagnostic
+              </p>
+              <p className="mt-0.5 text-xs font-medium uppercase tracking-[0.2em] text-[#0a4d57]/60">
+                LabOps Console
+              </p>
+            </div>
+          </div>
+
+          <h2 className="font-login-display text-[1.65rem] font-semibold tracking-tight text-[#102a30]">
+            Sign in
+          </h2>
+          <p className="mt-2 text-[14px] leading-relaxed text-[#4a6369]">
+            Enter your credentials to open the console.
+          </p>
+
+          <form onSubmit={handleLogin} className="mt-9 space-y-5">
+            <div className="login-field group">
+              <label htmlFor="login-identifier" className="mb-2 block text-[12px] font-semibold text-[#2d4a50]">
+                Email or username
               </label>
-              <div className="relative">
-                <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="text"
-                  value={identifier}
-                  onChange={e => setIdentifier(e.target.value)}
-                  placeholder="you@laboratory.com or username"
-                  required
-                  autoComplete="username"
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 py-3 pl-10 pr-4 text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-500/20"
-                />
-              </div>
+              <input
+                id="login-identifier"
+                type="text"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="you@laboratory.com"
+                required
+                autoComplete="username"
+                className="login-input w-full border-0 border-b-2 border-[#0a4d57]/20 bg-transparent py-3 text-[15px] text-[#102a30] outline-none transition placeholder:text-[#8aa0a6] focus:border-[#0a4d57]"
+              />
             </div>
 
-            {/* Password */}
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-400">
+            <div className="login-field group">
+              <label htmlFor="login-password" className="mb-2 block text-[12px] font-semibold text-[#2d4a50]">
                 Password
               </label>
               <div className="relative">
-                <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
+                  id="login-password"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
-                  onChange={e => setPassword(e.target.value)}
+                  onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
                   required
                   autoComplete="current-password"
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 py-3 pl-10 pr-11 text-sm text-gray-900 placeholder-gray-400 outline-none transition focus:border-emerald-400 focus:bg-white focus:ring-2 focus:ring-emerald-500/20"
+                  className="login-input w-full border-0 border-b-2 border-[#0a4d57]/20 bg-transparent py-3 pr-10 text-[15px] text-[#102a30] outline-none transition placeholder:text-[#8aa0a6] focus:border-[#0a4d57]"
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPassword(p => !p)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-gray-600"
+                  onClick={() => setShowPassword((p) => !p)}
+                  className="absolute right-0 top-1/2 -translate-y-1/2 p-1 text-[#7a949a] transition hover:text-[#0a4d57]"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
@@ -164,23 +225,28 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="group relative mt-2 flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-600/25 transition hover:bg-emerald-700 hover:shadow-xl hover:shadow-emerald-600/30 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+              className="login-submit group relative mt-3 flex w-full items-center justify-center gap-2 overflow-hidden bg-[#0a4d57] px-5 py-3.5 text-[14px] font-semibold text-white transition hover:bg-[#083e46] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 group-hover:translate-x-full" />
+              <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/15 to-transparent transition-transform duration-700 ease-out group-hover:translate-x-full" />
               {loading ? (
                 <>
-                  <Loader2 className="h-4 w-4 animate-spin" /> Signing in…
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Signing in…
                 </>
               ) : (
                 <>
-                  Login
-                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                  Continue
+                  <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
                 </>
               )}
             </button>
           </form>
+
+          <p className="mt-10 text-center text-[12px] text-[#7a949a] lg:text-left">
+            Need access? Contact your lab administrator.
+          </p>
         </div>
-      </div>
+      </main>
     </div>
   )
 }
