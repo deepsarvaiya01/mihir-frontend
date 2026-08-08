@@ -337,6 +337,34 @@ function openPdfInNewTab(bytes: Uint8Array) {
   setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }
 
+/** Loads a PDF into a hidden iframe and triggers the browser's print dialog for it. */
+function printPdfBytes(bytes: Uint8Array) {
+  const blob = new Blob([new Uint8Array(bytes)], { type: 'application/pdf' })
+  const url = URL.createObjectURL(blob)
+
+  const iframe = document.createElement('iframe')
+  iframe.style.position = 'fixed'
+  iframe.style.right = '0'
+  iframe.style.bottom = '0'
+  iframe.style.width = '0'
+  iframe.style.height = '0'
+  iframe.style.border = '0'
+  iframe.src = url
+
+  const cleanup = () => {
+    document.body.removeChild(iframe)
+    URL.revokeObjectURL(url)
+  }
+
+  iframe.onload = () => {
+    iframe.contentWindow?.focus()
+    iframe.contentWindow?.print()
+  }
+  document.body.appendChild(iframe)
+  // Give the print dialog time to open and be handled before tearing the iframe down
+  setTimeout(cleanup, 60_000)
+}
+
 /* ─── Uint8Array → base64 (chunked to avoid call stack limits) ─────── */
 function uint8ToBase64(bytes: Uint8Array): string {
   const chunks: string[] = []
@@ -812,7 +840,6 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
   const ML = 15
   const MR = 15
   const CW = PAGE_W - ML - MR
-  const COMPACT_HDR = 18
   // Same top gap as the letterhead report's reserved template-header zone, for a consistent look across both.
   const TEMPLATE_HDR = 36
 
@@ -878,16 +905,6 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
     return y
   }
 
-  function drawCompactHeader(): void {
-    const labName = labSettings.lab_name ?? 'Diagnostic Laboratory'
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(10, 10, 10)
-    doc.text(labName, ML, 10)
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(50, 50, 50)
-    doc.text(`${order.patient?.fullName ?? ''}${order.receiptNumber ? `   |   ${order.receiptNumber}` : ''}`, PAGE_W - MR, 10, { align: 'right' })
-    doc.setDrawColor(20, 20, 20); doc.setLineWidth(0.6)
-    doc.line(ML, 13.5, PAGE_W - MR, 13.5)
-  }
-
   /* ── Draw page 1 header + test title ── */
   const headerBottom = drawFullHeader()
   const testName = order.template?.name ?? 'Test Results'
@@ -924,7 +941,9 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
 
   autoTable(doc, {
     startY: headerBottom + 8,
-    margin: { top: COMPACT_HDR + 3, left: ML, right: MR, bottom: 20 },
+    // Continuation pages within this same test stay blank up top — patient details
+    // are shown once per test, not repeated on every overflow page.
+    margin: { top: TEMPLATE_HDR + 3, left: ML, right: MR, bottom: 20 },
     head: [['Parameter', 'Result', 'Unit', 'Biological Ref. Interval']],
     body: tableBody as Parameters<typeof autoTable>[1]['body'],
     showHead: 'firstPage',
@@ -949,9 +968,6 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
       1: { cellWidth: 28 },
       2: { cellWidth: 28 },
       3: { cellWidth: CW - 70 - 28 - 28 },
-    },
-    didDrawPage(data) {
-      if ((data as any).pageCount > 1) drawCompactHeader()
     },
     willDrawCell(data) {
       if (data.section !== 'body') return
@@ -1014,13 +1030,12 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
       title: order.template?.summaryTitle?.trim() || 'Summary',
       summary: summaryText,
       format: order.template?.summaryFormat ?? 'paragraph',
-      onPageBreak: () => { doc.addPage(); drawCompactHeader(); return COMPACT_HDR + 3 },
+      onPageBreak: () => { doc.addPage(); return TEMPLATE_HDR + 3 },
     })
   }
 
   if (contentEndY + 6 > safeBottomY) {
     doc.addPage()
-    drawCompactHeader()
   }
 
   await drawSignatureBlocks(doc, { bottomY: FOOTER_Y, ML, MR, PAGE_W, signatures, labSettings })
@@ -1192,6 +1207,16 @@ export async function viewCombinedReport(
   if (optionsList.length === 0) return
   const bytes = await buildCombinedReportBytes(optionsList, type)
   openPdfInNewTab(bytes)
+}
+
+/** Sends the combined report PDF straight to the browser's print dialog. */
+export async function printCombinedReport(
+  optionsList: GenerateReportOptions[],
+  type: 'letterhead' | 'plain' = 'plain',
+): Promise<void> {
+  if (optionsList.length === 0) return
+  const bytes = await buildCombinedReportBytes(optionsList, type)
+  printPdfBytes(bytes)
 }
 
 /** Fetches PDFs from the given URLs and merges them into one document, opened in a new tab. */

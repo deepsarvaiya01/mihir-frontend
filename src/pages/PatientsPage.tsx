@@ -242,7 +242,6 @@ export default function PatientsPage() {
   const navigate = useNavigate()
 
   const [viewPatientId, setViewPatientId] = useState<number | null>(null)
-  const [deletePatient, setDeletePatient] = useState<Patient | null>(null)
   const [search, setSearch] = useState('')
   const [genderFilter, setGenderFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'B2B' | 'INDIVIDUAL'>('ALL')
@@ -254,16 +253,6 @@ export default function PatientsPage() {
   const { data: patients = [], isLoading, isFetching, refetch } = useQuery({
     queryKey: ['patients'],
     queryFn: () => patientService.getAll(),
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => patientService.delete(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['patients'] })
-      setDeletePatient(null)
-      toast.success('Patient deleted')
-    },
-    onError: (err) => toastError(err, 'Failed to delete patient'),
   })
 
   const { data: archivedPatients = [] } = useQuery({
@@ -473,13 +462,6 @@ export default function PatientsPage() {
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </button>
-                          <button
-                            onClick={() => setDeletePatient(patient)}
-                            className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
                         </div>
                       </td>
                     </tr>
@@ -558,17 +540,6 @@ export default function PatientsPage() {
           onEdit={() => { navigate(`/patients/${viewPatientId}/edit`); setViewPatientId(null) }}
         />
       )}
-
-      <ConfirmModal
-        open={!!deletePatient}
-        onClose={() => setDeletePatient(null)}
-        onConfirm={() => deletePatient && deleteMutation.mutate(deletePatient.id)}
-        title="Archive Patient"
-        message={`Archive "${deletePatient?.fullName}"? The patient will be hidden from active lists but can be restored later.`}
-        confirmLabel="Archive Patient"
-        variant="danger"
-        loading={deleteMutation.isPending}
-      />
 
       <ConfirmModal
         open={!!permanentDeletePatient}

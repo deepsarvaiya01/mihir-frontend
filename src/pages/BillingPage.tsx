@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Search, Receipt, ChevronDown, DollarSign,
   CheckCircle, Clock, FileText, Pencil,
-  RefreshCw, Download, Share2, Loader2, Eye, Paperclip, X,
+  RefreshCw, Download, Share2, Loader2, Eye, Paperclip, X, Printer,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Card } from '../components/ui/Card'
@@ -18,7 +18,7 @@ import { reportShareService } from '../services/reportShares'
 import { labSettingsService } from '../services/labSettings'
 import { signatureService } from '../services/signatures'
 import { logoService } from '../services/logos'
-import { generateReceipt, generateCombinedReport, viewCombinedReport, viewMergedAttachments } from '../utils/generateReport'
+import { generateReceipt, generateCombinedReport, viewCombinedReport, printCombinedReport, viewMergedAttachments } from '../utils/generateReport'
 import type { Order, PaymentStatus, PaymentType } from '../types'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
@@ -270,6 +270,16 @@ export default function BillingPage() {
     onError: (err) => toastError(err, 'Failed to open report'),
   })
 
+  // Sends the letterhead report straight to the browser's print dialog
+  const printReportMutation = useMutation({
+    mutationFn: fetchReportOptions,
+    onSuccess: (optionsList) => {
+      printCombinedReport(optionsList, 'letterhead')
+        .catch(() => toast.error('Failed to print report'))
+    },
+    onError: (err) => toastError(err, 'Failed to print report'),
+  })
+
   // Merges every uploaded attachment on this receipt (one per test) into a single PDF and opens it
   const viewAttachmentsMutation = useMutation({
     mutationFn: (group: Order[]) => {
@@ -325,6 +335,16 @@ export default function BillingPage() {
         .catch(() => toast.error('Failed to generate report'))
     },
     onError: (err) => toastError(err, 'Failed to generate report'),
+  })
+
+  // Sends the plain report straight to the browser's print dialog
+  const printPlainReportMutation = useMutation({
+    mutationFn: fetchReportOptions,
+    onSuccess: (optionsList) => {
+      printCombinedReport(optionsList, 'plain')
+        .catch(() => toast.error('Failed to print report'))
+    },
+    onError: (err) => toastError(err, 'Failed to print report'),
   })
 
   // Group orders sharing one receipt into a single billing row — we always bill/report a receipt as one unit
@@ -600,6 +620,16 @@ export default function BillingPage() {
                                 <Download className="h-4 w-4" />
                               </IBtn>
 
+                              {/* Print the same letterhead report directly */}
+                              <IBtn
+                                title="Print Report"
+                                onClick={() => printReportMutation.mutate(primary)}
+                                loading={printReportMutation.isPending && printReportMutation.variables?.id === primary.id}
+                                color="text-emerald-500 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-900/30"
+                              >
+                                <Printer className="h-4 w-4" />
+                              </IBtn>
+
                               {/* Plain report — also combined across every approved test on this receipt */}
                               <IBtn
                                 title="Plain Report"
@@ -608,6 +638,16 @@ export default function BillingPage() {
                                 color="text-blue-500 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/30"
                               >
                                 <FileText className="h-4 w-4" />
+                              </IBtn>
+
+                              {/* Print the same plain report directly */}
+                              <IBtn
+                                title="Print Plain Report"
+                                onClick={() => printPlainReportMutation.mutate(primary)}
+                                loading={printPlainReportMutation.isPending && printPlainReportMutation.variables?.id === primary.id}
+                                color="text-blue-500 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/30"
+                              >
+                                <Printer className="h-4 w-4" />
                               </IBtn>
 
                               {/* Share link — points at the first test on this receipt */}

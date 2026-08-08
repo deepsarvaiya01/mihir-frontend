@@ -24,21 +24,42 @@ import { toTitleCase } from '../lib/utils'
 const GENDERS = ['Male', 'Female']
 const DISCOUNT_OPTIONS = [0, 5, 10, 15, 20, 25, 30, 50]
 
+const DOB_DAYS = Array.from({ length: 31 }, (_, i) => i + 1)
+const DOB_MONTHS = [
+  { value: 1, label: 'January' }, { value: 2, label: 'February' }, { value: 3, label: 'March' },
+  { value: 4, label: 'April' }, { value: 5, label: 'May' }, { value: 6, label: 'June' },
+  { value: 7, label: 'July' }, { value: 8, label: 'August' }, { value: 9, label: 'September' },
+  { value: 10, label: 'October' }, { value: 11, label: 'November' }, { value: 12, label: 'December' },
+]
+const DOB_CURRENT_YEAR = new Date().getFullYear()
+const DOB_YEARS = Array.from({ length: 121 }, (_, i) => DOB_CURRENT_YEAR - i)
+
+/** Whole years between a Y-M-D date of birth and today. */
+function calcAge(year: number, month: number, day: number): number {
+  const today = new Date()
+  let age = today.getFullYear() - year
+  const birthdayPassed = (today.getMonth() + 1 > month) || (today.getMonth() + 1 === month && today.getDate() >= day)
+  if (!birthdayPassed) age -= 1
+  return age
+}
+
 const PAYMENT_STATUS_STYLES = {
   PAID: { active: 'border-emerald-400 bg-emerald-50 text-emerald-700', idle: 'border-gray-200 bg-white text-gray-600 hover:border-emerald-200' },
   PENDING: { active: 'border-amber-400 bg-amber-50 text-amber-700', idle: 'border-gray-200 bg-white text-gray-600 hover:border-amber-200' },
   PARTIAL: { active: 'border-blue-400 bg-blue-50 text-blue-700', idle: 'border-gray-200 bg-white text-gray-600 hover:border-blue-200' },
 } as const
 
-interface PatientFormState extends Omit<CreatePatientDto, 'age' | 'isB2b' | 'b2bLabId' | 'labBranchId' | 'patientCode'> {
-  age: string
+interface PatientFormState extends Omit<CreatePatientDto, 'age' | 'dateOfBirth' | 'isB2b' | 'b2bLabId' | 'labBranchId' | 'patientCode'> {
+  dobDay: string
+  dobMonth: string
+  dobYear: string
   isB2b: boolean
   b2bLabId: string
   labBranchId: string
 }
 
 const emptyForm: PatientFormState = {
-  fullName: '', age: '', dateOfBirth: '',
+  fullName: '', dobDay: '', dobMonth: '', dobYear: '',
   gender: '', email: '', phoneNumber: '',
   addressLine: '', city: '', state: '', postalCode: '',
   emergencyContactName: '', emergencyContactPhone: '',
@@ -47,9 +68,14 @@ const emptyForm: PatientFormState = {
 }
 
 function patientToForm(p: import('../types').Patient): PatientFormState {
+  // date_of_birth comes back as an ISO date/datetime string — read the Y-M-D
+  // parts in UTC so the calendar day never shifts across local timezones.
+  const dob = p.dateOfBirth ? new Date(p.dateOfBirth) : null
   return {
     fullName: p.fullName ?? '',
-    age: p.age != null ? String(p.age) : '', dateOfBirth: p.dateOfBirth ?? '',
+    dobDay: dob ? String(dob.getUTCDate()) : '',
+    dobMonth: dob ? String(dob.getUTCMonth() + 1) : '',
+    dobYear: dob ? String(dob.getUTCFullYear()) : '',
     gender: p.gender ?? '',
     email: p.email ?? '', phoneNumber: p.phoneNumber ?? '',
     addressLine: p.addressLine ?? '', city: p.city ?? '',
@@ -65,10 +91,17 @@ function patientToForm(p: import('../types').Patient): PatientFormState {
 }
 
 function formToDto(form: PatientFormState): CreatePatientDto {
+  const day = Number(form.dobDay), month = Number(form.dobMonth), year = Number(form.dobYear)
+  const hasDob = form.dobDay && form.dobMonth && form.dobYear
+  const dateOfBirth = hasDob
+    ? new Date(Date.UTC(year, month - 1, day)).toISOString().split('T')[0]
+    : undefined
+  const age = hasDob ? calcAge(year, month, day) : undefined
+
   return {
     fullName: form.fullName,
-    age: form.age ? Number(form.age) : undefined,
-    dateOfBirth: form.dateOfBirth || undefined,
+    age,
+    dateOfBirth,
     gender: form.gender || undefined,
     email: form.email || undefined,
     phoneNumber: form.phoneNumber || undefined,
@@ -437,10 +470,30 @@ export default function PatientFormPage() {
                       onChange={e => setForm(p => ({ ...p, fullName: toTitleCase(e.target.value) }))}
                       required />
                   </div>
-                  <Input label="Age" type="number" placeholder="Years" min={0} max={150}
-                    value={form.age} onChange={setField('age')} />
-                  <Input label="Date of Birth" type="date"
-                    value={form.dateOfBirth} onChange={setField('dateOfBirth')} />
+                  <div className="sm:col-span-2">
+                    <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Date of Birth
+                      {form.dobDay && form.dobMonth && form.dobYear && (
+                        <span className="ml-2 font-normal text-gray-400">
+                          ({calcAge(Number(form.dobYear), Number(form.dobMonth), Number(form.dobDay))} years)
+                        </span>
+                      )}
+                    </label>
+                    <div className="grid grid-cols-3 gap-3">
+                      <Select value={form.dobDay} onChange={setField('dobDay')}>
+                        <option value="">Day</option>
+                        {DOB_DAYS.map(d => <option key={d} value={d}>{d}</option>)}
+                      </Select>
+                      <Select value={form.dobMonth} onChange={setField('dobMonth')}>
+                        <option value="">Month</option>
+                        {DOB_MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                      </Select>
+                      <Select value={form.dobYear} onChange={setField('dobYear')}>
+                        <option value="">Year</option>
+                        {DOB_YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                      </Select>
+                    </div>
+                  </div>
                   <Select label="Gender" value={form.gender} onChange={setField('gender')}>
                     <option value="">Select gender</option>
                     {GENDERS.map(g => <option key={g} value={g}>{g}</option>)}

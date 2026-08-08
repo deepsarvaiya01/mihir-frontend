@@ -4,7 +4,7 @@ import {
   LayoutDashboard, FlaskConical, Users, ClipboardList,
   History, LogOut, FlaskRound, ChevronRight,
   UserCog, Settings, Building2, MapPin, Receipt, PanelLeft,
-  PenLine, ImageIcon, Shield, ListTree, Stethoscope, Layers,
+  PenLine, ImageIcon, Shield, Stethoscope, Layers,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '../../store/authStore'
@@ -37,7 +37,6 @@ const adminItems: NavItem[] = [
   { to: '/signatures',   label: 'Signatures',         icon: <PenLine className="h-4 w-4" /> },
   { to: '/logos',        label: 'Logo Manager',       icon: <ImageIcon className="h-4 w-4" /> },
   { to: '/audit',        label: 'Audit Log',          icon: <Shield className="h-4 w-4" /> },
-  { to: '/request-logs', label: 'Request Log',        icon: <ListTree className="h-4 w-4" /> },
 ]
 
 const W_COLLAPSED = 'w-[56px]'
