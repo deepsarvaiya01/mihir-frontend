@@ -109,6 +109,6 @@
   .login-orbit-delay { animation: login-orbit 7s ease-in-out 1.4s infinite; }
 
   .login-input:focus {
-    box-shadow: 0 1px 0 0 #0a4d57;
+    box-shadow: 0 1px 0 0 #1d4ed8;
   }
 }

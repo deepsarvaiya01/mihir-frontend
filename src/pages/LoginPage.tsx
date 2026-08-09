@@ -38,7 +38,7 @@ export default function LoginPage() {
           className="absolute inset-0"
           style={{
             background:
-              'radial-gradient(ellipse 90% 70% at 20% 15%, #1a6b78 0%, transparent 55%), radial-gradient(ellipse 70% 80% at 90% 90%, #0d4a52 0%, transparent 50%), linear-gradient(155deg, #06343c 0%, #0a4d57 42%, #0c5f5a 100%)',
+              'radial-gradient(ellipse 90% 70% at 20% 15%, #2563eb 0%, transparent 55%), radial-gradient(ellipse 70% 80% at 90% 90%, #1e3a8a 0%, transparent 50%), linear-gradient(155deg, #0c2340 0%, #13407a 42%, #1d4ed8 100%)',
           }}
         />
 
@@ -113,16 +113,16 @@ export default function LoginPage() {
           </div>
 
           <div className="login-enter max-w-lg pb-6" style={{ animationDelay: '120ms' }}>
-            <p className="mb-4 font-login-display text-[11px] font-semibold uppercase tracking-[0.28em] text-teal-100/70">
+            <p className="mb-4 font-login-display text-[11px] font-semibold uppercase tracking-[0.28em] text-blue-100/70">
               Diagnostic operations
             </p>
             <h1 className="font-login-display text-[2.75rem] font-semibold leading-[1.08] tracking-tight text-white xl:text-[3.25rem]">
               Rameshwar
-              <span className="mt-1 block font-normal text-teal-100/85">
+              <span className="mt-1 block font-normal text-blue-100/85">
                 Diagnostic Laboratory
               </span>
             </h1>
-            <p className="mt-6 max-w-sm text-[15px] leading-relaxed text-teal-50/75">
+            <p className="mt-6 max-w-sm text-[15px] leading-relaxed text-blue-50/75">
               Secure access to orders, results, and reporting — built for precision lab workflows.
             </p>
           </div>
@@ -139,14 +139,14 @@ export default function LoginPage() {
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              'linear-gradient(180deg, #eef3f4 0%, #f6f8f9 48%, #e8eef0 100%)',
+              'linear-gradient(180deg, #eef2f7 0%, #f6f8fb 48%, #e8eef6 100%)',
           }}
         />
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.4]"
           style={{
             backgroundImage:
-              'radial-gradient(circle at 1px 1px, rgba(10, 77, 87, 0.07) 1px, transparent 0)',
+              'radial-gradient(circle at 1px 1px, rgba(37, 99, 235, 0.08) 1px, transparent 0)',
             backgroundSize: '22px 22px',
           }}
         />
@@ -163,25 +163,25 @@ export default function LoginPage() {
               />
             )}
             <div>
-              <p className="font-login-display text-xl font-semibold tracking-tight text-[#0a4d57]">
+              <p className="font-login-display text-xl font-semibold tracking-tight text-[#1d4ed8]">
                 Rameshwar Diagnostic
               </p>
-              <p className="mt-0.5 text-xs font-medium uppercase tracking-[0.2em] text-[#0a4d57]/60">
+              <p className="mt-0.5 text-xs font-medium uppercase tracking-[0.2em] text-[#1d4ed8]/60">
                 LabOps Console
               </p>
             </div>
           </div>
 
-          <h2 className="font-login-display text-[1.65rem] font-semibold tracking-tight text-[#102a30]">
+          <h2 className="font-login-display text-[1.65rem] font-semibold tracking-tight text-[#0f172a]">
             Sign in
           </h2>
-          <p className="mt-2 text-[14px] leading-relaxed text-[#4a6369]">
+          <p className="mt-2 text-[14px] leading-relaxed text-[#475569]">
             Enter your credentials to open the console.
           </p>
 
           <form onSubmit={handleLogin} className="mt-9 space-y-5">
             <div className="login-field group">
-              <label htmlFor="login-identifier" className="mb-2 block text-[12px] font-semibold text-[#2d4a50]">
+              <label htmlFor="login-identifier" className="mb-2 block text-[12px] font-semibold text-[#334155]">
                 Email or username
               </label>
               <input
@@ -192,12 +192,12 @@ export default function LoginPage() {
                 placeholder="you@laboratory.com"
                 required
                 autoComplete="username"
-                className="login-input w-full border-0 border-b-2 border-[#0a4d57]/20 bg-transparent py-3 text-[15px] text-[#102a30] outline-none transition placeholder:text-[#8aa0a6] focus:border-[#0a4d57]"
+                className="login-input w-full border-0 border-b-2 border-[#1d4ed8]/20 bg-transparent py-3 text-[15px] text-[#0f172a] outline-none transition placeholder:text-[#94a3b8] focus:border-[#1d4ed8]"
               />
             </div>
 
             <div className="login-field group">
-              <label htmlFor="login-password" className="mb-2 block text-[12px] font-semibold text-[#2d4a50]">
+              <label htmlFor="login-password" className="mb-2 block text-[12px] font-semibold text-[#334155]">
                 Password
               </label>
               <div className="relative">
@@ -209,12 +209,12 @@ export default function LoginPage() {
                   placeholder="Enter your password"
                   required
                   autoComplete="current-password"
-                  className="login-input w-full border-0 border-b-2 border-[#0a4d57]/20 bg-transparent py-3 pr-10 text-[15px] text-[#102a30] outline-none transition placeholder:text-[#8aa0a6] focus:border-[#0a4d57]"
+                  className="login-input w-full border-0 border-b-2 border-[#1d4ed8]/20 bg-transparent py-3 pr-10 text-[15px] text-[#0f172a] outline-none transition placeholder:text-[#94a3b8] focus:border-[#1d4ed8]"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((p) => !p)}
-                  className="absolute right-0 top-1/2 -translate-y-1/2 p-1 text-[#7a949a] transition hover:text-[#0a4d57]"
+                  className="absolute right-0 top-1/2 -translate-y-1/2 p-1 text-[#94a3b8] transition hover:text-[#1d4ed8]"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -225,7 +225,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="login-submit group relative mt-3 flex w-full items-center justify-center gap-2 overflow-hidden bg-[#0a4d57] px-5 py-3.5 text-[14px] font-semibold text-white transition hover:bg-[#083e46] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+              className="login-submit group relative mt-3 flex w-full items-center justify-center gap-2 overflow-hidden bg-[#1d4ed8] px-5 py-3.5 text-[14px] font-semibold text-white transition hover:bg-[#1e40af] active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
             >
               <span className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/15 to-transparent transition-transform duration-700 ease-out group-hover:translate-x-full" />
               {loading ? (
@@ -242,7 +242,7 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="mt-10 text-center text-[12px] text-[#7a949a] lg:text-left">
+          <p className="mt-10 text-center text-[12px] text-[#94a3b8] lg:text-left">
             Need access? Contact your lab administrator.
           </p>
         </div>
