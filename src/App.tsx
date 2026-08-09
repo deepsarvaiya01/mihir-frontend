@@ -15,6 +15,7 @@ import UsersPage from './pages/UsersPage'
 import SettingsPage from './pages/SettingsPage'
 import B2bLabsPage from './pages/B2bLabsPage'
 import DoctorsPage from './pages/DoctorsPage'
+import TestCategoriesPage from './pages/TestCategoriesPage'
 import LabBranchesPage from './pages/LabBranchesPage'
 import PatientFormPage from './pages/PatientFormPage'
 import TemplateFormPage from './pages/TemplateFormPage'
@@ -79,6 +80,7 @@ export default function App() {
             <Route path="/users" element={<RoleRoute roles={['SUPER_ADMIN']}><UsersPage /></RoleRoute>} />
             <Route path="/b2b-labs" element={<RoleRoute roles={['SUPER_ADMIN']}><B2bLabsPage /></RoleRoute>} />
             <Route path="/doctors" element={<RoleRoute roles={['SUPER_ADMIN']}><DoctorsPage /></RoleRoute>} />
+            <Route path="/test-categories" element={<RoleRoute roles={['SUPER_ADMIN']}><TestCategoriesPage /></RoleRoute>} />
             <Route path="/lab-branches" element={<RoleRoute roles={['SUPER_ADMIN']}><LabBranchesPage /></RoleRoute>} />
             <Route path="/signatures" element={<RoleRoute roles={['SUPER_ADMIN']}><SignaturesPage /></RoleRoute>} />
             <Route path="/logos" element={<RoleRoute roles={['SUPER_ADMIN']}><LogosPage /></RoleRoute>} />

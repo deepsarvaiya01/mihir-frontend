@@ -9,7 +9,8 @@ export interface UserProfile { id: number; name: string; email: string; role: Us
 export interface DashboardSummary { superAdmins: number; labUsers: number; templates: number; activeTemplates: number; patients: number; orders: number; completedOrders: number; pendingOrders: number }
 export interface TestTemplateField { id: number; fieldName: string; fieldType: FieldType; required: boolean; optionsJson: string | null; unit: string | null; displayOrder: number; referenceRange: string | null; referenceRangeMale: string | null; referenceRangeFemale: string | null; isSectionHeader: boolean; isMainHeader: boolean }
 export interface TestTemplateB2bPrice { id: number; b2bLabId: number; amount: number }
-export interface TestTemplate { id: number; name: string; code: string; active: boolean; amount: number; summaryTitle: string | null; summary: string | null; summaryFormat: SummaryFormat; fields: TestTemplateField[]; b2bPrices: TestTemplateB2bPrice[] }
+export interface TestCategory { id: number; name: string; code: string; displayOrder: number; active: boolean; deletedAt?: string | null }
+export interface TestTemplate { id: number; name: string; code: string; active: boolean; amount: number; summaryTitle: string | null; summary: string | null; summaryFormat: SummaryFormat; categoryId: number | null; category?: TestCategory | null; fields: TestTemplateField[]; b2bPrices: TestTemplateB2bPrice[] }
 export interface TestProfile { id: number; name: string; code: string; active: boolean; amount: number; templates: TestTemplate[]; deletedAt?: string | null }
 
 export interface B2bLab { id: number; name: string; contactPerson: string | null; phone: string | null; email: string | null; address: string | null; city: string | null; active: boolean; deletedAt?: string | null }
@@ -18,7 +19,8 @@ export interface LabBranch { id: number; name: string; address: string | null; p
 export interface Doctor { id: number; name: string; degreeName: string | null; active: boolean; deletedAt?: string | null }
 
 export interface Patient {
-  id: number; fullName: string; patientCode: string; age: number | null; dateOfBirth: string | null
+  id: number; fullName: string; patientCode: string
+  ageYears: number | null; ageMonths: number | null; ageDays: number | null; dateOfBirth: string | null
   gender: string | null; bloodGroup: string | null; email: string | null; phoneNumber: string | null
   addressLine: string | null; city: string | null; state: string | null; postalCode: string | null
   emergencyContactName: string | null; emergencyContactPhone: string | null

@@ -14,6 +14,7 @@ import { ConfirmModal, Modal } from '../components/ui/Modal'
 import { PageLoader } from '../components/ui/Spinner'
 import { templateService } from '../services/templates'
 import { b2bLabService } from '../services/b2bLabs'
+import { testCategoryService } from '../services/testCategories'
 import type { FieldType, TestTemplateField, SummaryFormat } from '../types'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
@@ -178,6 +179,7 @@ export default function TemplateFormPage() {
   const [summaryTitle, setSummaryTitle] = useState('')
   const [summary, setSummary] = useState('')
   const [summaryFormat, setSummaryFormat] = useState<SummaryFormat>('paragraph')
+  const [categoryId, setCategoryId] = useState('')
   const [b2bPrices, setB2bPrices] = useState<Record<number, string>>({})
   const [addFieldOpen, setAddFieldOpen] = useState(false)
   const [fieldForm, setFieldForm] = useState(emptyFieldForm)
@@ -192,6 +194,9 @@ export default function TemplateFormPage() {
 
   const { data: b2bLabs = [] } = useQuery({ queryKey: ['b2b-labs'], queryFn: b2bLabService.getAll })
   const activeB2bLabs = b2bLabs.filter(l => l.active)
+
+  const { data: categories = [] } = useQuery({ queryKey: ['test-categories'], queryFn: testCategoryService.getAll })
+  const activeCategories = categories.filter(c => c.active).sort((a, b) => a.displayOrder - b.displayOrder)
 
   const { data: template, isLoading } = useQuery({
     queryKey: ['template', id],
@@ -208,6 +213,7 @@ export default function TemplateFormPage() {
       setSummaryTitle(template.summaryTitle ?? '')
       setSummary(template.summary ?? '')
       setSummaryFormat(template.summaryFormat ?? 'paragraph')
+      setCategoryId(template.categoryId != null ? String(template.categoryId) : '')
       const prices: Record<number, string> = {}
       for (const p of template.b2bPrices ?? []) prices[p.b2bLabId] = String(p.amount)
       setB2bPrices(prices)
@@ -266,6 +272,7 @@ export default function TemplateFormPage() {
           summaryTitle: summaryTitle.trim() || undefined,
           summary: summary.trim() || undefined,
           summaryFormat,
+          categoryId: categoryId ? Number(categoryId) : null,
           b2bPrices: b2bPricesPayload,
         })
       }
@@ -274,6 +281,7 @@ export default function TemplateFormPage() {
         summaryTitle: summaryTitle.trim() || undefined,
         summary: summary.trim() || undefined,
         summaryFormat,
+        categoryId: categoryId ? Number(categoryId) : null,
         b2bPrices: b2bPricesPayload,
       })
     },
@@ -392,6 +400,7 @@ export default function TemplateFormPage() {
         summaryTitle: summaryTitle.trim() || undefined,
         summary: summary.trim() || undefined,
         summaryFormat,
+        categoryId: categoryId ? Number(categoryId) : null,
         b2bPrices: b2bPricesPayload,
       })
       for (const pf of pendingFields) {
@@ -514,13 +523,17 @@ export default function TemplateFormPage() {
           </div>
 
           {/* All fields in one row */}
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
             <div className="col-span-2 lg:col-span-2">
               <Input size="sm" label="Template Name" placeholder="e.g. Complete Blood Count" value={name} onChange={e => setName(toTitleCase(e.target.value))} required />
             </div>
             <Input size="sm" label="Template Code" placeholder="e.g. CBC" value={code} onChange={e => setCode(e.target.value.toUpperCase())} required />
             <Input size="sm" label="Default Amount (₹)" type="number" placeholder="0.00" value={amount} onChange={e => setAmount(e.target.value)} />
             <Input size="sm" label="Summary Title" placeholder="e.g. Clinical Interpretation" value={summaryTitle} onChange={e => setSummaryTitle(e.target.value)} />
+            <Select size="sm" label="Category" value={categoryId} onChange={e => setCategoryId(e.target.value)}>
+              <option value="">No category</option>
+              {activeCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </Select>
           </div>
 
           {/* Summary textarea — full width */}

@@ -21,6 +21,7 @@ export const templateService = {
     summaryTitle?: string
     summary?: string
     summaryFormat?: SummaryFormat
+    categoryId?: number | null
     b2bPrices?: Array<{ b2bLabId: number; amount: number }>
   }): Promise<TestTemplate> => {
     const { data } = await api.post('/tests/templates', payload)
@@ -35,6 +36,7 @@ export const templateService = {
     summaryTitle?: string
     summary?: string
     summaryFormat?: SummaryFormat
+    categoryId?: number | null
     b2bPrices?: Array<{ b2bLabId: number; amount: number }>
   }): Promise<TestTemplate> => {
     const { data } = await api.patch(`/tests/templates/${id}`, payload)

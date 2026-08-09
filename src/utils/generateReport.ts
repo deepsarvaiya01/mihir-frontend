@@ -4,6 +4,7 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib'
 import QRCode from 'qrcode'
 import type { LabSettings, ActiveSignature, Logo, Order, SummaryFormat } from '../types'
 import { isOutOfRange } from './rangeCheck'
+import { formatAge } from '../lib/utils'
 
 /* ─── Types ─────────────────────────────────────────────── */
 export interface ReportResult {
@@ -22,14 +23,16 @@ export interface ReportOrder {
   patient?: {
     fullName: string
     patientCode?: string
-    age: number | null
+    ageYears: number | null
+    ageMonths: number | null
+    ageDays: number | null
     gender: string | null
     doctorName: string | null
     city?: string | null
     isB2b?: boolean
     b2bLab?: { name: string; contactPerson?: string | null; city?: string | null; address?: string | null; phone?: string | null } | null
   }
-  template?: { name: string; code: string; summaryTitle?: string | null; summary?: string | null; summaryFormat?: SummaryFormat }
+  template?: { name: string; code: string; summaryTitle?: string | null; summary?: string | null; summaryFormat?: SummaryFormat; category?: { displayOrder: number } | null }
   createdAt?: string
 }
 
@@ -70,9 +73,10 @@ function fmtDate(iso?: string): string {
   })
 }
 
-function fmtAgeGender(age: number | null, gender: string | null): string {
+function fmtAgeGender(years: number | null, months: number | null, days: number | null, gender: string | null): string {
   const parts: string[] = []
-  if (age) parts.push(`${age} Years`)
+  const age = formatAge(years, months, days)
+  if (age) parts.push(age)
   if (gender) {
     const g = gender.toLowerCase()
     parts.push(g === 'm' || g === 'male' ? 'Male' : 'Female')
@@ -403,7 +407,7 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
     doc.setFont('helvetica', 'normal'); doc.text(`: ${order.receiptNumber ?? '—'}`, col2X + 24, startY)
 
     doc.setFont('helvetica', 'bold');  doc.text('Age / Gender', ML, startY + 7)
-    doc.setFont('helvetica', 'normal'); doc.text(`: ${fmtAgeGender(p?.age ?? null, p?.gender ?? null)}`, ML + 35, startY + 7)
+    doc.setFont('helvetica', 'normal'); doc.text(`: ${fmtAgeGender(p?.ageYears ?? null, p?.ageMonths ?? null, p?.ageDays ?? null, p?.gender ?? null)}`, ML + 35, startY + 7)
     doc.setFont('helvetica', 'bold');  doc.text('Date', col2X, startY + 7)
     doc.setFont('helvetica', 'normal'); doc.text(`: ${fmtDate(order.createdAt)}`, col2X + 24, startY + 7)
 
@@ -683,9 +687,9 @@ export async function generateReceipt(options: GenerateReceiptOptions): Promise<
 
   const fmt = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-  const fmtGenderAge = (gender: string | null, age: number | null): string => {
+  const fmtGenderAge = (gender: string | null, years: number | null, months: number | null, days: number | null): string => {
     const g = gender ? (gender.toLowerCase().startsWith('m') ? 'Male' : 'Female') : null
-    const parts = [g, age ? `${age} Yrs` : null].filter(Boolean)
+    const parts = [g, formatAge(years, months, days)].filter(Boolean)
     return parts.length > 0 ? parts.join('/') : '—'
   }
 
@@ -726,7 +730,7 @@ export async function generateReceipt(options: GenerateReceiptOptions): Promise<
   infoRow(ML, 'Name', p?.fullName ?? '—', y)
   infoRow(col2X, 'Bill No.', receiptNumber ?? '—', y)
   y += 6
-  infoRow(ML, 'Gender/Age', fmtGenderAge(p?.gender ?? null, p?.age ?? null), y)
+  infoRow(ML, 'Gender/Age', fmtGenderAge(p?.gender ?? null, p?.ageYears ?? null, p?.ageMonths ?? null, p?.ageDays ?? null), y)
   infoRow(col2X, 'Bill Date', fmtBillDate(order.createdAt), y)
   y += 6
   infoRow(ML, 'Mobile', p?.phoneNumber ?? '—', y)
@@ -881,7 +885,7 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
     doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${order.receiptNumber ?? '—'}`, col2X + 24, y)
 
     doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text('Age / Gender', ML, y + 7)
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${fmtAgeGender(p?.age ?? null, p?.gender ?? null)}`, ML + 35, y + 7)
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${fmtAgeGender(p?.ageYears ?? null, p?.ageMonths ?? null, p?.ageDays ?? null, p?.gender ?? null)}`, ML + 35, y + 7)
     doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text('Date', col2X, y + 7)
     doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${fmtDate(order.createdAt)}`, col2X + 24, y + 7)
 
@@ -1152,10 +1156,15 @@ async function buildCombinedReportBytes(
   // shared receipt number up front so every section shows the identical value,
   // even if an individual order's own record is missing it.
   const sharedReceiptNumber = optionsList.find(o => o.order.receiptNumber)?.order.receiptNumber ?? null
-  const normalizedList = optionsList.map(opt => ({
-    ...opt,
-    order: { ...opt.order, receiptNumber: sharedReceiptNumber },
-  }))
+  const normalizedList = optionsList
+    .map(opt => ({
+      ...opt,
+      order: { ...opt.order, receiptNumber: sharedReceiptNumber },
+    }))
+    // Tests print in test-category order (e.g. Biochemistry before Hematology),
+    // not in whatever order they happened to be approved — tests with no
+    // category, or the same category, keep their original relative order.
+    .sort((a, b) => (a.order.template?.category?.displayOrder ?? Infinity) - (b.order.template?.category?.displayOrder ?? Infinity))
 
   if (normalizedList.length === 1) {
     return type === 'letterhead' ? buildLabReportBytes(normalizedList[0]) : buildPlainReportDoc(normalizedList[0]).then(d => new Uint8Array(d.output('arraybuffer') as ArrayBuffer))

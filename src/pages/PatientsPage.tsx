@@ -19,6 +19,7 @@ import { patientService } from '../services/patients'
 import type { Patient } from '../types'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
+import { formatAge } from '../lib/utils'
 
 /* ── Patient detail slide-over ───────────────────────────────────────────── */
 
@@ -111,7 +112,7 @@ function PatientDrawer({ patientId, onClose, onEdit }: { patientId: number; onCl
 
               {/* Personal */}
               <Section title="Personal" icon={<UserCircle2 className="h-4 w-4" />}>
-                <DetailRow label="Age" value={p.age != null ? `${p.age} years` : null} />
+                <DetailRow label="Age" value={formatAge(p.ageYears, p.ageMonths, p.ageDays)} />
                 <DetailRow label="Date of Birth" value={p.dateOfBirth ? new Date(p.dateOfBirth).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null} />
                 <DetailRow label="Gender" value={p.gender} />
                 <DetailRow label="Blood Group" value={p.bloodGroup} />
@@ -406,9 +407,9 @@ export default function PatientsPage() {
 
                       {/* Age / Gender */}
                       <td className="px-5 py-3.5 text-gray-600 dark:text-gray-300">
-                        {patient.age || patient.gender ? (
+                        {formatAge(patient.ageYears, patient.ageMonths, patient.ageDays) || patient.gender ? (
                           <span>
-                            {patient.age ? `${patient.age} yrs` : '—'}
+                            {formatAge(patient.ageYears, patient.ageMonths, patient.ageDays) ?? '—'}
                             {patient.gender ? <span className="ml-1.5 text-gray-400">· {patient.gender}</span> : null}
                           </span>
                         ) : <span className="text-gray-300">—</span>}

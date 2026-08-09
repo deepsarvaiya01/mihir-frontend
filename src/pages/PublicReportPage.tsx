@@ -2,6 +2,7 @@ import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { FlaskConical, FileCheck, Clock, AlertCircle } from 'lucide-react'
 import { api } from '../lib/api'
+import { formatAge } from '../lib/utils'
 
 interface ReportResultRow {
   fieldName: string
@@ -15,7 +16,7 @@ function fetchReportByToken(token: string) {
   return api.get(`/report-shares/${token}`).then(r => r.data) as Promise<{
     order: {
       id: number; status: string; createdAt: string; receiptNumber?: string | null;
-      patient: { fullName: string; patientCode: string; age: number | null; gender: string | null; doctorName: string | null; city: string | null } | null;
+      patient: { fullName: string; patientCode: string; ageYears: number | null; ageMonths: number | null; ageDays: number | null; gender: string | null; doctorName: string | null; city: string | null } | null;
       template: { name: string; code: string } | null;
     };
     results: ReportResultRow[]
@@ -83,10 +84,13 @@ export default function PublicReportPage() {
               <p className="text-xs text-gray-400">Patient Code</p>
               <p className="mt-0.5 font-mono text-sm font-semibold text-blue-600">{order.patient?.patientCode ?? '—'}</p>
             </div>
-            {order.patient?.age && (
+            {(order.patient?.ageYears || order.patient?.ageMonths || order.patient?.ageDays) && (
               <div>
                 <p className="text-xs text-gray-400">Age / Gender</p>
-                <p className="mt-0.5 text-gray-700">{order.patient.age} yrs {order.patient.gender ? `/ ${order.patient.gender}` : ''}</p>
+                <p className="mt-0.5 text-gray-700">
+                  {formatAge(order.patient.ageYears, order.patient.ageMonths, order.patient.ageDays)}
+                  {order.patient.gender ? ` / ${order.patient.gender}` : ''}
+                </p>
               </div>
             )}
             {order.patient?.doctorName && (

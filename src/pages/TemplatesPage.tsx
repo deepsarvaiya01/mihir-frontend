@@ -133,6 +133,7 @@ export default function TemplatesPage() {
                     <thead>
                       <tr className="border-b border-gray-100 dark:border-gray-700 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
                         <th className="px-5 py-3">Template</th>
+                        <th className="px-5 py-3">Category</th>
                         <th className="px-5 py-3">Fields</th>
                         <th className="px-5 py-3">Price</th>
                         <th className="px-5 py-3">Status</th>
@@ -153,6 +154,15 @@ export default function TemplatesPage() {
                                   <span className="font-mono text-xs text-gray-400 dark:text-gray-500">{template.code}</span>
                                 </div>
                               </div>
+                            </td>
+                            <td className="px-5 py-3.5">
+                              {template.category ? (
+                                <span className="rounded-lg bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                                  {template.category.name}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-gray-300 dark:text-gray-600">—</span>
+                              )}
                             </td>
                             <td className="px-5 py-3.5 text-gray-600 dark:text-gray-300">
                               <div className="flex items-center gap-2">
@@ -195,7 +205,7 @@ export default function TemplatesPage() {
 
                           {expandedId === template.id && (
                             <tr>
-                              <td colSpan={5} className="space-y-4 bg-gray-50/60 px-5 py-4 dark:bg-gray-800/30">
+                              <td colSpan={6} className="space-y-4 bg-gray-50/60 px-5 py-4 dark:bg-gray-800/30">
                                 <div>
                                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Fields</p>
                                   {template.fields && template.fields.length > 0 ? (

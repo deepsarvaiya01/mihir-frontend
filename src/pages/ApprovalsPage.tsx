@@ -21,6 +21,7 @@ import { isOutOfRange as isValueOutOfRange } from '../utils/rangeCheck'
 import type { Order, OrderResult, HistoryResult } from '../types'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
+import { formatAge } from '../lib/utils'
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 
@@ -111,7 +112,7 @@ function ReviewPanel({
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
-                <InfoPill label="Age" value={p?.age != null ? `${p.age} yrs` : null} />
+                <InfoPill label="Age" value={formatAge(p?.ageYears, p?.ageMonths, p?.ageDays)} />
                 <InfoPill label="Gender" value={p?.gender} />
                 <InfoPill label="Blood Group" value={p?.bloodGroup} />
                 <InfoPill label="Phone" value={p?.phoneNumber} />
