@@ -183,6 +183,15 @@ function ReviewPanel({
                         </tr>
                       )
                     }
+                    if (r.isLineResult) {
+                      return (
+                        <tr key={i} className="border-b border-gray-50 dark:border-gray-800/60">
+                          <td colSpan={5} className="px-5 py-3 text-sm text-gray-800 dark:text-gray-200">
+                            {r.fieldName}{r.value != null && String(r.value) !== '' ? ` : ${r.value}` : ''}
+                          </td>
+                        </tr>
+                      )
+                    }
                     const outOfRange = isOutOfRange(r)
                     return (
                       <tr key={i} className={`border-b border-gray-50 transition-colors dark:border-gray-800/60
@@ -426,6 +435,7 @@ export default function ApprovalsPage() {
           fieldName: r.fieldName, fieldType: r.fieldType, value: r.value,
           unit: r.unit ?? null, referenceRange: r.referenceRange ?? null, isSectionHeader: r.isSectionHeader ?? false,
           isMainHeader: r.isMainHeader ?? false,
+          isLineResult: r.isLineResult ?? false,
         })),
         labSettings, signatures: activeSignatures, activeLogo,
       }).then(() => toast.success('Report downloaded')).catch(() => toast.error('Failed to generate report'))

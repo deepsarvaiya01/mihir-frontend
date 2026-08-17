@@ -110,7 +110,7 @@ function FormCard({ children }: { children: React.ReactNode }) {
 const emptyFieldForm = {
   fieldName: '', fieldType: 'text' as FieldType, required: false,
   options: '', unit: '', referenceRangeMale: '', referenceRangeFemale: '', isSectionHeader: false,
-  isMainHeader: false, displayOrder: '',
+  isMainHeader: false, isLineResult: false, displayOrder: '',
   formulaFirstKind: 'field' as FormulaOperandKind,
   formulaFirstFieldId: '', formulaFirstValue: '',
   formulaPairs: [] as FormulaPair[],
@@ -122,7 +122,7 @@ function fieldToForm(field: TestTemplateField): typeof emptyFieldForm {
   if (field.isSectionHeader || field.isMainHeader) {
     return { ...emptyFieldForm, fieldName: field.fieldName, isSectionHeader: field.isSectionHeader, isMainHeader: field.isMainHeader, displayOrder: String(field.displayOrder) }
   }
-  const base = { ...emptyFieldForm, fieldName: field.fieldName, fieldType: field.fieldType, required: field.required, unit: field.unit ?? '', referenceRangeMale: field.referenceRangeMale ?? '', referenceRangeFemale: field.referenceRangeFemale ?? '', displayOrder: String(field.displayOrder) }
+  const base = { ...emptyFieldForm, fieldName: field.fieldName, fieldType: field.fieldType, required: field.required, unit: field.unit ?? '', referenceRangeMale: field.referenceRangeMale ?? '', referenceRangeFemale: field.referenceRangeFemale ?? '', isLineResult: field.isLineResult ?? false, displayOrder: String(field.displayOrder) }
   if (field.fieldType === 'select' && field.optionsJson) {
     try { base.options = (JSON.parse(field.optionsJson) as string[]).join(', ') } catch {}
   }
@@ -254,10 +254,12 @@ export default function TemplateFormPage() {
     }
     return {
       fieldName: pf.fieldName, fieldType: pf.fieldType,
-      required: pf.required, unit: pf.unit || undefined, displayOrder,
+      required: pf.required, displayOrder,
+      isLineResult: pf.isLineResult,
+      unit: pf.isLineResult ? undefined : pf.unit || undefined,
       options: pf.fieldType === 'select' ? pf.options.split(',').map(o => o.trim()).filter(Boolean) : undefined,
-      referenceRangeMale: pf.referenceRangeMale || undefined,
-      referenceRangeFemale: pf.referenceRangeFemale || undefined,
+      referenceRangeMale: pf.isLineResult ? undefined : pf.referenceRangeMale || undefined,
+      referenceRangeFemale: pf.isLineResult ? undefined : pf.referenceRangeFemale || undefined,
     }
   }
 
@@ -310,19 +312,22 @@ export default function TemplateFormPage() {
       if (fieldForm.fieldType === 'calculated') {
         return templateService.addField(Number(id), {
           fieldName: fieldForm.fieldName, fieldType: 'calculated', required: false,
-          unit: fieldForm.unit || undefined, displayOrder,
+          isLineResult: fieldForm.isLineResult,
+          unit: fieldForm.isLineResult ? undefined : fieldForm.unit || undefined, displayOrder,
           formulaJson: buildFormulaJson(fieldForm.formulaFirstKind, fieldForm.formulaFirstFieldId, fieldForm.formulaFirstValue, fieldForm.formulaPairs, fieldForm.formulaGroupStart, fieldForm.formulaGroupEnd),
-          referenceRangeMale: fieldForm.referenceRangeMale || undefined,
-          referenceRangeFemale: fieldForm.referenceRangeFemale || undefined,
+          referenceRangeMale: fieldForm.isLineResult ? undefined : fieldForm.referenceRangeMale || undefined,
+          referenceRangeFemale: fieldForm.isLineResult ? undefined : fieldForm.referenceRangeFemale || undefined,
         })
       }
       return templateService.addField(Number(id), {
         fieldName: fieldForm.fieldName, fieldType: fieldForm.fieldType,
-        required: fieldForm.required, unit: fieldForm.unit || undefined, displayOrder,
+        required: fieldForm.required, displayOrder,
+        isLineResult: fieldForm.isLineResult,
+        unit: fieldForm.isLineResult ? undefined : fieldForm.unit || undefined,
         options: fieldForm.fieldType === 'select'
           ? fieldForm.options.split(',').map(o => o.trim()).filter(Boolean) : undefined,
-        referenceRangeMale: fieldForm.referenceRangeMale || undefined,
-        referenceRangeFemale: fieldForm.referenceRangeFemale || undefined,
+        referenceRangeMale: fieldForm.isLineResult ? undefined : fieldForm.referenceRangeMale || undefined,
+        referenceRangeFemale: fieldForm.isLineResult ? undefined : fieldForm.referenceRangeFemale || undefined,
       })
     },
     onSuccess: () => {
@@ -348,19 +353,22 @@ export default function TemplateFormPage() {
       if (fieldForm.fieldType === 'calculated') {
         return templateService.updateField(Number(id), editingField.id, {
           fieldName: fieldForm.fieldName, fieldType: 'calculated', required: false,
-          unit: fieldForm.unit || undefined, displayOrder,
+          isLineResult: fieldForm.isLineResult,
+          unit: fieldForm.isLineResult ? undefined : fieldForm.unit || undefined, displayOrder,
           formulaJson: buildFormulaJson(fieldForm.formulaFirstKind, fieldForm.formulaFirstFieldId, fieldForm.formulaFirstValue, fieldForm.formulaPairs, fieldForm.formulaGroupStart, fieldForm.formulaGroupEnd),
-          referenceRangeMale: fieldForm.referenceRangeMale || undefined,
-          referenceRangeFemale: fieldForm.referenceRangeFemale || undefined,
+          referenceRangeMale: fieldForm.isLineResult ? undefined : fieldForm.referenceRangeMale || undefined,
+          referenceRangeFemale: fieldForm.isLineResult ? undefined : fieldForm.referenceRangeFemale || undefined,
         })
       }
       return templateService.updateField(Number(id), editingField.id, {
         fieldName: fieldForm.fieldName, fieldType: fieldForm.fieldType,
-        required: fieldForm.required, unit: fieldForm.unit || undefined, displayOrder,
+        required: fieldForm.required, displayOrder,
+        isLineResult: fieldForm.isLineResult,
+        unit: fieldForm.isLineResult ? undefined : fieldForm.unit || undefined,
         options: fieldForm.fieldType === 'select'
           ? fieldForm.options.split(',').map(o => o.trim()).filter(Boolean) : undefined,
-        referenceRangeMale: fieldForm.referenceRangeMale || undefined,
-        referenceRangeFemale: fieldForm.referenceRangeFemale || undefined,
+        referenceRangeMale: fieldForm.isLineResult ? undefined : fieldForm.referenceRangeMale || undefined,
+        referenceRangeFemale: fieldForm.isLineResult ? undefined : fieldForm.referenceRangeFemale || undefined,
       })
     },
     onSuccess: () => {
@@ -597,6 +605,9 @@ export default function TemplateFormPage() {
                                 <div className="flex items-center gap-1.5">
                                   {field.fieldType === 'calculated' && <Calculator className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
                                   <span className={`font-medium ${field.isMainHeader ? 'text-amber-700 dark:text-amber-400' : field.isSectionHeader ? 'text-blue-700 dark:text-blue-400' : 'text-gray-800 dark:text-gray-100'}`}>{field.fieldName}</span>
+                                  {field.isLineResult && !field.isSectionHeader && (
+                                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300">Line</span>
+                                  )}
                                 </div>
                               </td>
                               <td className="px-3 py-2.5">
@@ -644,6 +655,21 @@ export default function TemplateFormPage() {
                                     <Input size="sm" placeholder={fieldForm.isMainHeader ? 'e.g. Complete Blood Count' : fieldForm.isSectionHeader ? 'e.g. RBC Indices :' : 'e.g. Hemoglobin'}
                                       value={fieldForm.fieldName} onChange={e => setFieldForm(p => ({ ...p, fieldName: toTitleCase(e.target.value) }))} />
                                   </div>
+                                  {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
+                                    <label className="mt-1 flex items-center gap-1.5 text-[11px] text-gray-500">
+                                      <input
+                                        type="checkbox"
+                                        checked={fieldForm.isLineResult}
+                                        onChange={e => setFieldForm(p => ({
+                                          ...p,
+                                          isLineResult: e.target.checked,
+                                          ...(e.target.checked ? { unit: '', referenceRangeMale: '', referenceRangeFemale: '' } : {}),
+                                        }))}
+                                        className="h-3.5 w-3.5 accent-blue-600"
+                                      />
+                                      Line result
+                                    </label>
+                                  )}
                                 </td>
                                 <td className="px-2 py-2">
                                   {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
@@ -655,13 +681,13 @@ export default function TemplateFormPage() {
                                   )}
                                 </td>
                                 <td className="px-2 py-2">
-                                  {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
+                                  {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && !fieldForm.isLineResult && (
                                     <Input size="sm" placeholder="e.g. mg/dL" value={fieldForm.unit}
                                       onChange={e => setFieldForm(p => ({ ...p, unit: e.target.value }))} />
                                   )}
                                 </td>
                                 <td className="px-2 py-2">
-                                  {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
+                                  {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && !fieldForm.isLineResult && (
                                     <div className="flex flex-col gap-1">
                                       <Input size="sm" placeholder="♂ Male range" value={fieldForm.referenceRangeMale}
                                         onChange={e => setFieldForm(p => ({ ...p, referenceRangeMale: e.target.value }))} />
@@ -699,6 +725,9 @@ export default function TemplateFormPage() {
                             <tr className={`group ${editingPendingIndex === i ? 'bg-blue-50/30 dark:bg-blue-900/15' : 'hover:bg-gray-50/60 dark:hover:bg-gray-700/20'}`}>
                               <td className="px-3 py-2.5">
                                 <span className={`font-medium ${pf.isMainHeader ? 'text-amber-700 dark:text-amber-400' : pf.isSectionHeader ? 'text-blue-700 dark:text-blue-400' : 'text-gray-800 dark:text-gray-100'}`}>{pf.fieldName}</span>
+                                {pf.isLineResult && !pf.isSectionHeader && (
+                                  <span className="ml-1.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300">Line</span>
+                                )}
                               </td>
                               <td className="px-3 py-2.5">
                                 <Badge variant={pf.isMainHeader ? 'warning' : pf.isSectionHeader ? 'default' : fieldTypeBadgeVariants[pf.fieldType]}>
@@ -745,6 +774,21 @@ export default function TemplateFormPage() {
                                     <Input size="sm" placeholder={fieldForm.isMainHeader ? 'e.g. Complete Blood Count' : fieldForm.isSectionHeader ? 'e.g. RBC Indices :' : 'e.g. Hemoglobin'}
                                       value={fieldForm.fieldName} onChange={e => setFieldForm(p => ({ ...p, fieldName: toTitleCase(e.target.value) }))} />
                                   </div>
+                                  {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
+                                    <label className="mt-1 flex items-center gap-1.5 text-[11px] text-gray-500">
+                                      <input
+                                        type="checkbox"
+                                        checked={fieldForm.isLineResult}
+                                        onChange={e => setFieldForm(p => ({
+                                          ...p,
+                                          isLineResult: e.target.checked,
+                                          ...(e.target.checked ? { unit: '', referenceRangeMale: '', referenceRangeFemale: '' } : {}),
+                                        }))}
+                                        className="h-3.5 w-3.5 accent-blue-600"
+                                      />
+                                      Line result
+                                    </label>
+                                  )}
                                 </td>
                                 <td className="px-2 py-2">
                                   {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
@@ -757,13 +801,13 @@ export default function TemplateFormPage() {
                                   )}
                                 </td>
                                 <td className="px-2 py-2">
-                                  {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
+                                  {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && !fieldForm.isLineResult && (
                                     <Input size="sm" placeholder="e.g. mg/dL" value={fieldForm.unit}
                                       onChange={e => setFieldForm(p => ({ ...p, unit: e.target.value }))} />
                                   )}
                                 </td>
                                 <td className="px-2 py-2">
-                                  {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
+                                  {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && !fieldForm.isLineResult && (
                                     <div className="flex flex-col gap-1">
                                       <Input size="sm" placeholder="♂ Male range" value={fieldForm.referenceRangeMale}
                                         onChange={e => setFieldForm(p => ({ ...p, referenceRangeMale: e.target.value }))} />
@@ -816,6 +860,21 @@ export default function TemplateFormPage() {
                               <Input size="sm" placeholder={fieldForm.isMainHeader ? 'e.g. Complete Blood Count' : fieldForm.isSectionHeader ? 'e.g. RBC Indices :' : 'e.g. Hemoglobin'}
                                 value={fieldForm.fieldName} onChange={e => setFieldForm(p => ({ ...p, fieldName: toTitleCase(e.target.value) }))} />
                             </div>
+                            {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
+                              <label className="mt-1 flex items-center gap-1.5 text-[11px] text-gray-500">
+                                <input
+                                  type="checkbox"
+                                  checked={fieldForm.isLineResult}
+                                  onChange={e => setFieldForm(p => ({
+                                    ...p,
+                                    isLineResult: e.target.checked,
+                                    ...(e.target.checked ? { unit: '', referenceRangeMale: '', referenceRangeFemale: '' } : {}),
+                                  }))}
+                                  className="h-3.5 w-3.5 accent-blue-600"
+                                />
+                                Line result
+                              </label>
+                            )}
                           </td>
                           <td className="px-2 py-2">
                             {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
@@ -828,13 +887,13 @@ export default function TemplateFormPage() {
                             )}
                           </td>
                           <td className="px-2 py-2">
-                            {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
+                            {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && !fieldForm.isLineResult && (
                               <Input size="sm" placeholder="e.g. mg/dL" value={fieldForm.unit}
                                 onChange={e => setFieldForm(p => ({ ...p, unit: e.target.value }))} />
                             )}
                           </td>
                           <td className="px-2 py-2">
-                            {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
+                            {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && !fieldForm.isLineResult && (
                               <div className="flex flex-col gap-1">
                                 <Input size="sm" placeholder="♂ Male range" value={fieldForm.referenceRangeMale}
                                   onChange={e => setFieldForm(p => ({ ...p, referenceRangeMale: e.target.value }))} />

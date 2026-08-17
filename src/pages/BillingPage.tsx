@@ -4,6 +4,7 @@ import {
   Search, Receipt, ChevronDown, DollarSign,
   CheckCircle, Clock, FileText, Pencil,
   RefreshCw, Download, Share2, Loader2, Eye, Paperclip, X, Printer,
+  Banknote, Landmark, Smartphone, CircleDot,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Card } from '../components/ui/Card'
@@ -88,25 +89,57 @@ function PaymentModal({ orders, onClose, onSave, saving }: PaymentModalProps) {
   const discount = parseFloat(form.discount) || 0
   const totalNet = orders.reduce((s, o) => s + Number(o.netAmount ?? 0), 0)
   const netAmount = isSingle ? Math.round(amount * (1 - discount / 100) * 100) / 100 : totalNet
+  const testNames = orders.map(o => o.template?.name).filter(Boolean).join(', ')
 
   const set = (key: keyof PaymentForm, val: string) =>
     setForm(prev => ({ ...prev, [key]: val }))
+
+  const statusOpts: { value: PaymentStatus; label: string; hint: string; icon: React.ReactNode; active: string }[] = [
+    { value: 'PENDING', label: 'Pending', hint: 'Not collected', icon: <Clock className="h-4 w-4" />, active: 'border-amber-400 bg-amber-50 text-amber-800 dark:border-amber-600 dark:bg-amber-900/30 dark:text-amber-300' },
+    { value: 'PARTIAL', label: 'Partial', hint: 'Part paid', icon: <CircleDot className="h-4 w-4" />, active: 'border-blue-400 bg-blue-50 text-blue-800 dark:border-blue-600 dark:bg-blue-900/30 dark:text-blue-300' },
+    { value: 'PAID', label: 'Paid', hint: 'Fully collected', icon: <CheckCircle className="h-4 w-4" />, active: 'border-emerald-400 bg-emerald-50 text-emerald-800 dark:border-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300' },
+  ]
+
+  const methodOpts: { value: PaymentType | ''; label: string; icon: React.ReactNode }[] = [
+    { value: '', label: 'None', icon: <X className="h-4 w-4" /> },
+    { value: 'CASH', label: 'Cash', icon: <Banknote className="h-4 w-4" /> },
+    { value: 'CHEQUE', label: 'Cheque', icon: <Landmark className="h-4 w-4" /> },
+    { value: 'ONLINE', label: 'Online', icon: <Smartphone className="h-4 w-4" /> },
+  ]
 
   return (
     <Modal
       open
       onClose={onClose}
-      title={`Update Payment — ${order.receiptNumber ?? order.template?.name}`}
-      subtitle={isSingle ? `${order.patient?.fullName} · ${order.template?.name}` : `${order.patient?.fullName} · ${orders.length} tests`}
-      size="sm"
+      title="Update Payment"
+      subtitle={`${order.patient?.fullName ?? 'Patient'} · ${isSingle ? (order.template?.name ?? 'Test') : `${orders.length} tests`}`}
+      size="md"
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button loading={saving} onClick={() => onSave(orders.map(o => o.id), form, isSingle)}>Save Changes</Button>
+          <Button loading={saving} onClick={() => onSave(orders.map(o => o.id), form, isSingle)}>Save Payment</Button>
         </>
       }
     >
-      <div className="space-y-4">
+      <div className="space-y-5">
+        <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-900/40">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Receipt</p>
+              <p className="mt-0.5 font-mono text-sm font-semibold text-gray-800 dark:text-gray-100">
+                {order.receiptNumber ?? <span className="italic font-sans font-normal text-gray-400">Generated on save</span>}
+              </p>
+              {testNames && <p className="mt-1 truncate text-xs text-gray-500">{testNames}</p>}
+            </div>
+            <div className="text-right">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Payable</p>
+              <p className="mt-0.5 text-2xl font-bold tracking-tight text-[#1d4ed8]">
+                ₹{netAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+          </div>
+        </div>
+
         {isSingle ? (
           <div className="grid grid-cols-2 gap-4">
             <Input label="Amount (₹)" type="number" min={0} step="0.01"
@@ -115,67 +148,52 @@ function PaymentModal({ orders, onClose, onSave, saving }: PaymentModalProps) {
               value={form.discount} onChange={e => set('discount', e.target.value)} />
           </div>
         ) : (
-          <div className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-xs text-gray-500 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-400">
-            {orders.length} tests on this receipt — amounts are set per test at order creation and aren't edited here.
+          <div className="rounded-xl border border-dashed border-gray-200 px-4 py-3 text-xs leading-relaxed text-gray-500 dark:border-gray-700 dark:text-gray-400">
+            {orders.length} tests on this receipt — amounts were set when the order was created and are not edited here.
           </div>
         )}
 
-        <div className="flex items-center justify-between rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 dark:border-blue-900 dark:bg-blue-900/20">
-          <span className="text-sm font-medium text-blue-700 dark:text-blue-400">Net Amount</span>
-          <span className="text-xl font-bold text-blue-800 dark:text-blue-300">
-            ₹{netAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-          </span>
-        </div>
-
         <div>
-          <p className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">Payment Status</p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Payment status</p>
           <div className="grid grid-cols-3 gap-2">
-            {(['PENDING', 'PARTIAL', 'PAID'] as PaymentStatus[]).map(s => (
+            {statusOpts.map(s => (
               <button
-                key={s}
+                key={s.value}
                 type="button"
-                onClick={() => set('paymentStatus', s)}
-                className={`rounded-lg border py-2 text-sm font-medium transition-all ${
-                  form.paymentStatus === s
-                    ? s === 'PAID'
-                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
-                      : s === 'PARTIAL'
-                        ? 'border-blue-400 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                        : 'border-amber-400 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                onClick={() => set('paymentStatus', s.value)}
+                className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-3 text-center transition-all ${
+                  form.paymentStatus === s.value
+                    ? s.active
                     : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400'
                 }`}
               >
-                {s.charAt(0) + s.slice(1).toLowerCase()}
+                {s.icon}
+                <span className="text-sm font-semibold">{s.label}</span>
+                <span className="text-[10px] opacity-70">{s.hint}</span>
               </button>
             ))}
           </div>
         </div>
 
         <div>
-          <p className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">Payment Method</p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Payment method</p>
           <div className="grid grid-cols-4 gap-2">
-            {(['', 'CASH', 'CHEQUE', 'ONLINE'] as const).map(m => (
+            {methodOpts.map(m => (
               <button
-                key={m}
+                key={m.value || 'none'}
                 type="button"
-                onClick={() => set('paymentType', m)}
-                className={`rounded-lg border py-2 text-sm font-medium transition-all ${
-                  form.paymentType === m
-                    ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                onClick={() => set('paymentType', m.value)}
+                className={`flex flex-col items-center gap-1.5 rounded-xl border py-3 text-xs font-semibold transition-all ${
+                  form.paymentType === m.value
+                    ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-600 dark:bg-blue-900/30 dark:text-blue-300'
                     : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400'
                 }`}
               >
-                {m === '' ? 'None' : m.charAt(0) + m.slice(1).toLowerCase()}
+                {m.icon}
+                {m.label}
               </button>
             ))}
           </div>
-        </div>
-
-        <div className="flex items-center gap-2 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 dark:border-gray-700 dark:bg-gray-800/50">
-          <span className="text-xs font-medium text-gray-400 dark:text-gray-500">Receipt #</span>
-          <span className="font-mono text-sm text-gray-600 dark:text-gray-300">
-            {order.receiptNumber ?? <span className="italic text-gray-400">Auto-generated on save</span>}
-          </span>
         </div>
       </div>
     </Modal>
@@ -242,6 +260,7 @@ export default function BillingPage() {
         referenceRange: r.referenceRange ?? null,
         isSectionHeader: r.isSectionHeader ?? false,
         isMainHeader: r.isMainHeader ?? false,
+        isLineResult: r.isLineResult ?? false,
       })),
       labSettings,
       signatures: activeSignatures,
@@ -325,6 +344,7 @@ export default function BillingPage() {
           referenceRange: r.referenceRange ?? null,
           isSectionHeader: r.isSectionHeader ?? false,
           isMainHeader: r.isMainHeader ?? false,
+          isLineResult: r.isLineResult ?? false,
         })),
         labSettings,
         signatures: activeSignatures,

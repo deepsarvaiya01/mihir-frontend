@@ -10,8 +10,6 @@ import {
   RefreshCw,
   X,
   ImageOff,
-  Archive,
-  RotateCcw,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
@@ -19,7 +17,6 @@ import { toTitleCase } from '../lib/utils'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
 import { ConfirmModal } from '../components/ui/Modal'
-import { DataTable, DataTableHead, DataTableTh, DataTableBody, DataTableRow, DataTableTd } from '../components/ui/DataTable'
 import { signatureService, type Signature, type UpdateSignatureDto } from '../services/signatures'
 
 /* ─── helpers ────────────────────────────────────────────── */
@@ -281,18 +278,10 @@ export default function SignaturesPage() {
   const [showModal, setShowModal] = useState(false)
   const [editSig, setEditSig] = useState<Signature | null>(null)
   const [deleteSig, setDeleteSig] = useState<Signature | null>(null)
-  const [showArchived, setShowArchived] = useState(false)
-  const [permDeleteSig, setPermDeleteSig] = useState<Signature | null>(null)
 
   const { data: signatures = [], isLoading, refetch } = useQuery({
     queryKey: ['signatures'],
     queryFn: signatureService.getAll,
-  })
-
-  const { data: archivedSigs = [] } = useQuery({
-    queryKey: ['signatures-archived'],
-    queryFn: signatureService.getArchived,
-    enabled: showArchived,
   })
 
   const createMut = useMutation({
@@ -338,30 +327,9 @@ export default function SignaturesPage() {
     onSuccess: () => {
       toast.success('Signature archived')
       qc.invalidateQueries({ queryKey: ['signatures'] })
-      qc.invalidateQueries({ queryKey: ['signatures-archived'] })
       setDeleteSig(null)
     },
     onError: (err) => toastError(err, 'Failed to archive signature'),
-  })
-
-  const restoreMut = useMutation({
-    mutationFn: signatureService.restore,
-    onSuccess: () => {
-      toast.success('Signature restored')
-      qc.invalidateQueries({ queryKey: ['signatures'] })
-      qc.invalidateQueries({ queryKey: ['signatures-archived'] })
-    },
-    onError: (err) => toastError(err, 'Failed to restore signature'),
-  })
-
-  const permanentDeleteMut = useMutation({
-    mutationFn: signatureService.permanentDelete,
-    onSuccess: () => {
-      toast.success('Signature permanently deleted')
-      qc.invalidateQueries({ queryKey: ['signatures-archived'] })
-      setPermDeleteSig(null)
-    },
-    onError: (err) => toastError(err, 'Failed to permanently delete signature'),
   })
 
   const busy = createMut.isPending || updateMut.isPending || activateMut.isPending || deactivateMut.isPending || deleteMut.isPending
@@ -380,13 +348,6 @@ export default function SignaturesPage() {
               onClick={() => refetch()}
             >
               Refresh
-            </Button>
-            <Button
-              variant="secondary"
-              icon={<Archive className="h-4 w-4" />}
-              onClick={() => setShowArchived(v => !v)}
-            >
-              {showArchived ? 'Hide Archived' : 'Archived'}
             </Button>
             {signatures.length > 0 && (
               <Button icon={<Upload className="h-4 w-4" />} onClick={() => setShowModal(true)}>
@@ -451,47 +412,6 @@ export default function SignaturesPage() {
             ))}
           </div>
         )}
-        {showArchived && (
-          <DataTable title="Archived Signatures" count={archivedSigs.length} minWidth="560px">
-            <DataTableHead>
-              <DataTableTh>Name</DataTableTh>
-              <DataTableTh>Date Archived</DataTableTh>
-              <DataTableTh align="right">Actions</DataTableTh>
-            </DataTableHead>
-            <DataTableBody>
-              {archivedSigs.length === 0 ? (
-                <DataTableRow>
-                  <DataTableTd colSpan={3} className="py-8 text-center text-sm text-gray-400">No archived signatures</DataTableTd>
-                </DataTableRow>
-              ) : archivedSigs.map(sig => (
-                <DataTableRow key={sig.id}>
-                  <DataTableTd>
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-400">
-                        <Archive className="h-4 w-4" />
-                      </div>
-                      <p className="font-semibold text-gray-700 dark:text-gray-300">{sig.name}</p>
-                    </div>
-                  </DataTableTd>
-                  <DataTableTd className="text-gray-500 dark:text-gray-400">
-                    {sig.deletedAt ? new Date(sig.deletedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                  </DataTableTd>
-                  <DataTableTd align="right">
-                    <div className="flex justify-end gap-2">
-                      <Button size="sm" variant="ghost" icon={<RotateCcw className="h-3.5 w-3.5 text-blue-500" />}
-                        className="text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                        onClick={() => restoreMut.mutate(sig.id)}>Restore</Button>
-                      <Button size="sm" variant="ghost" icon={<Trash2 className="h-3.5 w-3.5 text-red-500" />}
-                        className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => setPermDeleteSig(sig)}>
-                        Delete Forever
-                      </Button>
-                    </div>
-                  </DataTableTd>
-                </DataTableRow>
-              ))}
-            </DataTableBody>
-          </DataTable>
-        )}
       </div>
 
       {showModal && (
@@ -524,17 +444,6 @@ export default function SignaturesPage() {
         confirmLabel="Archive Signature"
         variant="danger"
         loading={deleteMut.isPending}
-      />
-
-      <ConfirmModal
-        open={!!permDeleteSig}
-        onClose={() => setPermDeleteSig(null)}
-        onConfirm={() => permDeleteSig && permanentDeleteMut.mutate(permDeleteSig.id)}
-        title="Delete Forever"
-        message={`Permanently delete "${permDeleteSig?.name}"? This cannot be undone.`}
-        confirmLabel="Delete Forever"
-        variant="danger"
-        loading={permanentDeleteMut.isPending}
       />
     </div>
   )

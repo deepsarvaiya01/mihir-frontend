@@ -2,8 +2,8 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import {
-  History, Printer, ChevronDown, ChevronUp, Calendar,
-  FileCheck, Search, X, ClipboardList,
+  Printer, ChevronDown, ChevronUp, Calendar,
+  FileCheck, Search, X, ClipboardList, User,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
@@ -13,6 +13,7 @@ import { Badge } from '../components/ui/Badge'
 import { patientService } from '../services/patients'
 import type { PatientHistory } from '../types'
 import { toastError } from '../lib/errors'
+import { formatAge } from '../lib/utils'
 
 export default function HistoryPage() {
   const [query, setQuery]           = useState('')
@@ -34,7 +35,6 @@ export default function HistoryPage() {
     onError:   (err)  => toastError(err, 'Failed to load history'),
   })
 
-  /* pre-select from URL param */
   useEffect(() => {
     const pid = searchParams.get('patientId')
     if (pid) {
@@ -45,7 +45,6 @@ export default function HistoryPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patients.length])
 
-  /* close dropdown on outside click */
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setDropOpen(false)
@@ -78,6 +77,20 @@ export default function HistoryPage() {
     inputRef.current?.focus()
   }
 
+  const groupedHistory = useMemo(() => {
+    const items = history?.history ?? []
+    const groups = new Map<string, typeof items>()
+    for (const item of items) {
+      const key = new Date(item.createdAt).toLocaleDateString('en-IN', {
+        day: '2-digit', month: 'short', year: 'numeric',
+      })
+      const list = groups.get(key) ?? []
+      list.push(item)
+      groups.set(key, list)
+    }
+    return Array.from(groups.entries())
+  }, [history])
+
   const printReport = () => {
     if (!history?.patient) return
     const html = `
@@ -101,6 +114,7 @@ export default function HistoryPage() {
         Code: <strong>${history.patient.patientCode}</strong>
         ${history.patient.phoneNumber ? ` &bull; ${history.patient.phoneNumber}` : ''}
         ${history.patient.gender ? ` &bull; ${history.patient.gender}` : ''}
+        ${formatAge(history.patient.ageYears, history.patient.ageMonths, history.patient.ageDays) ? ` &bull; ${formatAge(history.patient.ageYears, history.patient.ageMonths, history.patient.ageDays)}` : ''}
         ${history.patient.bloodGroup ? ` &bull; Blood: ${history.patient.bloodGroup}` : ''}
         <br><em>${history.history.length} report${history.history.length !== 1 ? 's' : ''}</em>
       </div>
@@ -127,20 +141,20 @@ export default function HistoryPage() {
   }
 
   const patient = history?.patient
+  const patientAge = patient ? formatAge(patient.ageYears, patient.ageMonths, patient.ageDays) : null
 
   return (
     <div className="flex h-full flex-col">
       <Header
         title="Result History"
-        subtitle="Search patients and view their full diagnostic report history"
+        subtitle="Look up a patient and review every completed diagnostic report"
       />
 
       <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-4xl space-y-5 p-5">
+        <div className="mx-auto max-w-6xl space-y-5 p-6">
 
-          {/* ── Search bar ── */}
           <div ref={wrapRef} className="relative">
-            <div className={`flex items-center gap-2 rounded-2xl border bg-white px-4 py-3 shadow-sm transition-all dark:bg-gray-800
+            <div className={`flex items-center gap-3 rounded-2xl border bg-white px-4 py-3.5 shadow-sm transition-all dark:bg-gray-800
               ${dropOpen ? 'border-blue-400 ring-2 ring-blue-500/20' : 'border-gray-200 dark:border-gray-700'}`}>
               <Search className="h-4 w-4 shrink-0 text-gray-400" />
               <input
@@ -159,19 +173,22 @@ export default function HistoryPage() {
               )}
             </div>
 
-            {/* Dropdown */}
             {dropOpen && suggestions.length > 0 && (
               <div className="absolute z-50 mt-1.5 w-full overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-800">
-                <div className="max-h-64 overflow-y-auto py-1">
+                <div className="max-h-72 overflow-y-auto py-1">
                   {suggestions.map(p => (
                     <button key={p.id} onMouseDown={() => selectPatient(p)}
                       className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-blue-50 dark:hover:bg-blue-900/20">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-600 dark:bg-blue-900/40 dark:text-blue-400">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-600 dark:bg-blue-900/40 dark:text-blue-400">
                         {p.fullName.charAt(0).toUpperCase()}
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold text-gray-800 dark:text-gray-100">{p.fullName}</p>
-                        <p className="text-xs text-gray-400">{p.patientCode}{p.phoneNumber ? ` · ${p.phoneNumber}` : ''}</p>
+                        <p className="text-xs text-gray-400">
+                          {p.patientCode}
+                          {p.phoneNumber ? ` · ${p.phoneNumber}` : ''}
+                          {formatAge(p.ageYears, p.ageMonths, p.ageDays) ? ` · ${formatAge(p.ageYears, p.ageMonths, p.ageDays)}` : ''}
+                        </p>
                       </div>
                       {p.gender && (
                         <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-gray-700">
@@ -185,33 +202,31 @@ export default function HistoryPage() {
             )}
           </div>
 
-          {/* ── Loading ── */}
           {loadHistory.isPending && <PageLoader />}
 
-          {/* ── Patient card + history ── */}
           {!loadHistory.isPending && patient && (
-            <div className="space-y-4">
-
-              {/* Patient summary */}
-              <div className="flex items-center justify-between rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 to-indigo-50/40 px-5 py-4 dark:border-blue-900/40 dark:from-blue-900/20 dark:to-indigo-900/10">
-                <div className="flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 text-xl font-bold text-white shadow">
+            <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
+              <aside className="h-fit rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <div className="flex flex-col items-center text-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#1d4ed8] text-2xl font-bold text-white">
                     {patient.fullName.charAt(0).toUpperCase()}
                   </div>
-                  <div>
-                    <h3 className="text-base font-bold text-gray-900 dark:text-white">{patient.fullName}</h3>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-2.5 text-xs text-gray-500 dark:text-gray-400">
-                      <span className="font-mono font-semibold">{patient.patientCode}</span>
-                      {patient.gender     && <><span className="text-gray-300">·</span><span>{patient.gender}</span></>}
-                      {patient.bloodGroup && <><span className="text-gray-300">·</span><span>Blood: {patient.bloodGroup}</span></>}
-                      {patient.phoneNumber && <><span className="text-gray-300">·</span><span>{patient.phoneNumber}</span></>}
-                    </div>
-                  </div>
+                  <h3 className="mt-3 text-base font-bold text-gray-900 dark:text-white">{patient.fullName}</h3>
+                  <p className="mt-0.5 font-mono text-xs font-semibold text-blue-600 dark:text-blue-400">{patient.patientCode}</p>
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="text-right">
-                    <p className="text-xl font-bold text-blue-600">{history!.history.length}</p>
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Reports</p>
+
+                <dl className="mt-5 space-y-2.5 border-t border-gray-100 pt-4 text-sm dark:border-gray-700">
+                  <InfoRow label="Age" value={patientAge} />
+                  <InfoRow label="Gender" value={patient.gender} />
+                  <InfoRow label="Blood group" value={patient.bloodGroup} />
+                  <InfoRow label="Phone" value={patient.phoneNumber} />
+                  {patient.isB2b && <InfoRow label="B2B" value={patient.b2bLab?.name ?? 'Partner'} />}
+                </dl>
+
+                <div className="mt-5 flex items-center justify-between rounded-xl bg-blue-50 px-4 py-3 dark:bg-blue-950/40">
+                  <div>
+                    <p className="text-xl font-bold text-blue-700 dark:text-blue-300">{history!.history.length}</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-500">Reports</p>
                   </div>
                   {history!.history.length > 0 && (
                     <Button size="sm" variant="secondary" icon={<Printer className="h-3.5 w-3.5" />} onClick={printReport}>
@@ -219,100 +234,113 @@ export default function HistoryPage() {
                     </Button>
                   )}
                 </div>
+              </aside>
+
+              <div>
+                {history!.history.length === 0 ? (
+                  <EmptyState
+                    icon={<FileCheck className="h-10 w-10" />}
+                    title="No test history"
+                    description="This patient has no completed test reports yet."
+                  />
+                ) : (
+                  <div className="space-y-6">
+                    {groupedHistory.map(([dateLabel, items]) => (
+                      <section key={dateLabel}>
+                        <div className="mb-2.5 flex items-center gap-2">
+                          <Calendar className="h-3.5 w-3.5 text-gray-400" />
+                          <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-400">{dateLabel}</h4>
+                          <span className="h-px flex-1 bg-gray-100 dark:bg-gray-700" />
+                        </div>
+                        <div className="space-y-2.5">
+                          {items.map((item) => {
+                            const isOpen = expandedId === item.orderId
+                            return (
+                              <div key={item.orderId}
+                                className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                                <button
+                                  className="flex w-full items-center gap-4 px-5 py-4 text-left"
+                                  onClick={() => setExpandedId(isOpen ? null : item.orderId)}
+                                >
+                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-950">
+                                    <ClipboardList className="h-4 w-4 text-blue-600" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <p className="truncate text-sm font-bold text-gray-800 dark:text-white">
+                                      {item.testName}
+                                      <span className="ml-2 font-mono text-xs font-normal text-gray-400">({item.testCode})</span>
+                                    </p>
+                                    <p className="mt-0.5 text-xs text-gray-400">
+                                      {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                      {' · '}
+                                      {item.results.length} parameter{item.results.length !== 1 ? 's' : ''}
+                                    </p>
+                                  </div>
+                                  <div className="flex shrink-0 items-center gap-2.5">
+                                    <Badge variant={item.status === 'APPROVED' ? 'success' : item.status === 'REJECTED' ? 'danger' : 'warning'} dot>
+                                      {item.status}
+                                    </Badge>
+                                    {isOpen
+                                      ? <ChevronUp className="h-4 w-4 text-gray-400" />
+                                      : <ChevronDown className="h-4 w-4 text-gray-400" />}
+                                  </div>
+                                </button>
+
+                                {isOpen && item.results.length > 0 && (
+                                  <div className="border-t border-gray-100 bg-gray-50/70 px-5 py-4 dark:border-gray-700 dark:bg-gray-800/60">
+                                    <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                                      {item.results.map((r, i) => (
+                                        <div key={i}
+                                          className="rounded-xl border border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-800">
+                                          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{r.fieldName}</p>
+                                          <p className="mt-1 text-base font-bold text-gray-900 dark:text-white">
+                                            {String(r.value)}
+                                            {r.unit && <span className="ml-1.5 text-sm font-normal text-gray-400">{r.unit}</span>}
+                                          </p>
+                                          {r.referenceRange && (
+                                            <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">Ref: {r.referenceRange}</p>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                )}
               </div>
-
-              {/* History list */}
-              {history!.history.length === 0 ? (
-                <EmptyState
-                  icon={<FileCheck className="h-10 w-10" />}
-                  title="No test history"
-                  description="This patient has no completed test reports yet."
-                />
-              ) : (
-                <div className="space-y-3">
-                  {history!.history.map((item, idx) => {
-                    const isOpen = expandedId === item.orderId
-                    return (
-                      <div key={item.orderId}
-                        className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800">
-
-                        {/* Row header */}
-                        <button
-                          className="flex w-full items-center gap-4 px-5 py-4 text-left"
-                          onClick={() => setExpandedId(isOpen ? null : item.orderId)}
-                        >
-                          {/* Index bubble */}
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-bold text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
-                            {history!.history.length - idx}
-                          </div>
-
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-bold text-gray-800 dark:text-white">
-                              {item.testName}
-                              <span className="ml-2 font-mono text-xs font-normal text-gray-400">({item.testCode})</span>
-                            </p>
-                            <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-gray-400">
-                              <Calendar className="h-3 w-3" />
-                              <span>{new Date(item.createdAt).toLocaleString()}</span>
-                              <span className="text-gray-200 dark:text-gray-600">·</span>
-                              <ClipboardList className="h-3 w-3" />
-                              <span>{item.results.length} parameter{item.results.length !== 1 ? 's' : ''}</span>
-                            </div>
-                          </div>
-
-                          <div className="flex shrink-0 items-center gap-2.5">
-                            <Badge variant={item.status === 'APPROVED' ? 'success' : item.status === 'REJECTED' ? 'danger' : 'warning'} dot>
-                              {item.status}
-                            </Badge>
-                            {isOpen
-                              ? <ChevronUp className="h-4 w-4 text-gray-400" />
-                              : <ChevronDown className="h-4 w-4 text-gray-400" />}
-                          </div>
-                        </button>
-
-                        {/* Expanded results */}
-                        {isOpen && item.results.length > 0 && (
-                          <div className="border-t border-gray-100 bg-gray-50/60 px-5 py-4 dark:border-gray-700 dark:bg-gray-800/60">
-                            <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-                              {item.results.map((r, i) => (
-                                <div key={i}
-                                  className="rounded-xl border border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-800">
-                                  <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{r.fieldName}</p>
-                                  <p className="mt-1 text-base font-bold text-gray-900 dark:text-white">
-                                    {String(r.value)}
-                                    {r.unit && <span className="ml-1.5 text-sm font-normal text-gray-400">{r.unit}</span>}
-                                  </p>
-                                  {r.referenceRange && (
-                                    <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">Ref: {r.referenceRange}</p>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
             </div>
           )}
 
-          {/* ── Initial empty state ── */}
           {!loadHistory.isPending && !patient && (
-            <div className="flex flex-col items-center justify-center py-20 text-center">
-              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
-                <History className="h-8 w-8 text-gray-400" />
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white py-20 text-center dark:border-gray-700 dark:bg-gray-800">
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-950">
+                <User className="h-7 w-7 text-blue-500" />
               </div>
-              <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300">Search for a patient</h3>
-              <p className="mt-1 max-w-xs text-xs text-gray-400">
-                Type a name, patient code, or phone number above to load their full diagnostic history.
+              <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">Search for a patient</h3>
+              <p className="mt-1.5 max-w-sm text-sm text-gray-400">
+                Type a name, patient code, or phone number to open their full diagnostic history.
               </p>
             </div>
           )}
 
         </div>
       </div>
+    </div>
+  )
+}
+
+function InfoRow({ label, value }: { label: string; value?: string | null }) {
+  if (!value) return null
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <dt className="text-xs text-gray-400">{label}</dt>
+      <dd className="text-right text-sm font-medium text-gray-700 dark:text-gray-200">{value}</dd>
     </div>
   )
 }

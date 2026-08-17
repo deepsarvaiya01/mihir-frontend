@@ -138,13 +138,14 @@ function FieldsGrid({
           )
         }
         return (
-          <div key={field.id} className={field.fieldType === 'text' && !field.optionsJson ? 'sm:col-span-2' : ''}>
+          <div key={field.id} className={field.isLineResult || (field.fieldType === 'text' && !field.optionsJson) ? 'sm:col-span-2' : ''}>
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
               {field.fieldName}
-              {field.unit && (
+              {!field.isLineResult && field.unit && (
                 <span className="ml-1 normal-case font-normal text-gray-400 dark:text-gray-500">({field.unit})</span>
               )}
               {(() => {
+                if (field.isLineResult) return null
                 const ref = gender === 'Male'
                   ? (field.referenceRangeMale ?? field.referenceRange)
                   : gender === 'Female'

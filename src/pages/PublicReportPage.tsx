@@ -10,6 +10,7 @@ interface ReportResultRow {
   unit: string | null
   referenceRange: string | null
   isSectionHeader: boolean
+  isLineResult?: boolean
 }
 
 function fetchReportByToken(token: string) {
@@ -139,6 +140,12 @@ export default function PublicReportPage() {
                       r.isSectionHeader ? (
                         <tr key={i} className="bg-gray-50">
                           <td colSpan={4} className="px-4 py-2 font-semibold text-gray-700">{r.fieldName}</td>
+                        </tr>
+                      ) : r.isLineResult ? (
+                        <tr key={i} className="border-t border-gray-100">
+                          <td colSpan={4} className="px-4 py-2 text-gray-800">
+                            {r.fieldName}{r.value !== null && String(r.value) !== '' ? ` : ${r.value}` : ''}
+                          </td>
                         </tr>
                       ) : (
                         <tr key={i} className="border-t border-gray-100">

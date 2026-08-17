@@ -15,6 +15,7 @@ export interface ReportResult {
   referenceRange: string | null
   isSectionHeader: boolean
   isMainHeader?: boolean
+  isLineResult?: boolean
 }
 
 export interface ReportOrder {
@@ -85,7 +86,7 @@ function fmtAgeGender(years: number | null, months: number | null, days: number 
 }
 
 const SIG_IMG_H = 22   // signature image slot (20mm image + 2mm gap)
-const SIG_LINE_H = 5.5 // name / qualification line slot
+const SIG_LINE_H = 6.5 // name / qualification line slot
 const SIG_AUTH_H = 4   // "Authorized Signatory" line slot (always the bottom-most line)
 
 /**
@@ -135,16 +136,16 @@ async function drawSignatureBlock(
 
   if (displayName) {
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9.5)
+    doc.setFontSize(11)
     doc.setTextColor(10, 10, 10)
     doc.text(displayName, x, y + 4, { align: 'right' })
     y += SIG_LINE_H
   }
 
   if (hasQual) {
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8)
-    doc.setTextColor(90, 90, 90)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.setTextColor(10, 10, 10)
     doc.text(opts.doctorQual!, x, y + 4, { align: 'right' })
     y += SIG_LINE_H
   }
@@ -444,6 +445,14 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
         styles: { fontStyle: 'bold', halign: r.isMainHeader ? 'center' : 'left' },
       }])
       rowMetas.push({ isSectionHeader: true, isMainHeader: !!r.isMainHeader, isOutOfRange: false })
+    } else if (r.isLineResult) {
+      const valStr = r.value !== null && r.value !== undefined && String(r.value) !== '' ? String(r.value) : ''
+      tableBody.push([{
+        content: valStr ? `${r.fieldName} : ${valStr}` : r.fieldName,
+        colSpan: 4,
+        styles: { fontStyle: 'normal', halign: 'left' },
+      }])
+      rowMetas.push({ isSectionHeader: false, isMainHeader: false, isOutOfRange: false })
     } else {
       const valStr = r.value !== null && r.value !== undefined ? String(r.value) : ''
       const oor = isOutOfRange(r.value, r.referenceRange)
@@ -935,6 +944,14 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
         styles: { fontStyle: 'bold', halign: r.isMainHeader ? 'center' : 'left' },
       }])
       rowMetas.push({ isSectionHeader: true, isMainHeader: !!r.isMainHeader, isOutOfRange: false })
+    } else if (r.isLineResult) {
+      const valStr = r.value !== null && r.value !== undefined && String(r.value) !== '' ? String(r.value) : ''
+      tableBody.push([{
+        content: valStr ? `${r.fieldName} : ${valStr}` : r.fieldName,
+        colSpan: 4,
+        styles: { fontStyle: 'normal', halign: 'left' },
+      }])
+      rowMetas.push({ isSectionHeader: false, isMainHeader: false, isOutOfRange: false })
     } else {
       const valStr = r.value !== null && r.value !== undefined ? String(r.value) : ''
       const oor = isOutOfRange(r.value, r.referenceRange)

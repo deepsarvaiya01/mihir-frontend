@@ -16,6 +16,7 @@ interface NavItem { to: string; label: string; icon: React.ReactNode }
 const labNavItems: NavItem[] = [
   { to: '/patients',     label: 'Patients',           icon: <Users className="h-4 w-4" /> },
   { to: '/orders',       label: 'Orders & Results',   icon: <ClipboardList className="h-4 w-4" /> },
+  { to: '/templates',    label: 'Test Catalogue',     icon: <FlaskConical className="h-4 w-4" /> },
   { to: '/billing',      label: 'Billing & Reports',  icon: <Receipt className="h-4 w-4" /> },
   { to: '/history',      label: 'Result History',     icon: <History className="h-4 w-4" /> },
   { to: '/settings',     label: 'Profile',            icon: <Settings className="h-4 w-4" /> },

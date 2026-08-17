@@ -65,7 +65,7 @@ export default function App() {
           <Route path="/r/:token" element={<PublicReportPage />} />
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/templates" element={<RoleRoute roles={['SUPER_ADMIN']}><TemplatesPage /></RoleRoute>} />
+            <Route path="/templates" element={<RoleRoute roles={['SUPER_ADMIN', 'LAB_USER']}><TemplatesPage /></RoleRoute>} />
             <Route path="/templates/new" element={<RoleRoute roles={['SUPER_ADMIN']}><TemplateFormPage /></RoleRoute>} />
             <Route path="/templates/:id/edit" element={<RoleRoute roles={['SUPER_ADMIN']}><TemplateFormPage /></RoleRoute>} />
             <Route path="/profiles" element={<RoleRoute roles={['SUPER_ADMIN']}><ProfilesPage /></RoleRoute>} />

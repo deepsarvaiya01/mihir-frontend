@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Stethoscope, Pencil, Trash2, ToggleLeft, ToggleRight, Archive, RotateCcw } from 'lucide-react'
+import { Plus, Stethoscope, Pencil, Trash2, ToggleLeft, ToggleRight } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -65,18 +65,10 @@ export default function DoctorsPage() {
   const [deleteDoctor, setDeleteDoctor] = useState<Doctor | null>(null)
   const [createForm, setCreateForm] = useState<CreateDoctorDto>(emptyForm)
   const [editForm, setEditForm] = useState<CreateDoctorDto>(emptyForm)
-  const [showArchived, setShowArchived] = useState(false)
-  const [permDeleteDoctor, setPermDeleteDoctor] = useState<Doctor | null>(null)
 
   const { data: doctors = [], isLoading } = useQuery({
     queryKey: ['doctors'],
     queryFn: doctorService.getAll,
-  })
-
-  const { data: archivedDoctors = [] } = useQuery({
-    queryKey: ['doctors-archived'],
-    queryFn: doctorService.getArchived,
-    enabled: showArchived,
   })
 
   const createMutation = useMutation({
@@ -104,31 +96,10 @@ export default function DoctorsPage() {
     mutationFn: doctorService.delete,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['doctors'] })
-      qc.invalidateQueries({ queryKey: ['doctors-archived'] })
       setDeleteDoctor(null)
       toast.success('Doctor archived')
     },
     onError: (err) => toastError(err, 'Failed to archive doctor'),
-  })
-
-  const restoreMutation = useMutation({
-    mutationFn: doctorService.restore,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['doctors'] })
-      qc.invalidateQueries({ queryKey: ['doctors-archived'] })
-      toast.success('Doctor restored')
-    },
-    onError: (err) => toastError(err, 'Failed to restore doctor'),
-  })
-
-  const permanentDeleteMutation = useMutation({
-    mutationFn: doctorService.permanentDelete,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['doctors-archived'] })
-      setPermDeleteDoctor(null)
-      toast.success('Doctor permanently deleted')
-    },
-    onError: (err) => toastError(err, 'Failed to permanently delete doctor'),
   })
 
   const openEdit = (doctor: Doctor) => {
@@ -156,14 +127,9 @@ export default function DoctorsPage() {
         title="Doctors"
         subtitle="Manage referring doctors shown in the patient form"
         action={
-          <div className="flex items-center gap-2">
-            <Button variant="secondary" icon={<Archive className="h-4 w-4" />} onClick={() => setShowArchived(v => !v)}>
-              {showArchived ? 'Hide Archived' : 'Archived'}
-            </Button>
-            {doctors.length > 0 && (
-              <Button icon={<Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>New Doctor</Button>
-            )}
-          </div>
+          doctors.length > 0 ? (
+            <Button icon={<Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>New Doctor</Button>
+          ) : undefined
         }
       />
 
@@ -223,48 +189,6 @@ export default function DoctorsPage() {
             </DataTableBody>
           </DataTable>
         )}
-
-        {showArchived && (
-          <DataTable title="Archived Doctors" count={archivedDoctors.length} minWidth="560px">
-            <DataTableHead>
-              <DataTableTh>Name</DataTableTh>
-              <DataTableTh>Date Archived</DataTableTh>
-              <DataTableTh align="right">Actions</DataTableTh>
-            </DataTableHead>
-            <DataTableBody>
-              {archivedDoctors.length === 0 ? (
-                <DataTableRow>
-                  <DataTableTd colSpan={3} className="py-8 text-center text-sm text-gray-400">No archived doctors</DataTableTd>
-                </DataTableRow>
-              ) : archivedDoctors.map(doctor => (
-                <DataTableRow key={doctor.id}>
-                  <DataTableTd>
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-400">
-                        <Archive className="h-4 w-4" />
-                      </div>
-                      <p className="font-semibold text-gray-700 dark:text-gray-300">{doctor.name}</p>
-                    </div>
-                  </DataTableTd>
-                  <DataTableTd className="text-gray-500 dark:text-gray-400">
-                    {doctor.deletedAt ? new Date(doctor.deletedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                  </DataTableTd>
-                  <DataTableTd align="right">
-                    <div className="flex justify-end gap-2">
-                      <Button size="sm" variant="ghost" icon={<RotateCcw className="h-3.5 w-3.5 text-blue-500" />}
-                        className="text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                        onClick={() => restoreMutation.mutate(doctor.id)}>Restore</Button>
-                      <Button size="sm" variant="ghost" icon={<Trash2 className="h-3.5 w-3.5 text-red-500" />}
-                        className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => setPermDeleteDoctor(doctor)}>
-                        Delete Forever
-                      </Button>
-                    </div>
-                  </DataTableTd>
-                </DataTableRow>
-              ))}
-            </DataTableBody>
-          </DataTable>
-        )}
       </PageContent>
 
       <Modal
@@ -308,17 +232,6 @@ export default function DoctorsPage() {
         confirmLabel="Archive Doctor"
         variant="danger"
         loading={deleteMutation.isPending}
-      />
-
-      <ConfirmModal
-        open={!!permDeleteDoctor}
-        onClose={() => setPermDeleteDoctor(null)}
-        onConfirm={() => permDeleteDoctor && permanentDeleteMutation.mutate(permDeleteDoctor.id)}
-        title="Delete Forever"
-        message={`Permanently delete "${permDeleteDoctor?.name}"? This cannot be undone.`}
-        confirmLabel="Delete Forever"
-        variant="danger"
-        loading={permanentDeleteMutation.isPending}
       />
     </div>
   )

@@ -1,24 +1,20 @@
 ﻿import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import {
-  Plus, Users, Search, Pencil, Trash2,
-  Building2, History, Archive, RotateCcw,
+  Plus, Users, Search, Pencil,
+  Building2, History,
   Eye, X, Phone, MapPin, UserCircle2,
   Stethoscope, AlertCircle, FileText, ExternalLink,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
-import { ConfirmModal } from '../components/ui/Modal'
 import { EmptyState } from '../components/ui/EmptyState'
 import { PageLoader } from '../components/ui/Spinner'
 import { PageContent } from '../components/ui/PageContent'
 import { FilterBar, FilterSelect } from '../components/ui/FilterBar'
 import { Pagination } from '../components/ui/Pagination'
 import { patientService } from '../services/patients'
-import type { Patient } from '../types'
-import { toast } from 'sonner'
-import { toastError } from '../lib/errors'
 import { formatAge } from '../lib/utils'
 
 /* ── Patient detail slide-over ───────────────────────────────────────────── */
@@ -239,7 +235,6 @@ function TypeBadge({ isB2b }: { isB2b: boolean }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function PatientsPage() {
-  const qc = useQueryClient()
   const navigate = useNavigate()
 
   const [viewPatientId, setViewPatientId] = useState<number | null>(null)
@@ -248,38 +243,10 @@ export default function PatientsPage() {
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'B2B' | 'INDIVIDUAL'>('ALL')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
-  const [showArchived, setShowArchived] = useState(false)
-  const [permanentDeletePatient, setPermanentDeletePatient] = useState<Patient | null>(null)
 
   const { data: patients = [], isLoading, isFetching, refetch } = useQuery({
     queryKey: ['patients'],
     queryFn: () => patientService.getAll(),
-  })
-
-  const { data: archivedPatients = [] } = useQuery({
-    queryKey: ['patients', 'archived'],
-    queryFn: patientService.getArchived,
-    enabled: showArchived,
-  })
-
-  const restoreMutation = useMutation({
-    mutationFn: (id: number) => patientService.restore(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['patients'] })
-      qc.invalidateQueries({ queryKey: ['patients', 'archived'] })
-      toast.success('Patient restored')
-    },
-    onError: (err) => toastError(err, 'Failed to restore patient'),
-  })
-
-  const permanentDeleteMutation = useMutation({
-    mutationFn: (id: number) => patientService.permanentDelete(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['patients', 'archived'] })
-      setPermanentDeletePatient(null)
-      toast.success('Patient permanently deleted')
-    },
-    onError: (err) => toastError(err, 'Failed to permanently delete patient'),
   })
 
   // Reset to page 1 whenever filters change
@@ -310,19 +277,9 @@ export default function PatientsPage() {
         title="Patients"
         subtitle="Manage patient profiles and records"
         action={
-          <div className="flex items-center gap-2">
-            <Button
-              variant={showArchived ? 'secondary' : 'ghost'}
-              icon={<Archive className="h-4 w-4" />}
-              onClick={() => setShowArchived(p => !p)}
-              size="sm"
-            >
-              {showArchived ? 'Hide Archived' : 'Archived'}
-            </Button>
-            <Button icon={<Plus className="h-4 w-4" />} onClick={() => navigate('/patients/new')}>
-              New Patient
-            </Button>
-          </div>
+          <Button icon={<Plus className="h-4 w-4" />} onClick={() => navigate('/patients/new')}>
+            New Patient
+          </Button>
         }
       />
 
@@ -483,55 +440,6 @@ export default function PatientsPage() {
             />
           </>
         )}
-
-        {/* ── Archived Patients Section ── */}
-        {showArchived && (
-          <div className="mt-6">
-            <h3 className="mb-3 text-sm font-semibold text-gray-600 dark:text-gray-400 flex items-center gap-2">
-              <Archive className="h-4 w-4" />
-              Archived Patients ({archivedPatients.length})
-            </h3>
-            {archivedPatients.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-gray-200 dark:border-gray-700 py-8 text-center text-sm text-gray-400">No archived patients</p>
-            ) : (
-              <div className="overflow-hidden rounded-xl border border-amber-200 dark:border-amber-800/40 bg-amber-50/30 dark:bg-amber-900/10">
-                <table className="min-w-[600px] w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-900/20">
-                      <th className="px-5 py-3 text-left text-xs font-semibold text-amber-700 dark:text-amber-500">Patient</th>
-                      <th className="px-5 py-3 text-left text-xs font-semibold text-amber-700 dark:text-amber-500">Code</th>
-                      <th className="px-5 py-3 text-left text-xs font-semibold text-amber-700 dark:text-amber-500">Phone</th>
-                      <th className="px-5 py-3 text-right text-xs font-semibold text-amber-700 dark:text-amber-500">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-amber-100 dark:divide-amber-800/20">
-                    {archivedPatients.map(p => (
-                      <tr key={p.id} className="opacity-70 hover:opacity-100 transition-opacity">
-                        <td className="px-5 py-3 font-medium text-gray-700 dark:text-gray-300">{p.fullName}</td>
-                        <td className="px-5 py-3 font-mono text-xs text-gray-500 dark:text-gray-400">{p.patientCode}</td>
-                        <td className="px-5 py-3 text-gray-500 dark:text-gray-400">{p.phoneNumber ?? '—'}</td>
-                        <td className="px-5 py-3 text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button size="sm" variant="secondary" icon={<RotateCcw className="h-3.5 w-3.5" />}
-                              loading={restoreMutation.isPending && restoreMutation.variables === p.id}
-                              onClick={() => restoreMutation.mutate(p.id)}>
-                              Restore
-                            </Button>
-                            <Button size="sm" variant="ghost" icon={<Trash2 className="h-3.5 w-3.5 text-red-500" />}
-                              className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
-                              onClick={() => setPermanentDeletePatient(p)}>
-                              Delete Forever
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
       </PageContent>
 
       {viewPatientId && (
@@ -541,17 +449,6 @@ export default function PatientsPage() {
           onEdit={() => { navigate(`/patients/${viewPatientId}/edit`); setViewPatientId(null) }}
         />
       )}
-
-      <ConfirmModal
-        open={!!permanentDeletePatient}
-        onClose={() => setPermanentDeletePatient(null)}
-        onConfirm={() => permanentDeletePatient && permanentDeleteMutation.mutate(permanentDeletePatient.id)}
-        title="Delete Forever"
-        message={`Permanently delete "${permanentDeletePatient?.fullName}"? This CANNOT be undone and will remove all associated data.`}
-        confirmLabel="Delete Forever"
-        variant="danger"
-        loading={permanentDeleteMutation.isPending}
-      />
     </div>
   )
 }

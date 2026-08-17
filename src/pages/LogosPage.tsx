@@ -9,8 +9,6 @@ import {
   RefreshCw,
   X,
   ImageOff,
-  Archive,
-  RotateCcw,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
@@ -18,7 +16,6 @@ import { toTitleCase } from '../lib/utils'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
 import { ConfirmModal } from '../components/ui/Modal'
-import { DataTable, DataTableHead, DataTableTh, DataTableBody, DataTableRow, DataTableTd } from '../components/ui/DataTable'
 import { logoService } from '../services/logos'
 import type { Logo } from '../types'
 
@@ -246,18 +243,10 @@ export default function LogosPage() {
   const qc = useQueryClient()
   const [showModal, setShowModal] = useState(false)
   const [deleteLogo, setDeleteLogo] = useState<Logo | null>(null)
-  const [showArchived, setShowArchived] = useState(false)
-  const [permDeleteLogo, setPermDeleteLogo] = useState<Logo | null>(null)
 
   const { data: logos = [], isLoading, refetch } = useQuery({
     queryKey: ['logos'],
     queryFn: logoService.getAll,
-  })
-
-  const { data: archivedLogos = [] } = useQuery({
-    queryKey: ['logos-archived'],
-    queryFn: logoService.getArchived,
-    enabled: showArchived,
   })
 
   const createMut = useMutation({
@@ -294,30 +283,9 @@ export default function LogosPage() {
     onSuccess: () => {
       toast.success('Logo archived')
       qc.invalidateQueries({ queryKey: ['logos'] })
-      qc.invalidateQueries({ queryKey: ['logos-archived'] })
       setDeleteLogo(null)
     },
     onError: (err) => toastError(err, 'Failed to archive logo'),
-  })
-
-  const restoreMut = useMutation({
-    mutationFn: logoService.restore,
-    onSuccess: () => {
-      toast.success('Logo restored')
-      qc.invalidateQueries({ queryKey: ['logos'] })
-      qc.invalidateQueries({ queryKey: ['logos-archived'] })
-    },
-    onError: (err) => toastError(err, 'Failed to restore logo'),
-  })
-
-  const permanentDeleteMut = useMutation({
-    mutationFn: logoService.permanentDelete,
-    onSuccess: () => {
-      toast.success('Logo permanently deleted')
-      qc.invalidateQueries({ queryKey: ['logos-archived'] })
-      setPermDeleteLogo(null)
-    },
-    onError: (err) => toastError(err, 'Failed to permanently delete logo'),
   })
 
   const busy = createMut.isPending || activateMut.isPending || deactivateMut.isPending || deleteMut.isPending
@@ -336,13 +304,6 @@ export default function LogosPage() {
               onClick={() => refetch()}
             >
               Refresh
-            </Button>
-            <Button
-              variant="secondary"
-              icon={<Archive className="h-4 w-4" />}
-              onClick={() => setShowArchived(v => !v)}
-            >
-              {showArchived ? 'Hide Archived' : 'Archived'}
             </Button>
             {logos.length > 0 && (
               <Button icon={<Upload className="h-4 w-4" />} onClick={() => setShowModal(true)}>
@@ -406,47 +367,6 @@ export default function LogosPage() {
             ))}
           </div>
         )}
-        {showArchived && (
-          <DataTable title="Archived Logos" count={archivedLogos.length} minWidth="560px">
-            <DataTableHead>
-              <DataTableTh>Name</DataTableTh>
-              <DataTableTh>Date Archived</DataTableTh>
-              <DataTableTh align="right">Actions</DataTableTh>
-            </DataTableHead>
-            <DataTableBody>
-              {archivedLogos.length === 0 ? (
-                <DataTableRow>
-                  <DataTableTd colSpan={3} className="py-8 text-center text-sm text-gray-400">No archived logos</DataTableTd>
-                </DataTableRow>
-              ) : archivedLogos.map(logo => (
-                <DataTableRow key={logo.id}>
-                  <DataTableTd>
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-400">
-                        <Archive className="h-4 w-4" />
-                      </div>
-                      <p className="font-semibold text-gray-700 dark:text-gray-300">{logo.name}</p>
-                    </div>
-                  </DataTableTd>
-                  <DataTableTd className="text-gray-500 dark:text-gray-400">
-                    {logo.deletedAt ? new Date(logo.deletedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                  </DataTableTd>
-                  <DataTableTd align="right">
-                    <div className="flex justify-end gap-2">
-                      <Button size="sm" variant="ghost" icon={<RotateCcw className="h-3.5 w-3.5 text-blue-500" />}
-                        className="text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                        onClick={() => restoreMut.mutate(logo.id)}>Restore</Button>
-                      <Button size="sm" variant="ghost" icon={<Trash2 className="h-3.5 w-3.5 text-red-500" />}
-                        className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => setPermDeleteLogo(logo)}>
-                        Delete Forever
-                      </Button>
-                    </div>
-                  </DataTableTd>
-                </DataTableRow>
-              ))}
-            </DataTableBody>
-          </DataTable>
-        )}
       </div>
 
       {showModal && (
@@ -466,17 +386,6 @@ export default function LogosPage() {
         confirmLabel="Archive Logo"
         variant="danger"
         loading={deleteMut.isPending}
-      />
-
-      <ConfirmModal
-        open={!!permDeleteLogo}
-        onClose={() => setPermDeleteLogo(null)}
-        onConfirm={() => permDeleteLogo && permanentDeleteMut.mutate(permDeleteLogo.id)}
-        title="Delete Forever"
-        message={`Permanently delete "${permDeleteLogo?.name}"? This cannot be undone.`}
-        confirmLabel="Delete Forever"
-        variant="danger"
-        loading={permanentDeleteMut.isPending}
       />
     </div>
   )

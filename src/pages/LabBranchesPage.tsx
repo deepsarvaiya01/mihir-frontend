@@ -1,6 +1,6 @@
 ﻿import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, MapPin, Pencil, Trash2, Archive, RotateCcw } from 'lucide-react'
+import { Plus, MapPin, Pencil, Trash2 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -80,18 +80,10 @@ export default function LabBranchesPage() {
   const [deleteBranch, setDeleteBranch] = useState<LabBranch | null>(null)
   const [createForm, setCreateForm] = useState<CreateLabBranchDto>(emptyForm)
   const [editForm, setEditForm] = useState<CreateLabBranchDto>(emptyForm)
-  const [showArchived, setShowArchived] = useState(false)
-  const [permDeleteBranch, setPermDeleteBranch] = useState<LabBranch | null>(null)
 
   const { data: branches = [], isLoading } = useQuery({
     queryKey: ['lab-branches'],
     queryFn: labBranchService.getAll,
-  })
-
-  const { data: archivedBranches = [] } = useQuery({
-    queryKey: ['lab-branches-archived'],
-    queryFn: labBranchService.getArchived,
-    enabled: showArchived,
   })
 
   const createMutation = useMutation({
@@ -119,31 +111,10 @@ export default function LabBranchesPage() {
     mutationFn: labBranchService.delete,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['lab-branches'] })
-      qc.invalidateQueries({ queryKey: ['lab-branches-archived'] })
       setDeleteBranch(null)
       toast.success('Branch archived')
     },
     onError: (err) => toastError(err, 'Failed to archive branch'),
-  })
-
-  const restoreMutation = useMutation({
-    mutationFn: labBranchService.restore,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['lab-branches'] })
-      qc.invalidateQueries({ queryKey: ['lab-branches-archived'] })
-      toast.success('Branch restored')
-    },
-    onError: (err) => toastError(err, 'Failed to restore branch'),
-  })
-
-  const permanentDeleteMutation = useMutation({
-    mutationFn: labBranchService.permanentDelete,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['lab-branches-archived'] })
-      setPermDeleteBranch(null)
-      toast.success('Branch permanently deleted')
-    },
-    onError: (err) => toastError(err, 'Failed to permanently delete branch'),
   })
 
   const openEdit = (branch: LabBranch) => {
@@ -182,18 +153,9 @@ export default function LabBranchesPage() {
         title="Lab Branches"
         subtitle="Manage your laboratory branches and locations"
         action={
-          <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
-              icon={<Archive className="h-4 w-4" />}
-              onClick={() => setShowArchived(v => !v)}
-            >
-              {showArchived ? 'Hide Archived' : 'Archived'}
-            </Button>
-            {branches.length > 0 && (
-              <Button icon={<Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>New Branch</Button>
-            )}
-          </div>
+          branches.length > 0 ? (
+            <Button icon={<Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>New Branch</Button>
+          ) : undefined
         }
       />
 
@@ -255,49 +217,6 @@ export default function LabBranchesPage() {
             </DataTableBody>
           </DataTable>
         )}
-        {showArchived && (
-          <DataTable title="Archived Branches" count={archivedBranches.length} minWidth="560px">
-            <DataTableHead>
-              <DataTableTh>Branch Name</DataTableTh>
-              <DataTableTh>Phone</DataTableTh>
-              <DataTableTh>Date Archived</DataTableTh>
-              <DataTableTh align="right">Actions</DataTableTh>
-            </DataTableHead>
-            <DataTableBody>
-              {archivedBranches.length === 0 ? (
-                <DataTableRow>
-                  <DataTableTd colSpan={4} className="py-8 text-center text-sm text-gray-400">No archived branches</DataTableTd>
-                </DataTableRow>
-              ) : archivedBranches.map(branch => (
-                <DataTableRow key={branch.id}>
-                  <DataTableTd>
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-400">
-                        <Archive className="h-4 w-4" />
-                      </div>
-                      <p className="font-semibold text-gray-700 dark:text-gray-300">{branch.name}</p>
-                    </div>
-                  </DataTableTd>
-                  <DataTableTd className="text-gray-500 dark:text-gray-400">{branch.phone ?? '—'}</DataTableTd>
-                  <DataTableTd className="text-gray-500 dark:text-gray-400">
-                    {branch.deletedAt ? new Date(branch.deletedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                  </DataTableTd>
-                  <DataTableTd align="right">
-                    <div className="flex justify-end gap-2">
-                      <Button size="sm" variant="ghost" icon={<RotateCcw className="h-3.5 w-3.5 text-blue-500" />}
-                        className="text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                        onClick={() => restoreMutation.mutate(branch.id)}>Restore</Button>
-                      <Button size="sm" variant="ghost" icon={<Trash2 className="h-3.5 w-3.5 text-red-500" />}
-                        className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => setPermDeleteBranch(branch)}>
-                        Delete Forever
-                      </Button>
-                    </div>
-                  </DataTableTd>
-                </DataTableRow>
-              ))}
-            </DataTableBody>
-          </DataTable>
-        )}
       </PageContent>
 
       {/* Create Modal */}
@@ -344,18 +263,6 @@ export default function LabBranchesPage() {
         confirmLabel="Archive Branch"
         variant="danger"
         loading={deleteMutation.isPending}
-      />
-
-      {/* Permanent Delete Confirm */}
-      <ConfirmModal
-        open={!!permDeleteBranch}
-        onClose={() => setPermDeleteBranch(null)}
-        onConfirm={() => permDeleteBranch && permanentDeleteMutation.mutate(permDeleteBranch.id)}
-        title="Delete Forever"
-        message={`Permanently delete "${permDeleteBranch?.name}"? This cannot be undone.`}
-        confirmLabel="Delete Forever"
-        variant="danger"
-        loading={permanentDeleteMutation.isPending}
       />
     </div>
   )

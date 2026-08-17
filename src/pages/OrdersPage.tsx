@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, ClipboardList, Search, FileText, ChevronDown,
   Trash2, RotateCcw, ExternalLink, Paperclip, FlaskConical,
-  X, CheckSquare, SendHorizonal, Archive,
+  X, CheckSquare, SendHorizonal, User, Check, Banknote, Landmark, Smartphone,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
@@ -19,6 +19,7 @@ import { templateService } from '../services/templates'
 import { profileService } from '../services/profiles'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
+import { formatAge } from '../lib/utils'
 
 /** B2B column cell — shows the referring B2B lab name, or "—" if the patient isn't a B2B referral. */
 function B2bCell({ patient }: { patient?: { isB2b?: boolean; b2bLab?: { name: string } | null } | null }) {
@@ -48,16 +49,16 @@ interface BatchForm {
   patientId: string
   selectedItems: Array<{ kind: 'template' | 'profile'; id: number }>
   discount: string
-  paymentStatus: PaymentStatus | ''
-  paymentType: PaymentType | ''
+  paymentStatus: PaymentStatus
+  paymentType: PaymentType
 }
 
 const EMPTY_BATCH: BatchForm = {
   patientId: '',
   selectedItems: [],
   discount: '',
-  paymentStatus: '',
-  paymentType: '',
+  paymentStatus: 'PENDING',
+  paymentType: 'CASH',
 }
 
 const TODAY = new Date().toISOString().split('T')[0]
@@ -71,8 +72,6 @@ export default function OrdersPage() {
   const [deleteOrder, setDeleteOrder] = useState<Order | null>(null)
   const [deleteGroupOrders, setDeleteGroupOrders] = useState<Order[] | null>(null)
   const [reopenOrder, setReopenOrder] = useState<Order | null>(null)
-  const [showArchived, setShowArchived] = useState(false)
-  const [permanentDeleteOrder, setPermanentDeleteOrder] = useState<Order | null>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
   const [dateFrom, setDateFrom] = useState(TODAY)
@@ -89,12 +88,6 @@ export default function OrdersPage() {
   const { data: patients = [] } = useQuery({ queryKey: ['patients'], queryFn: () => patientService.getAll() })
   const { data: templates = [] } = useQuery({ queryKey: ['templates'], queryFn: templateService.getAll })
   const { data: profiles = [] } = useQuery({ queryKey: ['profiles'], queryFn: profileService.getAll })
-
-  const { data: archivedOrders = [] } = useQuery({
-    queryKey: ['orders', 'archived'],
-    queryFn: orderService.getArchived,
-    enabled: showArchived,
-  })
 
   const activeTemplates = templates.filter(t => t.active)
   const activeProfiles = profiles.filter(p => p.active)
@@ -135,6 +128,7 @@ export default function OrdersPage() {
   const subtotal = selectedTemplates.reduce((s, it) => s + it.price, 0)
   const discountPct = parseFloat(batchForm.discount) || 0
   const total = Math.round(subtotal * (1 - discountPct / 100) * 100) / 100
+  const selectedPatient = patients.find(p => String(p.id) === batchForm.patientId)
 
   // Tests that belong to a currently-selected profile — disabled individually to avoid double-booking the same test.
   const disabledTemplateInfo = new Map<number, string>()
@@ -179,8 +173,8 @@ export default function OrdersPage() {
         patientId: Number(batchForm.patientId),
         orders: batchForm.selectedItems.map(s => s.kind === 'profile' ? { profileId: s.id } : { templateId: s.id }),
         discount: discountPct || undefined,
-        paymentStatus: (batchForm.paymentStatus || undefined) as PaymentStatus | undefined,
-        paymentType: (batchForm.paymentType || undefined) as PaymentType | undefined,
+        paymentStatus: batchForm.paymentStatus,
+        paymentType: batchForm.paymentType,
       })
     },
     onSuccess: ({ orders: created, receiptNumber }) => {
@@ -233,26 +227,6 @@ export default function OrdersPage() {
       toast.success(`${count} test${count !== 1 ? 's' : ''} submitted for approval`)
     },
     onError: (err) => toastError(err, 'Failed to submit batch'),
-  })
-
-  const restoreOrder = useMutation({
-    mutationFn: (id: number) => orderService.restore(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['orders'] })
-      qc.invalidateQueries({ queryKey: ['orders', 'archived'] })
-      toast.success('Order restored')
-    },
-    onError: (err) => toastError(err, 'Failed to restore order'),
-  })
-
-  const permanentDeleteMut = useMutation({
-    mutationFn: (id: number) => orderService.permanentDelete(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['orders', 'archived'] })
-      setPermanentDeleteOrder(null)
-      toast.success('Order permanently deleted')
-    },
-    onError: (err) => toastError(err, 'Failed to permanently delete'),
   })
 
   const activeOrders = orders.filter(o => o.status !== 'APPROVED')
@@ -324,16 +298,7 @@ export default function OrdersPage() {
       <Header
         title="Orders & Results"
         subtitle="Create diagnostic orders and enter test results for approval"
-        action={
-          <div className="flex items-center gap-2">
-            <Button variant={showArchived ? 'secondary' : 'ghost'} size="sm"
-              icon={<Archive className="h-4 w-4" />}
-              onClick={() => setShowArchived(p => !p)}>
-              {showArchived ? 'Hide Archived' : 'Archived'}
-            </Button>
-            <Button icon={<Plus className="h-4 w-4" />} onClick={openCreate}>New Order</Button>
-          </div>
-        }
+        action={<Button icon={<Plus className="h-4 w-4" />} onClick={openCreate}>New Order</Button>}
       />
 
       <div className="p-6 space-y-5">
@@ -539,85 +504,15 @@ export default function OrdersPage() {
             </table>
           </div>
         )}
-
-        {/* ── Archived Orders Section ─────────────────────────── */}
-        {showArchived && (
-          <div className="mt-2">
-            <div className="mb-3 flex items-center gap-2">
-              <Archive className="h-4 w-4 text-amber-500" />
-              <h3 className="text-sm font-semibold text-amber-700 dark:text-amber-400">
-                Archived Orders
-              </h3>
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
-                {archivedOrders.length}
-              </span>
-            </div>
-            {archivedOrders.length === 0 ? (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50/50 dark:border-amber-800/50 dark:bg-amber-900/10 px-6 py-10 text-center">
-                <Archive className="mx-auto mb-2 h-8 w-8 text-amber-300 dark:text-amber-700" />
-                <p className="text-sm text-amber-600 dark:text-amber-500">No archived orders</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-2xl border border-amber-200 bg-white shadow-sm dark:border-amber-800/50 dark:bg-gray-800">
-                <table className="min-w-[640px] w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-amber-100 bg-amber-50/60 dark:border-amber-800/40 dark:bg-amber-900/20">
-                      <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-amber-500 dark:text-amber-500">Order</th>
-                      <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-amber-500 dark:text-amber-500">Patient</th>
-                      <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-amber-500 dark:text-amber-500">B2B</th>
-                      <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-amber-500 dark:text-amber-500">Test</th>
-                      <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-amber-500 dark:text-amber-500">Status</th>
-                      <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-amber-500 dark:text-amber-500">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-amber-50 dark:divide-amber-800/20">
-                    {archivedOrders.map(order => (
-                      <tr key={order.id} className="hover:bg-amber-50/40 transition-colors dark:hover:bg-amber-900/10">
-                        <td className="px-5 py-4">
-                          <span className="font-bold text-gray-700 dark:text-gray-200">{order.receiptNumber ?? order.template?.name ?? '—'}</span>
-                        </td>
-                        <td className="px-5 py-4">
-                          <p className="font-medium text-gray-800 dark:text-gray-200">{order.patient?.fullName ?? '—'}</p>
-                          <p className="text-xs text-gray-400 dark:text-gray-500">{order.patient?.patientCode ?? ''}</p>
-                        </td>
-                        <td className="px-5 py-4"><B2bCell patient={order.patient} /></td>
-                        <td className="px-5 py-4 text-gray-600 max-w-[180px] truncate dark:text-gray-300">
-                          {order.template?.name ?? '—'}
-                        </td>
-                        <td className="px-5 py-4"><OrderStatusBadge status={order.status} /></td>
-                        <td className="px-5 py-4">
-                          <div className="flex justify-end gap-2">
-                            <Button size="sm" variant="secondary"
-                              icon={<RotateCcw className="h-3.5 w-3.5" />}
-                              loading={restoreOrder.isPending && restoreOrder.variables === order.id}
-                              onClick={() => restoreOrder.mutate(order.id)}>
-                              Restore
-                            </Button>
-                            <Button size="sm" variant="ghost"
-                              icon={<Trash2 className="h-3.5 w-3.5 text-red-500" />}
-                              className="text-red-500 hover:bg-red-50"
-                              onClick={() => setPermanentDeleteOrder(order)}>
-                              Delete Forever
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       {/* ── Create Order Modal (multi-test batch) ────────────── */}
       <Modal
         open={createOpen}
         onClose={() => setCreateOpen(false)}
-        title="Create Diagnostic Orders"
-        subtitle="Select a patient and one or more tests"
-        size="xl"
+        title="New Diagnostic Order"
+        subtitle="Pick a patient, add tests, then confirm payment"
+        size="2xl"
         footer={
           <>
             <Button variant="secondary" onClick={() => setCreateOpen(false)}>Cancel</Button>
@@ -632,207 +527,274 @@ export default function OrdersPage() {
           </>
         }
       >
-        <div className="space-y-5">
-          {/* Patient selector with search */}
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500">
-              Patient <span className="text-red-500">*</span>
-            </label>
-            <div className="relative mb-1.5">
-              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
-              <input
-                value={patientSearch} onChange={e => setPatientSearch(e.target.value)}
-                placeholder="Search by name, code or phone..."
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2 pl-8 pr-3 text-sm outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700/50 dark:text-gray-200 dark:placeholder-gray-500 dark:focus:bg-gray-700"
-              />
-            </div>
-            <select
-              value={batchForm.patientId}
-              onChange={e => setBatchForm(p => ({ ...p, patientId: e.target.value }))}
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-              size={Math.min(5, Math.max(2, filteredPatients.length))}
-            >
-              {filteredPatients.length === 0
-                ? <option disabled>No patients match</option>
-                : filteredPatients.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.fullName} ({p.patientCode}){p.phoneNumber ? ` · ${p.phoneNumber}` : ''}
-                    </option>
-                  ))
-              }
-            </select>
-          </div>
-
-          {/* Test catalogue + summary side-by-side */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-
-            {/* Left: test catalogue */}
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Select Tests <span className="text-red-500">*</span>
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-12 xl:gap-6">
+          {/* Patient column */}
+          <div className="flex min-h-0 flex-col xl:col-span-4">
+            <div className="mb-2 flex items-center justify-between">
+              <label className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">
+                1 · Patient <span className="text-red-500">*</span>
               </label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
-                <input
-                  value={testSearch} onChange={e => setTestSearch(e.target.value)}
-                  placeholder="Search tests..."
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2 pl-8 pr-3 text-sm outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700/50 dark:text-gray-200 dark:placeholder-gray-500 dark:focus:bg-gray-700"
-                />
-              </div>
-              <div className="max-h-64 overflow-y-auto rounded-xl border border-gray-200 divide-y divide-gray-100 dark:border-gray-600 dark:divide-gray-700">
-                {filteredTests.length === 0 ? (
-                  <div className="px-4 py-8 text-center text-sm text-gray-400">No active tests found</div>
-                ) : filteredTests.map(it => {
-                  const checked = batchForm.selectedItems.some(s => s.kind === it.kind && s.id === it.id)
-                  const coveredByProfile = it.kind === 'template' ? disabledTemplateInfo.get(it.id) : undefined
-                  return (
-                    <label
-                      key={`${it.kind}-${it.id}`}
-                      title={coveredByProfile ? `Already included in the "${coveredByProfile}" package` : undefined}
-                      className={`flex items-center gap-3 px-4 py-3 transition-colors ${
-                        coveredByProfile
-                          ? 'cursor-not-allowed bg-gray-50 opacity-50 dark:bg-gray-800/40'
-                          : `cursor-pointer ${checked ? 'bg-blue-50 dark:bg-blue-900/30' : 'hover:bg-gray-50 dark:hover:bg-gray-700/40'}`
-                      }`}
-                    >
-                      <input
-                        type="checkbox" checked={checked}
-                        disabled={!!coveredByProfile}
-                        onChange={() => toggleTest(it.kind, it.id)}
-                        className="h-4 w-4 rounded accent-blue-600 shrink-0"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          {it.kind === 'profile' && (
-                            <span className="shrink-0 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
-                              Package · {it.testCount}
-                            </span>
-                          )}
-                          <p className="truncate text-sm font-semibold text-gray-800 dark:text-gray-200">{it.name}</p>
-                          {coveredByProfile && (
-                            <span className="shrink-0 rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-gray-700 dark:text-gray-400">
-                              In {coveredByProfile}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-400 dark:text-gray-500">{it.code}</p>
-                      </div>
-                      {it.price > 0 && (
-                        <span className="shrink-0 text-sm font-semibold text-gray-700 dark:text-gray-300">
-                          ₹{it.price.toLocaleString()}
-                        </span>
-                      )}
-                    </label>
-                  )
-                })}
-              </div>
-              {batchForm.selectedItems.length > 0 && (
+              {selectedPatient && (
                 <button
-                  className="self-start text-xs text-gray-400 hover:text-red-500"
-                  onClick={() => setBatchForm(p => ({ ...p, selectedItems: [] }))}
+                  type="button"
+                  onClick={() => { setBatchForm(p => ({ ...p, patientId: '' })); setPatientSearch('') }}
+                  className="text-[11px] font-medium text-gray-400 hover:text-red-500"
                 >
-                  Clear selection
+                  Change
                 </button>
               )}
             </div>
 
-            {/* Right: order summary + payment */}
-            <div className="flex flex-col gap-4">
-              <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Order Summary
-              </label>
-
-              {batchForm.selectedItems.length === 0 ? (
-                <div className="flex flex-1 flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 px-4 py-10 text-center dark:border-gray-600">
-                  <FlaskConical className="mb-2 h-8 w-8 text-gray-300" />
-                  <p className="text-sm text-gray-400">Select tests on the left</p>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  {/* Selected tests list */}
-                  <div className="rounded-xl border border-gray-200 divide-y divide-gray-100 overflow-hidden dark:border-gray-600 dark:divide-gray-700">
-                    {selectedTemplates.map(it => (
-                      <div key={`${it.kind}-${it.id}`} className="flex items-center gap-3 px-4 py-2.5">
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-gray-800 dark:text-gray-200">{it.name}</p>
-                          <p className="text-xs text-gray-400 dark:text-gray-500">{it.code}</p>
-                        </div>
-                        <span className="shrink-0 text-sm text-gray-600 dark:text-gray-300">
-                          ₹{it.price.toLocaleString()}
-                        </span>
-                        <button onClick={() => toggleTest(it.kind, it.id)} className="shrink-0 text-gray-300 hover:text-red-400">
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ))}
+            {selectedPatient ? (
+              <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-white p-4 dark:border-blue-900/50 dark:from-blue-950/40 dark:to-gray-800">
+                <div className="flex items-start gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">
+                    {selectedPatient.fullName.charAt(0).toUpperCase()}
                   </div>
-
-                  {/* Discount */}
-                  <div className="flex items-center gap-3">
-                    <label className="shrink-0 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                      Discount %
-                    </label>
-                    <input
-                      type="number" min="0" max="100" step="1" placeholder="0"
-                      value={batchForm.discount}
-                      onChange={e => setBatchForm(p => ({ ...p, discount: e.target.value }))}
-                      className="w-20 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-right outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700/50 dark:text-gray-200"
-                    />
-                  </div>
-
-                  {/* Total */}
-                  <div className="flex items-center justify-between rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 dark:border-blue-900/50 dark:bg-blue-900/20">
-                    <div>
-                      {discountPct > 0 && (
-                        <p className="text-xs text-gray-400 line-through">₹{subtotal.toLocaleString()}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[15px] font-semibold text-gray-900 dark:text-white">{selectedPatient.fullName}</p>
+                    <p className="mt-0.5 font-mono text-xs text-blue-600 dark:text-blue-400">{selectedPatient.patientCode}</p>
+                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+                      {formatAge(selectedPatient.ageYears, selectedPatient.ageMonths, selectedPatient.ageDays) && (
+                        <span>{formatAge(selectedPatient.ageYears, selectedPatient.ageMonths, selectedPatient.ageDays)}</span>
                       )}
-                      <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">Total</p>
+                      {selectedPatient.gender && <span>{selectedPatient.gender}</span>}
+                      {selectedPatient.phoneNumber && <span>{selectedPatient.phoneNumber}</span>}
                     </div>
-                    <span className="text-xl font-bold text-blue-800 dark:text-blue-300">₹{total.toLocaleString()}</span>
+                    {selectedPatient.isB2b && (
+                      <span className="mt-2 inline-flex rounded-md bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+                        B2B · {selectedPatient.b2bLab?.name ?? 'Partner'}
+                      </span>
+                    )}
                   </div>
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-white">
+                    <Check className="h-3.5 w-3.5" />
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="relative mb-2">
+                  <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                  <input
+                    value={patientSearch} onChange={e => setPatientSearch(e.target.value)}
+                    placeholder="Name, code or phone…"
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-8 pr-3 text-sm outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700/50 dark:text-gray-200 dark:placeholder-gray-500 dark:focus:bg-gray-700"
+                  />
+                </div>
+                <div className="max-h-72 overflow-y-auto rounded-2xl border border-gray-200 dark:border-gray-600">
+                  {filteredPatients.length === 0 ? (
+                    <div className="flex flex-col items-center px-4 py-10 text-center">
+                      <User className="mb-2 h-7 w-7 text-gray-300" />
+                      <p className="text-sm text-gray-400">No patients match</p>
+                    </div>
+                  ) : filteredPatients.map(p => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setBatchForm(prev => ({ ...prev, patientId: String(p.id) }))}
+                      className="flex w-full items-center gap-3 border-b border-gray-100 px-3.5 py-2.5 text-left last:border-0 hover:bg-blue-50 dark:border-gray-700 dark:hover:bg-blue-950/30"
+                    >
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-bold text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                        {p.fullName.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-gray-800 dark:text-gray-100">{p.fullName}</p>
+                        <p className="truncate text-[11px] text-gray-400">
+                          {p.patientCode}
+                          {p.phoneNumber ? ` · ${p.phoneNumber}` : ''}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
 
-                  {/* Payment status */}
+          {/* Test catalogue */}
+          <div className="flex min-h-0 flex-col xl:col-span-4">
+            <label className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">
+              2 · Tests <span className="text-red-500">*</span>
+            </label>
+            <div className="relative mb-2">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+              <input
+                value={testSearch} onChange={e => setTestSearch(e.target.value)}
+                placeholder="Search tests or packages…"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 pl-8 pr-3 text-sm outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700/50 dark:text-gray-200 dark:placeholder-gray-500 dark:focus:bg-gray-700"
+              />
+            </div>
+            <div className="max-h-80 overflow-y-auto rounded-2xl border border-gray-200 dark:border-gray-600">
+              {filteredTests.length === 0 ? (
+                <div className="px-4 py-10 text-center text-sm text-gray-400">No active tests found</div>
+              ) : filteredTests.map(it => {
+                const checked = batchForm.selectedItems.some(s => s.kind === it.kind && s.id === it.id)
+                const coveredByProfile = it.kind === 'template' ? disabledTemplateInfo.get(it.id) : undefined
+                return (
+                  <label
+                    key={`${it.kind}-${it.id}`}
+                    title={coveredByProfile ? `Already included in the "${coveredByProfile}" package` : undefined}
+                    className={`flex items-center gap-3 border-b border-gray-100 px-3.5 py-2.5 last:border-0 dark:border-gray-700 ${
+                      coveredByProfile
+                        ? 'cursor-not-allowed bg-gray-50 opacity-50 dark:bg-gray-800/40'
+                        : `cursor-pointer ${checked ? 'bg-blue-50 dark:bg-blue-900/30' : 'hover:bg-gray-50 dark:hover:bg-gray-700/40'}`
+                    }`}
+                  >
+                    <input
+                      type="checkbox" checked={checked}
+                      disabled={!!coveredByProfile}
+                      onChange={() => toggleTest(it.kind, it.id)}
+                      className="h-4 w-4 rounded accent-blue-600 shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        {it.kind === 'profile' && (
+                          <span className="shrink-0 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+                            Package · {it.testCount}
+                          </span>
+                        )}
+                        <p className="truncate text-sm font-semibold text-gray-800 dark:text-gray-200">{it.name}</p>
+                        {coveredByProfile && (
+                          <span className="shrink-0 rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-gray-700 dark:text-gray-400">
+                            In {coveredByProfile}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">{it.code}</p>
+                    </div>
+                    {it.price > 0 && (
+                      <span className="shrink-0 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        ₹{it.price.toLocaleString()}
+                      </span>
+                    )}
+                  </label>
+                )
+              })}
+            </div>
+            {batchForm.selectedItems.length > 0 && (
+              <button
+                type="button"
+                className="mt-2 self-start text-xs text-gray-400 hover:text-red-500"
+                onClick={() => setBatchForm(p => ({ ...p, selectedItems: [] }))}
+              >
+                Clear selection
+              </button>
+            )}
+          </div>
+
+          {/* Summary + payment */}
+          <div className="flex min-h-0 flex-col xl:col-span-4">
+            <label className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">
+              3 · Summary
+            </label>
+
+            {batchForm.selectedItems.length === 0 ? (
+              <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 px-4 py-12 text-center dark:border-gray-600">
+                <FlaskConical className="mb-2 h-8 w-8 text-gray-300" />
+                <p className="text-sm text-gray-400">Select tests to build this order</p>
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-600">
+                <div className="max-h-40 overflow-y-auto">
+                  {selectedTemplates.map(it => (
+                    <div key={`${it.kind}-${it.id}`} className="flex items-center gap-3 border-b border-gray-100 px-4 py-2.5 dark:border-gray-700">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-gray-800 dark:text-gray-200">{it.name}</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">{it.code}</p>
+                      </div>
+                      <span className="shrink-0 text-sm tabular-nums text-gray-600 dark:text-gray-300">
+                        ₹{it.price.toLocaleString()}
+                      </span>
+                      <button type="button" onClick={() => toggleTest(it.kind, it.id)} className="shrink-0 text-gray-300 hover:text-red-400">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="space-y-3 border-t border-gray-100 bg-gray-50 px-4 py-4 dark:border-gray-700 dark:bg-gray-900/40">
+                  <div className="flex items-center justify-between text-sm text-gray-500">
+                    <span>Subtotal</span>
+                    <span className="tabular-nums text-gray-700 dark:text-gray-300">₹{subtotal.toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-gray-500">Discount</span>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number" min="0" max="100" step="1" placeholder="0"
+                        value={batchForm.discount}
+                        onChange={e => setBatchForm(p => ({ ...p, discount: e.target.value }))}
+                        className="w-16 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-right text-sm tabular-nums outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+                      />
+                      <span className="text-sm text-gray-400">%</span>
+                    </div>
+                  </div>
+                  {discountPct > 0 && (
+                    <div className="flex items-center justify-between text-sm text-emerald-600">
+                      <span>Saved</span>
+                      <span className="tabular-nums">− ₹{(subtotal - total).toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between border-t border-gray-200 pt-3 dark:border-gray-700">
+                    <span className="text-sm font-semibold text-gray-800 dark:text-gray-100">Total</span>
+                    <span className="text-xl font-bold tabular-nums text-gray-900 dark:text-white">₹{total.toLocaleString()}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-4 border-t border-gray-100 px-4 py-4 dark:border-gray-700">
                   <div>
-                    <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">Payment Status</p>
-                    <div className="grid grid-cols-3 gap-1.5">
-                      {(['', 'PENDING', 'PAID'] as const).map(s => (
-                        <button key={s}
-                          onClick={() => setBatchForm(p => ({ ...p, paymentStatus: s as PaymentStatus | '' }))}
-                          className={`rounded-xl border py-2 text-xs font-semibold transition-all ${
-                            batchForm.paymentStatus === s
-                              ? s === 'PAID'
-                                ? 'border-emerald-400 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:border-emerald-700 dark:text-emerald-400'
-                                : 'border-blue-400 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-400'
-                              : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400 dark:hover:border-gray-500'
+                    <p className="mb-2 text-xs font-medium text-gray-500">Status</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {([
+                        { value: 'PENDING' as const, label: 'Unpaid' },
+                        { value: 'PAID' as const, label: 'Paid' },
+                      ]).map(s => (
+                        <button
+                          key={s.value}
+                          type="button"
+                          onClick={() => setBatchForm(p => ({ ...p, paymentStatus: s.value }))}
+                          className={`rounded-lg border py-2 text-sm font-medium transition-all ${
+                            batchForm.paymentStatus === s.value
+                              ? s.value === 'PAID'
+                                ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:border-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300'
+                                : 'border-amber-400 bg-amber-50 text-amber-800 dark:border-amber-600 dark:bg-amber-900/30 dark:text-amber-300'
+                              : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400'
                           }`}
                         >
-                          {s === '' ? 'Default' : s.charAt(0) + s.slice(1).toLowerCase()}
+                          {s.label}
                         </button>
                       ))}
                     </div>
                   </div>
 
-                  {/* Payment method */}
                   <div>
-                    <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">Payment Method</p>
-                    <div className="grid grid-cols-4 gap-1.5">
-                      {(['', 'CASH', 'CHEQUE', 'ONLINE'] as const).map(m => (
-                        <button key={m}
-                          onClick={() => setBatchForm(p => ({ ...p, paymentType: m as PaymentType | '' }))}
-                          className={`rounded-xl border py-2 text-xs font-semibold transition-all ${
-                            batchForm.paymentType === m
-                              ? 'border-blue-400 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-400'
-                              : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400 dark:hover:border-gray-500'
+                    <p className="mb-2 text-xs font-medium text-gray-500">Method</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {([
+                        { value: 'CASH' as const, label: 'Cash', icon: Banknote },
+                        { value: 'CHEQUE' as const, label: 'Cheque', icon: Landmark },
+                        { value: 'ONLINE' as const, label: 'Online', icon: Smartphone },
+                      ]).map(m => (
+                        <button
+                          key={m.value}
+                          type="button"
+                          onClick={() => setBatchForm(p => ({ ...p, paymentType: m.value }))}
+                          className={`flex items-center justify-center gap-1.5 rounded-lg border py-2 text-sm font-medium transition-all ${
+                            batchForm.paymentType === m.value
+                              ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-600 dark:bg-blue-900/30 dark:text-blue-300'
+                              : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-400'
                           }`}
                         >
-                          {m === '' ? 'None' : m.charAt(0) + m.slice(1).toLowerCase()}
+                          <m.icon className="h-3.5 w-3.5" />
+                          {m.label}
                         </button>
                       ))}
                     </div>
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
       </Modal>
@@ -924,15 +886,6 @@ export default function OrdersPage() {
         title="Archive Receipt"
         message={`Archive all ${deleteGroupOrders?.length ?? 0} tests on this receipt? They will be moved to the archive and can be restored later.`}
         confirmLabel="Archive All" variant="danger" loading={removeGroupMutation.isPending}
-      />
-
-      {/* Permanent Delete Confirm */}
-      <ConfirmModal
-        open={!!permanentDeleteOrder} onClose={() => setPermanentDeleteOrder(null)}
-        onConfirm={() => permanentDeleteOrder && permanentDeleteMut.mutate(permanentDeleteOrder.id)}
-        title="Permanently Delete Order"
-        message={`Permanently delete Order #${permanentDeleteOrder?.id}? This cannot be undone and all data will be lost.`}
-        confirmLabel="Delete Forever" variant="danger" loading={permanentDeleteMut.isPending}
       />
     </div>
   )

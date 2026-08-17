@@ -63,6 +63,7 @@ export const templateService = {
       referenceRangeFemale?: string
       isSectionHeader?: boolean
       isMainHeader?: boolean
+      isLineResult?: boolean
     }
   ): Promise<TestTemplate> => {
     const { data } = await api.patch(`/tests/templates/${templateId}/fields/${fieldId}`, payload)
@@ -88,6 +89,7 @@ export const templateService = {
       referenceRangeFemale?: string
       isSectionHeader?: boolean
       isMainHeader?: boolean
+      isLineResult?: boolean
     }
   ): Promise<TestTemplate> => {
     const { data } = await api.post(`/tests/templates/${templateId}/fields`, payload)

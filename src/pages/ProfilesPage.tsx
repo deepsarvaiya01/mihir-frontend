@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, ListTree, Pencil, Trash2, ToggleLeft, ToggleRight, Archive, RotateCcw, Search } from 'lucide-react'
+import { Plus, ListTree, Pencil, Trash2, ToggleLeft, ToggleRight, Search } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -140,18 +140,10 @@ export default function ProfilesPage() {
   const [deleteProfile, setDeleteProfile] = useState<TestProfile | null>(null)
   const [createForm, setCreateForm] = useState<CreateProfileDto>(emptyForm)
   const [editForm, setEditForm] = useState<CreateProfileDto>(emptyForm)
-  const [showArchived, setShowArchived] = useState(false)
-  const [permDeleteProfile, setPermDeleteProfile] = useState<TestProfile | null>(null)
 
   const { data: profiles = [], isLoading } = useQuery({
     queryKey: ['profiles'],
     queryFn: profileService.getAll,
-  })
-
-  const { data: archivedProfiles = [] } = useQuery({
-    queryKey: ['profiles-archived'],
-    queryFn: profileService.getArchived,
-    enabled: showArchived,
   })
 
   const createMutation = useMutation({
@@ -179,31 +171,10 @@ export default function ProfilesPage() {
     mutationFn: profileService.delete,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['profiles'] })
-      qc.invalidateQueries({ queryKey: ['profiles-archived'] })
       setDeleteProfile(null)
       toast.success('Profile archived')
     },
     onError: (err) => toastError(err, 'Failed to archive profile'),
-  })
-
-  const restoreMutation = useMutation({
-    mutationFn: profileService.restore,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['profiles'] })
-      qc.invalidateQueries({ queryKey: ['profiles-archived'] })
-      toast.success('Profile restored')
-    },
-    onError: (err) => toastError(err, 'Failed to restore profile'),
-  })
-
-  const permanentDeleteMutation = useMutation({
-    mutationFn: profileService.permanentDelete,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['profiles-archived'] })
-      setPermDeleteProfile(null)
-      toast.success('Profile permanently deleted')
-    },
-    onError: (err) => toastError(err, 'Failed to permanently delete profile'),
   })
 
   const openEdit = (profile: TestProfile) => {
@@ -240,14 +211,9 @@ export default function ProfilesPage() {
         title="Profile Management"
         subtitle="Bundle multiple tests into a priced package, selectable at patient/order creation"
         action={
-          <div className="flex items-center gap-2">
-            <Button variant="secondary" icon={<Archive className="h-4 w-4" />} onClick={() => setShowArchived(v => !v)}>
-              {showArchived ? 'Hide Archived' : 'Archived'}
-            </Button>
-            {profiles.length > 0 && (
-              <Button icon={<Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>New Profile</Button>
-            )}
-          </div>
+          profiles.length > 0 ? (
+            <Button icon={<Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>New Profile</Button>
+          ) : undefined
         }
       />
 
@@ -315,48 +281,6 @@ export default function ProfilesPage() {
             </DataTableBody>
           </DataTable>
         )}
-
-        {showArchived && (
-          <DataTable title="Archived Profiles" count={archivedProfiles.length} minWidth="560px">
-            <DataTableHead>
-              <DataTableTh>Profile</DataTableTh>
-              <DataTableTh>Date Archived</DataTableTh>
-              <DataTableTh align="right">Actions</DataTableTh>
-            </DataTableHead>
-            <DataTableBody>
-              {archivedProfiles.length === 0 ? (
-                <DataTableRow>
-                  <DataTableTd colSpan={3} className="py-8 text-center text-sm text-gray-400">No archived profiles</DataTableTd>
-                </DataTableRow>
-              ) : archivedProfiles.map(profile => (
-                <DataTableRow key={profile.id}>
-                  <DataTableTd>
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-400">
-                        <Archive className="h-4 w-4" />
-                      </div>
-                      <p className="font-semibold text-gray-700 dark:text-gray-300">{profile.name}</p>
-                    </div>
-                  </DataTableTd>
-                  <DataTableTd className="text-gray-500 dark:text-gray-400">
-                    {profile.deletedAt ? new Date(profile.deletedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                  </DataTableTd>
-                  <DataTableTd align="right">
-                    <div className="flex justify-end gap-2">
-                      <Button size="sm" variant="ghost" icon={<RotateCcw className="h-3.5 w-3.5 text-blue-500" />}
-                        className="text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                        onClick={() => restoreMutation.mutate(profile.id)}>Restore</Button>
-                      <Button size="sm" variant="ghost" icon={<Trash2 className="h-3.5 w-3.5 text-red-500" />}
-                        className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => setPermDeleteProfile(profile)}>
-                        Delete Forever
-                      </Button>
-                    </div>
-                  </DataTableTd>
-                </DataTableRow>
-              ))}
-            </DataTableBody>
-          </DataTable>
-        )}
       </PageContent>
 
       <Modal
@@ -400,17 +324,6 @@ export default function ProfilesPage() {
         confirmLabel="Archive Profile"
         variant="danger"
         loading={deleteMutation.isPending}
-      />
-
-      <ConfirmModal
-        open={!!permDeleteProfile}
-        onClose={() => setPermDeleteProfile(null)}
-        onConfirm={() => permDeleteProfile && permanentDeleteMutation.mutate(permDeleteProfile.id)}
-        title="Delete Forever"
-        message={`Permanently delete "${permDeleteProfile?.name}"? This cannot be undone.`}
-        confirmLabel="Delete Forever"
-        variant="danger"
-        loading={permanentDeleteMutation.isPending}
       />
     </div>
   )

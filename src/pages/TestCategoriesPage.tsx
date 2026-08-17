@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, ListOrdered, Pencil, Trash2, ToggleLeft, ToggleRight, Archive, RotateCcw } from 'lucide-react'
+import { Plus, ListOrdered, Pencil, Trash2, ToggleLeft, ToggleRight } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -73,18 +73,10 @@ export default function TestCategoriesPage() {
   const [deleteCategory, setDeleteCategory] = useState<TestCategory | null>(null)
   const [createForm, setCreateForm] = useState<CreateTestCategoryDto>(emptyForm)
   const [editForm, setEditForm] = useState<CreateTestCategoryDto>(emptyForm)
-  const [showArchived, setShowArchived] = useState(false)
-  const [permDeleteCategory, setPermDeleteCategory] = useState<TestCategory | null>(null)
 
   const { data: categories = [], isLoading } = useQuery({
     queryKey: ['test-categories'],
     queryFn: testCategoryService.getAll,
-  })
-
-  const { data: archivedCategories = [] } = useQuery({
-    queryKey: ['test-categories-archived'],
-    queryFn: testCategoryService.getArchived,
-    enabled: showArchived,
   })
 
   const createMutation = useMutation({
@@ -113,31 +105,10 @@ export default function TestCategoriesPage() {
     mutationFn: testCategoryService.delete,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['test-categories'] })
-      qc.invalidateQueries({ queryKey: ['test-categories-archived'] })
       setDeleteCategory(null)
       toast.success('Test category archived')
     },
     onError: (err) => toastError(err, 'Failed to archive test category'),
-  })
-
-  const restoreMutation = useMutation({
-    mutationFn: testCategoryService.restore,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['test-categories'] })
-      qc.invalidateQueries({ queryKey: ['test-categories-archived'] })
-      toast.success('Test category restored')
-    },
-    onError: (err) => toastError(err, 'Failed to restore test category'),
-  })
-
-  const permanentDeleteMutation = useMutation({
-    mutationFn: testCategoryService.permanentDelete,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['test-categories-archived'] })
-      setPermDeleteCategory(null)
-      toast.success('Test category permanently deleted')
-    },
-    onError: (err) => toastError(err, 'Failed to permanently delete test category'),
   })
 
   const openEdit = (category: TestCategory) => {
@@ -167,14 +138,9 @@ export default function TestCategoriesPage() {
         title="Test Categories"
         subtitle="Group tests and control the order they print in a combined report"
         action={
-          <div className="flex items-center gap-2">
-            <Button variant="secondary" icon={<Archive className="h-4 w-4" />} onClick={() => setShowArchived(v => !v)}>
-              {showArchived ? 'Hide Archived' : 'Archived'}
-            </Button>
-            {categories.length > 0 && (
-              <Button icon={<Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>New Category</Button>
-            )}
-          </div>
+          categories.length > 0 ? (
+            <Button icon={<Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>New Category</Button>
+          ) : undefined
         }
       />
 
@@ -238,48 +204,6 @@ export default function TestCategoriesPage() {
             </DataTableBody>
           </DataTable>
         )}
-
-        {showArchived && (
-          <DataTable title="Archived Test Categories" count={archivedCategories.length} minWidth="560px">
-            <DataTableHead>
-              <DataTableTh>Name</DataTableTh>
-              <DataTableTh>Date Archived</DataTableTh>
-              <DataTableTh align="right">Actions</DataTableTh>
-            </DataTableHead>
-            <DataTableBody>
-              {archivedCategories.length === 0 ? (
-                <DataTableRow>
-                  <DataTableTd colSpan={3} className="py-8 text-center text-sm text-gray-400">No archived categories</DataTableTd>
-                </DataTableRow>
-              ) : archivedCategories.map(category => (
-                <DataTableRow key={category.id}>
-                  <DataTableTd>
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-400">
-                        <Archive className="h-4 w-4" />
-                      </div>
-                      <p className="font-semibold text-gray-700 dark:text-gray-300">{category.name}</p>
-                    </div>
-                  </DataTableTd>
-                  <DataTableTd className="text-gray-500 dark:text-gray-400">
-                    {category.deletedAt ? new Date(category.deletedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                  </DataTableTd>
-                  <DataTableTd align="right">
-                    <div className="flex justify-end gap-2">
-                      <Button size="sm" variant="ghost" icon={<RotateCcw className="h-3.5 w-3.5 text-blue-500" />}
-                        className="text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                        onClick={() => restoreMutation.mutate(category.id)}>Restore</Button>
-                      <Button size="sm" variant="ghost" icon={<Trash2 className="h-3.5 w-3.5 text-red-500" />}
-                        className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" onClick={() => setPermDeleteCategory(category)}>
-                        Delete Forever
-                      </Button>
-                    </div>
-                  </DataTableTd>
-                </DataTableRow>
-              ))}
-            </DataTableBody>
-          </DataTable>
-        )}
       </PageContent>
 
       <Modal
@@ -323,17 +247,6 @@ export default function TestCategoriesPage() {
         confirmLabel="Archive Category"
         variant="danger"
         loading={deleteMutation.isPending}
-      />
-
-      <ConfirmModal
-        open={!!permDeleteCategory}
-        onClose={() => setPermDeleteCategory(null)}
-        onConfirm={() => permDeleteCategory && permanentDeleteMutation.mutate(permDeleteCategory.id)}
-        title="Delete Forever"
-        message={`Permanently delete "${permDeleteCategory?.name}"? This cannot be undone.`}
-        confirmLabel="Delete Forever"
-        variant="danger"
-        loading={permanentDeleteMutation.isPending}
       />
     </div>
   )
