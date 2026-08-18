@@ -394,6 +394,8 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
 
   // Space reserved at the top of every page for the Rameshwar.pdf header template.
   const TEMPLATE_HDR = 36
+  // Keep result rows above the letterhead address bar and the page-number line.
+  const TEMPLATE_FTR = 32
 
   /* ── Draw patient info block (first page only) ── */
   function drawPatientInfo(startY: number): number {
@@ -511,7 +513,8 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
   autoTable(doc, {
     startY: TABLE_START_Y,
     // top margin keeps continuation pages clear of the template header
-    margin: { top: TEMPLATE_HDR + 3, left: ML, right: MR, bottom: 20 },
+    margin: { top: TEMPLATE_HDR + 3, left: ML, right: MR, bottom: TEMPLATE_FTR },
+    rowPageBreak: 'avoid',
     head: [['Test Name', 'Result', 'Units', 'Biological Reference Interval']],
     body: tableBody as Parameters<typeof autoTable>[1]['body'],
     theme: 'plain',
@@ -883,6 +886,7 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
   const CW = PAGE_W - ML - MR
   // Same top gap as the letterhead report's reserved template-header zone, for a consistent look across both.
   const TEMPLATE_HDR = 36
+  const TEMPLATE_FTR = 32
 
   function drawFullHeader(): number {
     let y = TEMPLATE_HDR
@@ -1016,7 +1020,8 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
     startY: headerBottom + 8,
     // Continuation pages within this same test stay blank up top — patient details
     // are shown once per test, not repeated on every overflow page.
-    margin: { top: TEMPLATE_HDR + 3, left: ML, right: MR, bottom: 20 },
+    margin: { top: TEMPLATE_HDR + 3, left: ML, right: MR, bottom: TEMPLATE_FTR },
+    rowPageBreak: 'avoid',
     head: [['Parameter', 'Result', 'Unit', 'Biological Ref. Interval']],
     body: tableBody as Parameters<typeof autoTable>[1]['body'],
     showHead: 'firstPage',
