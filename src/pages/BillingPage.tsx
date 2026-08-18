@@ -4,7 +4,7 @@ import {
   Search, Receipt, ChevronDown, DollarSign,
   CheckCircle, Clock, FileText, Pencil,
   RefreshCw, Download, Share2, Loader2, Eye, Paperclip, X, Printer,
-  Banknote, Landmark, Smartphone, CircleDot,
+  Banknote, Landmark, Smartphone, CircleDot, Barcode,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Card } from '../components/ui/Card'
@@ -19,7 +19,7 @@ import { reportShareService } from '../services/reportShares'
 import { labSettingsService } from '../services/labSettings'
 import { signatureService } from '../services/signatures'
 import { logoService } from '../services/logos'
-import { generateReceipt, generateCombinedReport, viewCombinedReport, printCombinedReport, viewMergedAttachments } from '../utils/generateReport'
+import { generateReceipt, generateCombinedReport, viewCombinedReport, printCombinedReport, viewMergedAttachments, printTubeLabels } from '../utils/generateReport'
 import type { Order, PaymentStatus, PaymentType } from '../types'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
@@ -67,32 +67,71 @@ interface PaymentForm {
   discount: string
 }
 
+interface PaymentUpdate {
+  id: number
+  amount: number
+  discount: number
+  paymentStatus: PaymentStatus
+  paymentType: PaymentType | ''
+}
+
 interface PaymentModalProps {
   orders: Order[]
   onClose: () => void
-  onSave: (ids: number[], form: PaymentForm, applyAmount: boolean) => void
+  onSave: (updates: PaymentUpdate[]) => void
   saving: boolean
+}
+
+/** Split a receipt total across tests using original amounts, last row takes rounding. */
+function splitReceiptAmounts(orders: Order[], newGross: number): Map<number, number> {
+  const origTotal = orders.reduce((s, o) => s + Number(o.amount ?? 0), 0)
+  const result = new Map<number, number>()
+  let allocated = 0
+  orders.forEach((o, i) => {
+    if (i === orders.length - 1) {
+      result.set(o.id, Math.round((newGross - allocated) * 100) / 100)
+      return
+    }
+    const share = origTotal > 0
+      ? Math.round(newGross * (Number(o.amount ?? 0) / origTotal) * 100) / 100
+      : Math.round((newGross / orders.length) * 100) / 100
+    result.set(o.id, share)
+    allocated += share
+  })
+  return result
 }
 
 function PaymentModal({ orders, onClose, onSave, saving }: PaymentModalProps) {
   const order = orders[0]
   const isSingle = orders.length === 1
+  const originalGross = orders.reduce((s, o) => s + Number(o.amount ?? 0), 0)
 
   const [form, setForm] = useState<PaymentForm>({
     paymentStatus: order.paymentStatus ?? 'PENDING',
     paymentType: order.paymentType ?? '',
-    amount: String(order.amount ?? 0),
+    amount: String(originalGross),
     discount: String(order.discount ?? 0),
   })
 
   const amount = parseFloat(form.amount) || 0
   const discount = parseFloat(form.discount) || 0
-  const totalNet = orders.reduce((s, o) => s + Number(o.netAmount ?? 0), 0)
-  const netAmount = isSingle ? Math.round(amount * (1 - discount / 100) * 100) / 100 : totalNet
-  const testNames = orders.map(o => o.template?.name).filter(Boolean).join(', ')
+  const netAmount = Math.round(amount * (1 - discount / 100) * 100) / 100
+  const allocations = splitReceiptAmounts(orders, amount)
 
   const set = (key: keyof PaymentForm, val: string) =>
     setForm(prev => ({ ...prev, [key]: val }))
+
+  const handleSave = () => {
+    onSave(
+      orders.map(o => ({
+        id: o.id,
+        amount: allocations.get(o.id) ?? 0,
+        discount,
+        paymentStatus: form.paymentStatus,
+        paymentType: form.paymentType,
+      })),
+    )
+  }
 
   const statusOpts: { value: PaymentStatus; label: string; hint: string; icon: React.ReactNode; active: string }[] = [
     { value: 'PENDING', label: 'Pending', hint: 'Not collected', icon: <Clock className="h-4 w-4" />, active: 'border-amber-400 bg-amber-50 text-amber-800 dark:border-amber-600 dark:bg-amber-900/30 dark:text-amber-300' },
@@ -117,7 +156,7 @@ function PaymentModal({ orders, onClose, onSave, saving }: PaymentModalProps) {
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button loading={saving} onClick={() => onSave(orders.map(o => o.id), form, isSingle)}>Save Payment</Button>
+          <Button loading={saving} onClick={handleSave}>Save Payment</Button>
         </>
       }
     >
@@ -129,7 +168,9 @@ function PaymentModal({ orders, onClose, onSave, saving }: PaymentModalProps) {
               <p className="mt-0.5 font-mono text-sm font-semibold text-gray-800 dark:text-gray-100">
                 {order.receiptNumber ?? <span className="italic font-sans font-normal text-gray-400">Generated on save</span>}
               </p>
-              {testNames && <p className="mt-1 truncate text-xs text-gray-500">{testNames}</p>}
+              {!isSingle && (
+                <p className="mt-1 text-xs text-gray-500">{orders.length} tests on this receipt</p>
+              )}
             </div>
             <div className="text-right">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Payable</p>
@@ -140,18 +181,29 @@ function PaymentModal({ orders, onClose, onSave, saving }: PaymentModalProps) {
           </div>
         </div>
 
-        {isSingle ? (
-          <div className="grid grid-cols-2 gap-4">
-            <Input label="Amount (₹)" type="number" min={0} step="0.01"
-              value={form.amount} onChange={e => set('amount', e.target.value)} />
-            <Input label="Discount (%)" type="number" min={0} max={100} step="0.5"
-              value={form.discount} onChange={e => set('discount', e.target.value)} />
-          </div>
-        ) : (
-          <div className="rounded-xl border border-dashed border-gray-200 px-4 py-3 text-xs leading-relaxed text-gray-500 dark:border-gray-700 dark:text-gray-400">
-            {orders.length} tests on this receipt — amounts were set when the order was created and are not edited here.
+        {!isSingle && (
+          <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700">
+            {orders.map(o => {
+              const share = allocations.get(o.id) ?? 0
+              const shareNet = Math.round(share * (1 - discount / 100) * 100) / 100
+              return (
+                <div key={o.id} className="flex items-center justify-between gap-3 border-b border-gray-100 px-3 py-2 last:border-0 text-sm dark:border-gray-700">
+                  <span className="truncate text-gray-700 dark:text-gray-200">{o.template?.name ?? 'Test'}</span>
+                  <span className="shrink-0 tabular-nums text-gray-500">
+                    ₹{shareNet.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )
+            })}
           </div>
         )}
+
+        <div className="grid grid-cols-2 gap-4">
+          <Input label={isSingle ? 'Amount (₹)' : 'Total amount (₹)'} type="number" min={0} step="0.01"
+            value={form.amount} onChange={e => set('amount', e.target.value)} />
+          <Input label="Discount (%)" type="number" min={0} max={100} step="0.5"
+            value={form.discount} onChange={e => set('discount', e.target.value)} />
+        </div>
 
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Payment status</p>
@@ -229,11 +281,12 @@ export default function BillingPage() {
   })
 
   const updatePayment = useMutation({
-    mutationFn: ({ ids, form, applyAmount }: { ids: number[]; form: PaymentForm; applyAmount: boolean }) =>
-      Promise.all(ids.map(id => orderService.updatePayment(id, {
-        paymentStatus: form.paymentStatus,
-        paymentType: form.paymentType || null,
-        ...(applyAmount ? { amount: parseFloat(form.amount) || 0, discount: parseFloat(form.discount) || 0 } : {}),
+    mutationFn: (updates: PaymentUpdate[]) =>
+      Promise.all(updates.map(u => orderService.updatePayment(u.id, {
+        paymentStatus: u.paymentStatus,
+        paymentType: u.paymentType || null,
+        amount: u.amount,
+        discount: u.discount,
       }))),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['orders'] })
@@ -603,6 +656,16 @@ export default function BillingPage() {
                             <Receipt className="h-4 w-4" />
                           </IBtn>
 
+                          {primary.receiptNumber && (
+                            <IBtn
+                              title="Print tube labels"
+                              onClick={() => printTubeLabels(group)}
+                              color="text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+                            >
+                              <Barcode className="h-4 w-4" />
+                            </IBtn>
+                          )}
+
                           {/* Uploaded document(s) — merged into one PDF if this receipt has more than one */}
                           {attachmentUrls.length > 0 && (
                             <IBtn
@@ -698,7 +761,7 @@ export default function BillingPage() {
           orders={editGroup}
           onClose={() => setEditGroup(null)}
           saving={updatePayment.isPending}
-          onSave={(ids, form, applyAmount) => updatePayment.mutate({ ids, form, applyAmount })}
+          onSave={(updates) => updatePayment.mutate(updates)}
         />
       )}
     </div>

@@ -42,7 +42,12 @@ export interface Order {
 
 export interface OrderFormData { order: Order; fields: TestTemplateField[] }
 export interface HistoryResult { fieldId?: number; fieldName: string; fieldType: FieldType; value: string | number | boolean | null; unit?: string | null; referenceRange?: string | null; isSectionHeader?: boolean; isMainHeader?: boolean; isLineResult?: boolean }
-export interface LabSettings { lab_name?: string; lab_address?: string; lab_email?: string; lab_phone?: string; lab_timing?: string; lab_logo_base64?: string; doctor_name?: string; doctor_qualification?: string; lab_gstin?: string; lab_hsn_code?: string }
+export interface LabSettings {
+  lab_name?: string; lab_address?: string; lab_email?: string; lab_phone?: string; lab_timing?: string
+  lab_logo_base64?: string; doctor_name?: string; doctor_qualification?: string
+  lab_gstin?: string; lab_hsn_code?: string
+  barcode_x_mm?: string; barcode_y_mm?: string
+}
 export interface ActiveSignature { id: number; name: string; degreeName?: string | null; imageUrl: string; isActive: boolean }
 export interface Logo { id: number; name: string; imageUrl: string; isActive: boolean; createdAt: string; deletedAt?: string | null }
 export interface OrderResult { order: Order; results: HistoryResult[] }

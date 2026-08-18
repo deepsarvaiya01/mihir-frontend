@@ -5,6 +5,7 @@ import QRCode from 'qrcode'
 import type { LabSettings, ActiveSignature, Logo, Order, SummaryFormat } from '../types'
 import { isOutOfRange } from './rangeCheck'
 import { formatAge } from '../lib/utils'
+import { barcodePosition, drawCode128, drawReceiptBarcode } from './code128'
 
 /* ─── Types ─────────────────────────────────────────────── */
 export interface ReportResult {
@@ -402,15 +403,23 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
     doc.setFontSize(9)
     doc.setTextColor(10, 10, 10)
 
+    const receipt = order.receiptNumber?.trim()
+    const customBarcode = barcodePosition(labSettings)
+    const barcodeBesidePatient = !!receipt && !customBarcode
+
     doc.setFont('helvetica', 'bold');  doc.text("Patient's Name", ML, startY)
     doc.setFont('helvetica', 'normal'); doc.text(`: ${p?.fullName ?? '—'}`, ML + 35, startY)
-    doc.setFont('helvetica', 'bold');  doc.text('Receipt No.', col2X, startY)
-    doc.setFont('helvetica', 'normal'); doc.text(`: ${order.receiptNumber ?? '—'}`, col2X + 24, startY)
+    if (!barcodeBesidePatient) {
+      doc.setFont('helvetica', 'bold');  doc.text('Receipt No.', col2X, startY)
+      doc.setFont('helvetica', 'normal'); doc.text(`: ${receipt ?? '—'}`, col2X + 24, startY)
+    }
 
     doc.setFont('helvetica', 'bold');  doc.text('Age / Gender', ML, startY + 7)
     doc.setFont('helvetica', 'normal'); doc.text(`: ${fmtAgeGender(p?.ageYears ?? null, p?.ageMonths ?? null, p?.ageDays ?? null, p?.gender ?? null)}`, ML + 35, startY + 7)
-    doc.setFont('helvetica', 'bold');  doc.text('Date', col2X, startY + 7)
-    doc.setFont('helvetica', 'normal'); doc.text(`: ${fmtDate(order.createdAt)}`, col2X + 24, startY + 7)
+    if (!barcodeBesidePatient) {
+      doc.setFont('helvetica', 'bold');  doc.text('Date', col2X, startY + 7)
+      doc.setFont('helvetica', 'normal'); doc.text(`: ${fmtDate(order.createdAt)}`, col2X + 24, startY + 7)
+    }
 
     doc.setFont('helvetica', 'bold');  doc.text('Referred by', ML, startY + 14)
     doc.setFont('helvetica', 'normal'); doc.text(`: ${p?.doctorName ?? 'Self'}`, ML + 35, startY + 14)
@@ -422,6 +431,22 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
       doc.setFont('helvetica', 'bold');  doc.text('Location', ML, startY + 21)
       doc.setFont('helvetica', 'normal'); doc.text(`: ${locationValue}`, ML + 35, startY + 21)
       bottomOffset = 26
+    }
+
+    if (barcodeBesidePatient) {
+      const dateY = p?.isB2b && p?.b2bLab ? startY + 28 : startY + 21
+      doc.setFont('helvetica', 'bold');  doc.text('Date', ML, dateY)
+      doc.setFont('helvetica', 'normal'); doc.text(`: ${fmtDate(order.createdAt)}`, ML + 35, dateY)
+      bottomOffset = (p?.isB2b && p?.b2bLab ? 28 : 21) + 5
+    }
+
+    if (receipt) {
+      if (customBarcode) {
+        drawReceiptBarcode(doc, receipt, customBarcode.x, customBarcode.y)
+      } else {
+        drawReceiptBarcode(doc, receipt, PAGE_W - MR - 42, startY - 1)
+        if (bottomOffset < 22) bottomOffset = 22
+      }
     }
 
     doc.setDrawColor(160, 160, 160)
@@ -492,7 +517,7 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
     theme: 'plain',
     styles: {
       fontSize: 8.5,
-      cellPadding: { top: 2.5, bottom: 2.5, left: 2.5, right: 2.5 },
+      cellPadding: { top: 1.2, bottom: 1.2, left: 2.5, right: 2.5 },
       lineWidth: 0,
       textColor: [15, 15, 15],
       font: 'helvetica',
@@ -738,6 +763,9 @@ export async function generateReceipt(options: GenerateReceiptOptions): Promise<
 
   infoRow(ML, 'Name', p?.fullName ?? '—', y)
   infoRow(col2X, 'Bill No.', receiptNumber ?? '—', y)
+  if (receiptNumber) {
+    drawReceiptBarcode(doc, receiptNumber, PAGE_W - MR - 42, y - 12, 42, 8)
+  }
   y += 6
   infoRow(ML, 'Gender/Age', fmtGenderAge(p?.gender ?? null, p?.ageYears ?? null, p?.ageMonths ?? null, p?.ageDays ?? null), y)
   infoRow(col2X, 'Bill Date', fmtBillDate(order.createdAt), y)
@@ -888,15 +916,23 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
 
     doc.setFontSize(9)
 
+    const receipt = order.receiptNumber?.trim()
+    const customBarcode = barcodePosition(labSettings)
+    const barcodeBesidePatient = !!receipt && !customBarcode
+
     doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text("Patient's Name", ML, y)
     doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${p?.fullName ?? '—'}`, ML + 35, y)
-    doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text('Receipt No.', col2X, y)
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${order.receiptNumber ?? '—'}`, col2X + 24, y)
+    if (!barcodeBesidePatient) {
+      doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text('Receipt No.', col2X, y)
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${receipt ?? '—'}`, col2X + 24, y)
+    }
 
     doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text('Age / Gender', ML, y + 7)
     doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${fmtAgeGender(p?.ageYears ?? null, p?.ageMonths ?? null, p?.ageDays ?? null, p?.gender ?? null)}`, ML + 35, y + 7)
-    doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text('Date', col2X, y + 7)
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${fmtDate(order.createdAt)}`, col2X + 24, y + 7)
+    if (!barcodeBesidePatient) {
+      doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text('Date', col2X, y + 7)
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${fmtDate(order.createdAt)}`, col2X + 24, y + 7)
+    }
 
     doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text('Referred by', ML, y + 14)
     doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${p?.doctorName ?? 'Self'}`, ML + 35, y + 14)
@@ -908,6 +944,22 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
       doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text('Location', ML, y + 21)
       doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${locationValue}`, ML + 35, y + 21)
       bottomOffset = 26
+    }
+
+    if (barcodeBesidePatient) {
+      const dateY = p?.isB2b && p?.b2bLab ? y + 28 : y + 21
+      doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text('Date', ML, dateY)
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${fmtDate(order.createdAt)}`, ML + 35, dateY)
+      bottomOffset = (p?.isB2b && p?.b2bLab ? 28 : 21) + 5
+    }
+
+    if (receipt) {
+      if (customBarcode) {
+        drawReceiptBarcode(doc, receipt, customBarcode.x, customBarcode.y)
+      } else {
+        drawReceiptBarcode(doc, receipt, PAGE_W - MR - 42, y - 1)
+        if (bottomOffset < 22) bottomOffset = 22
+      }
     }
 
     y += bottomOffset
@@ -971,7 +1023,7 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
     theme: 'plain',
     styles: {
       fontSize: 8.5,
-      cellPadding: { top: 2.5, bottom: 2.5, left: 2.5, right: 2.5 },
+      cellPadding: { top: 1.2, bottom: 1.2, left: 2.5, right: 2.5 },
       lineWidth: 0,
       textColor: [15, 15, 15],
       font: 'helvetica',
@@ -1269,4 +1321,57 @@ export async function viewMergedAttachments(urls: string[]): Promise<void> {
 
   if (merged.getPageCount() === 0) return
   openPdfInNewTab(await merged.save())
+}
+
+export interface TubeLabelOrder {
+  receiptNumber?: string | null
+  patient?: { fullName?: string | null } | null
+  template?: { name?: string | null } | null
+  createdAt?: string
+}
+
+/** Print 50×25 mm tube stickers — one per test, Code 128 of the receipt number. */
+export function printTubeLabels(orders: TubeLabelOrder[]): void {
+  const items = orders.filter(o => o.receiptNumber?.trim())
+  if (items.length === 0) return
+
+  const LABEL_W = 50
+  const LABEL_H = 25
+  const COLS = 4
+  const GAP_X = 1.5
+  const GAP_Y = 1.5
+  const ML = 5
+  const MT = 8
+  const perPage = COLS * 10
+
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+
+  items.forEach((o, i) => {
+    if (i > 0 && i % perPage === 0) doc.addPage()
+    const idx = i % perPage
+    const col = idx % COLS
+    const row = Math.floor(idx / COLS)
+    const x = ML + col * (LABEL_W + GAP_X)
+    const y = MT + row * (LABEL_H + GAP_Y)
+    const code = o.receiptNumber!.trim()
+
+    doc.setDrawColor(190, 190, 190)
+    doc.setLineWidth(0.2)
+    doc.rect(x, y, LABEL_W, LABEL_H)
+
+    drawCode128(doc, code, x + 3, y + 2.5, 44, 10)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(6.5)
+    doc.setTextColor(15, 15, 15)
+    doc.text(code, x + LABEL_W / 2, y + 15.5, { align: 'center' })
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6)
+    const name = (o.patient?.fullName ?? '').slice(0, 32)
+    const test = (o.template?.name ?? '').slice(0, 32)
+    if (name) doc.text(name, x + 3, y + 19.5, { maxWidth: 44 })
+    if (test) doc.text(test, x + 3, y + 23, { maxWidth: 44 })
+  })
+
+  printPdfBytes(new Uint8Array(doc.output('arraybuffer') as ArrayBuffer))
 }

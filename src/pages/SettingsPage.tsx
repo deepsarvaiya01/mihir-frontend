@@ -262,7 +262,14 @@ export default function SettingsPage() {
                         onChange={v => setLabForm(p => ({ ...p, lab_timing: v }))} />
                       <Field label="Address" value={labForm.lab_address ?? ''} placeholder="Street, City, PIN"
                         onChange={v => setLabForm(p => ({ ...p, lab_address: v }))} span2 />
+                      <Field label="Barcode X (mm)" value={labForm.barcode_x_mm ?? ''} placeholder="Leave blank for auto"
+                        onChange={v => setLabForm(p => ({ ...p, barcode_x_mm: v }))} />
+                      <Field label="Barcode Y (mm)" value={labForm.barcode_y_mm ?? ''} placeholder="Leave blank for auto"
+                        onChange={v => setLabForm(p => ({ ...p, barcode_y_mm: v }))} />
                     </div>
+                    <p className="mt-2 text-xs text-gray-400">
+                      Receipt barcode sits to the right of patient details by default. Set X and Y (from the top-left of the A4 page) to drop it inside a box on pre-printed letterhead.
+                    </p>
                     <div className="mt-4">
                       <Button size="sm" loading={saveLabMutation.isPending} icon={<Save className="h-3.5 w-3.5" />}
                         onClick={() => saveLabMutation.mutate()}>

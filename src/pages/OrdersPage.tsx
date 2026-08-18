@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, ClipboardList, Search, FileText, ChevronDown,
   Trash2, RotateCcw, ExternalLink, Paperclip, FlaskConical,
-  X, CheckSquare, SendHorizonal, User, Check, Banknote, Landmark, Smartphone,
+  X, CheckSquare, SendHorizonal, User, Check, Banknote, Landmark, Smartphone, Barcode,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
@@ -20,6 +20,7 @@ import { profileService } from '../services/profiles'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
 import { formatAge } from '../lib/utils'
+import { printTubeLabels } from '../utils/generateReport'
 
 /** B2B column cell — shows the referring B2B lab name, or "—" if the patient isn't a B2B referral. */
 function B2bCell({ patient }: { patient?: { isB2b?: boolean; b2bLab?: { name: string } | null } | null }) {
@@ -183,6 +184,7 @@ export default function OrdersPage() {
       toast.success(
         `${created.length} order${created.length > 1 ? 's' : ''} created${receiptNumber ? ` · Receipt ${receiptNumber}` : ''}`
       )
+      if (created.length) printTubeLabels(created)
     },
     onError: (err) => toastError(err, 'Failed to create orders'),
   })
@@ -410,6 +412,12 @@ export default function OrdersPage() {
                         </td>
                         <td className="px-5 py-4">
                           <div className="flex flex-wrap justify-end gap-2">
+                            {row.receipt && (
+                              <Button size="sm" variant="ghost" icon={<Barcode className="h-3.5 w-3.5" />}
+                                onClick={() => printTubeLabels(group)}>
+                                Labels
+                              </Button>
+                            )}
                             {editableOrder && (
                               <Button size="sm" variant="secondary" icon={<ExternalLink className="h-3.5 w-3.5" />}
                                 onClick={() => navigate(`/orders/${editableOrder.id}/enter-results`)}>
@@ -468,6 +476,12 @@ export default function OrdersPage() {
                       </td>
                       <td className="px-5 py-4">
                         <div className="flex justify-end gap-2">
+                          {order.receiptNumber && (
+                            <Button size="sm" variant="ghost" icon={<Barcode className="h-3.5 w-3.5" />}
+                              onClick={() => printTubeLabels([order])}>
+                              Labels
+                            </Button>
+                          )}
                           {(order.status === 'PENDING' || order.status === 'IN_PROGRESS') && (
                             <Button size="sm" variant="secondary" icon={<ExternalLink className="h-3.5 w-3.5" />}
                               onClick={() => navigate(`/orders/${order.id}/enter-results`)}>
