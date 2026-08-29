@@ -182,7 +182,7 @@ export default function OrdersPage() {
       qc.invalidateQueries({ queryKey: ['orders'] })
       setCreateOpen(false)
       toast.success(
-        `${created.length} order${created.length > 1 ? 's' : ''} created${receiptNumber ? ` · Receipt ${receiptNumber}` : ''}`
+        `${created.length} test${created.length > 1 ? 's' : ''} added${receiptNumber ? ` · Receipt ${receiptNumber}` : ''}`
       )
       if (created.length) printTubeLabels(created)
     },

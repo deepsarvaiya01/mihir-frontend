@@ -5,7 +5,7 @@ import QRCode from 'qrcode'
 import type { LabSettings, ActiveSignature, Logo, Order, SummaryFormat } from '../types'
 import { isOutOfRange } from './rangeCheck'
 import { formatAge } from '../lib/utils'
-import { barcodePosition, drawCode128, drawReceiptBarcode } from './code128'
+import { drawCode128 } from './code128'
 
 /* ─── Types ─────────────────────────────────────────────── */
 export interface ReportResult {
@@ -405,23 +405,15 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
     doc.setFontSize(9)
     doc.setTextColor(10, 10, 10)
 
-    const receipt = order.receiptNumber?.trim()
-    const customBarcode = barcodePosition(labSettings)
-    const barcodeBesidePatient = !!receipt && !customBarcode
-
     doc.setFont('helvetica', 'bold');  doc.text("Patient's Name", ML, startY)
     doc.setFont('helvetica', 'normal'); doc.text(`: ${p?.fullName ?? '—'}`, ML + 35, startY)
-    if (!barcodeBesidePatient) {
-      doc.setFont('helvetica', 'bold');  doc.text('Receipt No.', col2X, startY)
-      doc.setFont('helvetica', 'normal'); doc.text(`: ${receipt ?? '—'}`, col2X + 24, startY)
-    }
+    doc.setFont('helvetica', 'bold');  doc.text('Receipt No.', col2X, startY)
+    doc.setFont('helvetica', 'normal'); doc.text(`: ${order.receiptNumber ?? '—'}`, col2X + 24, startY)
 
     doc.setFont('helvetica', 'bold');  doc.text('Age / Gender', ML, startY + 7)
     doc.setFont('helvetica', 'normal'); doc.text(`: ${fmtAgeGender(p?.ageYears ?? null, p?.ageMonths ?? null, p?.ageDays ?? null, p?.gender ?? null)}`, ML + 35, startY + 7)
-    if (!barcodeBesidePatient) {
-      doc.setFont('helvetica', 'bold');  doc.text('Date', col2X, startY + 7)
-      doc.setFont('helvetica', 'normal'); doc.text(`: ${fmtDate(order.createdAt)}`, col2X + 24, startY + 7)
-    }
+    doc.setFont('helvetica', 'bold');  doc.text('Date', col2X, startY + 7)
+    doc.setFont('helvetica', 'normal'); doc.text(`: ${fmtDate(order.createdAt)}`, col2X + 24, startY + 7)
 
     doc.setFont('helvetica', 'bold');  doc.text('Referred by', ML, startY + 14)
     doc.setFont('helvetica', 'normal'); doc.text(`: ${p?.doctorName ?? 'Self'}`, ML + 35, startY + 14)
@@ -433,22 +425,6 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
       doc.setFont('helvetica', 'bold');  doc.text('Location', ML, startY + 21)
       doc.setFont('helvetica', 'normal'); doc.text(`: ${locationValue}`, ML + 35, startY + 21)
       bottomOffset = 26
-    }
-
-    if (barcodeBesidePatient) {
-      const dateY = p?.isB2b && p?.b2bLab ? startY + 28 : startY + 21
-      doc.setFont('helvetica', 'bold');  doc.text('Date', ML, dateY)
-      doc.setFont('helvetica', 'normal'); doc.text(`: ${fmtDate(order.createdAt)}`, ML + 35, dateY)
-      bottomOffset = (p?.isB2b && p?.b2bLab ? 28 : 21) + 5
-    }
-
-    if (receipt) {
-      if (customBarcode) {
-        drawReceiptBarcode(doc, receipt, customBarcode.x, customBarcode.y)
-      } else {
-        drawReceiptBarcode(doc, receipt, PAGE_W - MR - 42, startY - 1)
-        if (bottomOffset < 22) bottomOffset = 22
-      }
     }
 
     doc.setDrawColor(160, 160, 160)
@@ -700,7 +676,7 @@ export interface GenerateReceiptOptions {
 }
 
 export async function generateReceipt(options: GenerateReceiptOptions): Promise<void> {
-  const { orders } = options
+  const { orders, labSettings } = options
   const order = orders[0]
   // All tests on one receipt share a single receipt number — resolve it from
   // whichever order actually has it set, rather than assuming orders[0] does.
@@ -712,23 +688,23 @@ export async function generateReceipt(options: GenerateReceiptOptions): Promise<
   const ML = 15
   const MR = 15
   const CW = PAGE_W - ML - MR
-  const TEMPLATE_HDR = 58
+  const TEMPLATE_HDR = 54
 
   const lineItems = orders.map(o => ({
-    label: [o.template?.code, o.template?.name].filter(Boolean).join(' - ') || 'Diagnostic Test',
+    label: o.template?.name || o.template?.code || 'Diagnostic Test',
     amount: Number(o.netAmount ?? o.amount ?? 0),
   }))
   const grossTotal = orders.reduce((s, o) => s + Number(o.amount ?? 0), 0)
   const netTotal = lineItems.reduce((s, l) => s + l.amount, 0)
-  const discountAmt = grossTotal - netTotal
+  const discountAmt = Math.max(0, grossTotal - netTotal)
+
+  const isAllPaid = orders.every(o => o.paymentStatus === 'PAID')
+  const paidAmount = isAllPaid
+    ? netTotal
+    : orders.filter(o => o.paymentStatus === 'PAID').reduce((s, o) => s + Number(o.netAmount ?? o.amount ?? 0), 0)
+  const balanceToPay = Math.max(0, netTotal - paidAmount)
 
   const fmt = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-
-  const fmtGenderAge = (gender: string | null, years: number | null, months: number | null, days: number | null): string => {
-    const g = gender ? (gender.toLowerCase().startsWith('m') ? 'Male' : 'Female') : null
-    const parts = [g, formatAge(years, months, days)].filter(Boolean)
-    return parts.length > 0 ? parts.join('/') : '—'
-  }
 
   const fmtBillDate = (iso?: string): string => {
     if (!iso) return '—'
@@ -739,108 +715,136 @@ export async function generateReceipt(options: GenerateReceiptOptions): Promise<
   }
 
   const p = order.patient
-  let y = TEMPLATE_HDR + 4
+  let y = TEMPLATE_HDR
 
-  /* ── Title ─────────────────────────────────────────────── */
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(16)
-  doc.setTextColor(10, 10, 10)
-  doc.text('BILL', PAGE_W / 2, y, { align: 'center' })
-  y += 3
-  doc.setDrawColor(10, 10, 10)
-  doc.setLineWidth(0.5)
+  /* ── Receipt Top Header Bar with Barcode ─────────────────── */
+  doc.setDrawColor(20, 20, 20)
+  doc.setLineWidth(0.4)
   doc.line(ML, y, PAGE_W - MR, y)
-  y += 7
 
-  /* ── Two-column info grid ──────────────────────────────── */
-  const col2X = ML + CW / 2 + 5
-  const labelW = 28
+  // Title in Center
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(15, 15, 15)
+  doc.text('RECEIPT', PAGE_W / 2, y + 5.5, { align: 'center' })
 
-  doc.setFontSize(9)
-  const infoRow = (x: number, label: string, value: string, rowY: number) => {
-    doc.setFont('helvetica', 'bold'); doc.setTextColor(10, 10, 10)
-    doc.text(label, x, rowY)
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30)
-    doc.text(`: ${value}`, x + labelW, rowY)
-  }
-
-  infoRow(ML, 'Name', p?.fullName ?? '—', y)
-  infoRow(col2X, 'Bill No.', receiptNumber ?? '—', y)
+  // Barcode on Top Right
   if (receiptNumber) {
-    drawReceiptBarcode(doc, receiptNumber, PAGE_W - MR - 42, y - 12, 42, 8)
+    drawCode128(doc, receiptNumber, PAGE_W - MR - 34, y + 1.2, 34, 6.5)
   }
-  y += 6
-  infoRow(ML, 'Gender/Age', fmtGenderAge(p?.gender ?? null, p?.ageYears ?? null, p?.ageMonths ?? null, p?.ageDays ?? null), y)
-  infoRow(col2X, 'Bill Date', fmtBillDate(order.createdAt), y)
-  y += 6
-  infoRow(ML, 'Mobile', p?.phoneNumber ?? '—', y)
-  infoRow(col2X, 'Patient ID', p?.patientCode ?? '—', y)
-  y += 6
-  infoRow(ML, 'Ref By', p?.doctorName ?? 'Self', y)
-  y += 10
 
-  /* ── Test table — one row per test on this receipt ─────── */
+  // Line below header
+  doc.line(ML, y + 8.8, PAGE_W - MR, y + 8.8)
+  y += 13.5
+
+  /* ── Patient & Invoice Metadata (Aligned Colons) ────────── */
+  doc.setFontSize(8.5)
+  const labelW = 16
+  const col2X = ML + CW / 2 + 5
+  const col2LabelW = 34
+
+  const infoRowLeft = (label: string, value: string, rowY: number) => {
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(20, 20, 20)
+    doc.text(label, ML, rowY)
+    doc.text(`:  ${value}`, ML + labelW, rowY)
+  }
+
+  const infoRowRight = (label: string, value: string, rowY: number) => {
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(20, 20, 20)
+    doc.text(label, col2X, rowY)
+    doc.text(`:  ${value}`, col2X + col2LabelW, rowY)
+  }
+
+  const patientName = p?.fullName ? p.fullName.toUpperCase() : '—'
+  const ageDisplay = p?.ageYears !== null && p?.ageYears !== undefined
+    ? `${p.ageYears} Yrs`
+    : (formatAge(p?.ageYears, p?.ageMonths, p?.ageDays) || '—')
+  const doctorName = p?.doctorName ? p.doctorName.toUpperCase() : 'SELF'
+  const clientName = (p?.b2bLab?.name || labSettings.lab_name || '—').toUpperCase()
+  const genderDisplay = p?.gender ? (p.gender.toLowerCase().startsWith('m') ? 'Male' : 'Female') : '—'
+  const invoiceDateStr = `${receiptNumber ?? order.id} / ${fmtBillDate(order.createdAt)}`
+
+  infoRowLeft('Name', patientName, y)
+  infoRowRight('Invoice No / Date', invoiceDateStr, y)
+  y += 5.2
+
+  infoRowLeft('Age', ageDisplay, y)
+  infoRowRight('Gender', genderDisplay, y)
+  y += 5.2
+
+  infoRowLeft('Doctor', doctorName, y)
+  y += 5.2
+
+  infoRowLeft('Client', clientName, y)
+  y += 4
+
+  /* ── Test Table ─────────────────────────────────────────── */
   autoTable(doc, {
     startY: y,
     margin: { left: ML, right: MR, bottom: 20 },
-    head: [['Test Name', 'Remarks', 'MRP Amount']],
-    body: lineItems.map(l => [l.label, '', fmt(l.amount)]),
+    head: [['Test Name', 'Amount']],
+    body: lineItems.map(l => [l.label, fmt(l.amount)]),
     theme: 'plain',
     styles: {
       fontSize: 8.5,
-      cellPadding: { top: 3.5, bottom: 3.5, left: 3, right: 3 },
+      cellPadding: { top: 2.2, bottom: 2.2, left: 1, right: 1 },
       lineWidth: 0,
       textColor: [15, 15, 15],
       font: 'helvetica',
     },
     headStyles: {
       fontStyle: 'bold',
-      fontSize: 8,
+      fontSize: 8.5,
       fillColor: [255, 255, 255] as [number, number, number],
       textColor: [10, 10, 10] as [number, number, number],
-      lineWidth: { top: 0.4, bottom: 0.4 },
-      lineColor: [10, 10, 10],
+      lineWidth: { top: 0.35, bottom: 0.35 },
+      lineColor: [20, 20, 20],
     },
     columnStyles: {
-      0: { cellWidth: CW - 30 - 40 },
-      1: { cellWidth: 30 },
-      2: { cellWidth: 40, halign: 'right' },
+      0: { cellWidth: CW - 35, halign: 'left' },
+      1: { cellWidth: 35, halign: 'right' },
     },
   })
 
   const afterTable: number = ((doc as unknown) as { lastAutoTable?: { finalY?: number } }).lastAutoTable?.finalY ?? y + 20
-  y = afterTable + 3
+  y = afterTable + 1.5
 
-  doc.setDrawColor(10, 10, 10)
-  doc.setLineWidth(0.4)
+  doc.setDrawColor(20, 20, 20)
+  doc.setLineWidth(0.35)
   doc.line(ML, y, PAGE_W - MR, y)
-  y += 6
+  y += 5.5
 
-  /* ── Total ─────────────────────────────────────────────── */
+  /* ── Totals & Balance (Aligned Colons on Right) ───────────── */
   const totalsRightX = PAGE_W - MR
-  const totalsLabelX = totalsRightX - 55
+  const totalsColonX = totalsRightX - 25
 
-  if (discountAmt > 0) {
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(60, 60, 60)
-    doc.text('Gross Amount', totalsLabelX, y)
-    doc.text(fmt(grossTotal), totalsRightX, y, { align: 'right' })
+  const totalRow = (label: string, val: string, isBold = false) => {
+    doc.setFont('helvetica', isBold ? 'bold' : 'normal')
+    doc.setFontSize(8.5)
+    doc.setTextColor(15, 15, 15)
+    doc.text(label, totalsColonX - 2, y, { align: 'right' })
+    doc.text(':', totalsColonX, y)
+    doc.text(val, totalsRightX, y, { align: 'right' })
     y += 5
-    doc.setTextColor(5, 150, 105)
-    doc.text('Discount', totalsLabelX, y)
-    doc.text(`-${fmt(discountAmt)}`, totalsRightX, y, { align: 'right' })
-    y += 6
   }
 
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(10, 10, 10)
-  doc.text('Bill Amount', totalsLabelX, y)
-  doc.text(fmt(netTotal), totalsRightX, y, { align: 'right' })
-  y += 10
+  totalRow('Gross Bill Amount', fmt(grossTotal))
+  if (discountAmt > 0) {
+    totalRow('Discount', fmt(discountAmt))
+  }
+  totalRow('Net Amount', fmt(netTotal))
+  totalRow('Paid Amount', fmt(paidAmount))
+  totalRow('Balance to Pay', fmt(balanceToPay), true)
 
-  /* ── Footer note — no signature required on this format ── */
+  y += 3
+
+  /* ── Footer Note ────────────────────────────────────────── */
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7)
-  doc.setTextColor(140, 140, 140)
-  doc.text('This is a computer-generated bill and does not require a signature.', ML, y)
+  doc.setFontSize(7.5)
+  doc.setTextColor(50, 50, 50)
+  doc.text('This is a computer-generated document. No signature is required.', ML, y)
 
   /* ── Merge with payment template ─────────────────────── */
   const patientSlug = order.patient?.fullName?.replace(/\s+/g, '-') ?? 'patient'
@@ -920,23 +924,15 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
 
     doc.setFontSize(9)
 
-    const receipt = order.receiptNumber?.trim()
-    const customBarcode = barcodePosition(labSettings)
-    const barcodeBesidePatient = !!receipt && !customBarcode
-
     doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text("Patient's Name", ML, y)
     doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${p?.fullName ?? '—'}`, ML + 35, y)
-    if (!barcodeBesidePatient) {
-      doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text('Receipt No.', col2X, y)
-      doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${receipt ?? '—'}`, col2X + 24, y)
-    }
+    doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text('Receipt No.', col2X, y)
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${order.receiptNumber ?? '—'}`, col2X + 24, y)
 
     doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text('Age / Gender', ML, y + 7)
     doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${fmtAgeGender(p?.ageYears ?? null, p?.ageMonths ?? null, p?.ageDays ?? null, p?.gender ?? null)}`, ML + 35, y + 7)
-    if (!barcodeBesidePatient) {
-      doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text('Date', col2X, y + 7)
-      doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${fmtDate(order.createdAt)}`, col2X + 24, y + 7)
-    }
+    doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text('Date', col2X, y + 7)
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${fmtDate(order.createdAt)}`, col2X + 24, y + 7)
 
     doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text('Referred by', ML, y + 14)
     doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${p?.doctorName ?? 'Self'}`, ML + 35, y + 14)
@@ -948,22 +944,6 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
       doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text('Location', ML, y + 21)
       doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${locationValue}`, ML + 35, y + 21)
       bottomOffset = 26
-    }
-
-    if (barcodeBesidePatient) {
-      const dateY = p?.isB2b && p?.b2bLab ? y + 28 : y + 21
-      doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text('Date', ML, dateY)
-      doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${fmtDate(order.createdAt)}`, ML + 35, dateY)
-      bottomOffset = (p?.isB2b && p?.b2bLab ? 28 : 21) + 5
-    }
-
-    if (receipt) {
-      if (customBarcode) {
-        drawReceiptBarcode(doc, receipt, customBarcode.x, customBarcode.y)
-      } else {
-        drawReceiptBarcode(doc, receipt, PAGE_W - MR - 42, y - 1)
-        if (bottomOffset < 22) bottomOffset = 22
-      }
     }
 
     y += bottomOffset

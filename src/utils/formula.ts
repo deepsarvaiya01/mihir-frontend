@@ -40,3 +40,27 @@ export function evalFormula(optionsJson: string | null, values: Record<number, s
     return 0
   }
 }
+
+/** Multi-pass eval so calculated fields can reference other calculated fields. */
+export function evalCalculatedFields(
+  fields: { id: number; fieldType: string; optionsJson: string | null }[],
+  inputValues: Record<number, string | boolean>,
+): Record<number, number> {
+  const calculated = fields.filter(f => f.fieldType === 'calculated')
+  const values: Record<number, string | boolean> = { ...inputValues }
+  const results: Record<number, number> = {}
+
+  for (let pass = 0; pass < calculated.length + 1; pass++) {
+    let changed = false
+    for (const f of calculated) {
+      const n = evalFormula(f.optionsJson, values)
+      if (results[f.id] !== n) {
+        results[f.id] = n
+        values[f.id] = String(n)
+        changed = true
+      }
+    }
+    if (!changed) break
+  }
+  return results
+}

@@ -7,10 +7,32 @@ export type SummaryFormat = 'paragraph' | 'points'
 
 export interface UserProfile { id: number; name: string; email: string; role: UserRole }
 export interface DashboardSummary { superAdmins: number; labUsers: number; templates: number; activeTemplates: number; patients: number; orders: number; completedOrders: number; pendingOrders: number }
+export type ComparisonOperator = '==' | '!=' | '<' | '<=' | '>' | '>='
+export type OperandKind = 'sum' | 'field' | 'constant'
+
+export interface RuleOperand {
+  kind: OperandKind
+  fieldIds?: number[]
+  fieldId?: number
+  value?: number
+}
+
+export interface TemplateValidationRule {
+  id?: string
+  name?: string
+  type?: 'comparison' | 'sum_equals' | 'sum' | 'compare'
+  operator?: ComparisonOperator
+  left?: RuleOperand
+  right?: RuleOperand
+  message?: string
+  // Legacy backward-compatibility for sum_equals
+  fieldIds?: number[]
+  equals?: number
+}
 export interface TestTemplateField { id: number; fieldName: string; fieldType: FieldType; required: boolean; optionsJson: string | null; unit: string | null; displayOrder: number; referenceRange: string | null; referenceRangeMale: string | null; referenceRangeFemale: string | null; isSectionHeader: boolean; isMainHeader: boolean; isLineResult: boolean }
 export interface TestTemplateB2bPrice { id: number; b2bLabId: number; amount: number }
 export interface TestCategory { id: number; name: string; code: string; displayOrder: number; active: boolean; deletedAt?: string | null }
-export interface TestTemplate { id: number; name: string; code: string; active: boolean; amount: number; summaryTitle: string | null; summary: string | null; summaryFormat: SummaryFormat; categoryId: number | null; category?: TestCategory | null; fields: TestTemplateField[]; b2bPrices: TestTemplateB2bPrice[] }
+export interface TestTemplate { id: number; name: string; code: string; active: boolean; amount: number; summaryTitle: string | null; summary: string | null; summaryFormat: SummaryFormat; categoryId: number | null; category?: TestCategory | null; fields: TestTemplateField[]; b2bPrices: TestTemplateB2bPrice[]; validationRules?: TemplateValidationRule[] | null }
 export interface TestProfile { id: number; name: string; code: string; active: boolean; amount: number; templates: TestTemplate[]; deletedAt?: string | null }
 
 export interface B2bLab { id: number; name: string; contactPerson: string | null; phone: string | null; email: string | null; address: string | null; city: string | null; active: boolean; deletedAt?: string | null }
@@ -46,7 +68,6 @@ export interface LabSettings {
   lab_name?: string; lab_address?: string; lab_email?: string; lab_phone?: string; lab_timing?: string
   lab_logo_base64?: string; doctor_name?: string; doctor_qualification?: string
   lab_gstin?: string; lab_hsn_code?: string
-  barcode_x_mm?: string; barcode_y_mm?: string
 }
 export interface ActiveSignature { id: number; name: string; degreeName?: string | null; imageUrl: string; isActive: boolean }
 export interface Logo { id: number; name: string; imageUrl: string; isActive: boolean; createdAt: string; deletedAt?: string | null }

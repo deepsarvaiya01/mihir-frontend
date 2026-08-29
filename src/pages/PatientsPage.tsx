@@ -1,11 +1,11 @@
 ﻿import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Users, Search, Pencil,
   Building2, History,
   Eye, X, Phone, MapPin, UserCircle2,
-  Stethoscope, AlertCircle, FileText, ExternalLink,
+  Stethoscope, AlertCircle, FileText, ExternalLink, Trash2,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
@@ -14,8 +14,12 @@ import { PageLoader } from '../components/ui/Spinner'
 import { PageContent } from '../components/ui/PageContent'
 import { FilterBar, FilterSelect } from '../components/ui/FilterBar'
 import { Pagination } from '../components/ui/Pagination'
+import { ConfirmModal } from '../components/ui/Modal'
 import { patientService } from '../services/patients'
 import { formatAge } from '../lib/utils'
+import { toast } from 'sonner'
+import { toastError } from '../lib/errors'
+import type { Patient } from '../types'
 
 /* ── Patient detail slide-over ───────────────────────────────────────────── */
 
@@ -236,8 +240,10 @@ function TypeBadge({ isB2b }: { isB2b: boolean }) {
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function PatientsPage() {
   const navigate = useNavigate()
+  const qc = useQueryClient()
 
   const [viewPatientId, setViewPatientId] = useState<number | null>(null)
+  const [deletePatient, setDeletePatient] = useState<Patient | null>(null)
   const [search, setSearch] = useState('')
   const [genderFilter, setGenderFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'B2B' | 'INDIVIDUAL'>('ALL')
@@ -247,6 +253,17 @@ export default function PatientsPage() {
   const { data: patients = [], isLoading, isFetching, refetch } = useQuery({
     queryKey: ['patients'],
     queryFn: () => patientService.getAll(),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => patientService.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['patients'] })
+      setDeletePatient(null)
+      if (viewPatientId === deletePatient?.id) setViewPatientId(null)
+      toast.success('Patient deleted')
+    },
+    onError: (err) => toastError(err, 'Failed to delete patient'),
   })
 
   // Reset to page 1 whenever filters change
@@ -420,6 +437,13 @@ export default function PatientsPage() {
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </button>
+                          <button
+                            onClick={() => setDeletePatient(patient)}
+                            className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -449,6 +473,17 @@ export default function PatientsPage() {
           onEdit={() => { navigate(`/patients/${viewPatientId}/edit`); setViewPatientId(null) }}
         />
       )}
+
+      <ConfirmModal
+        open={!!deletePatient}
+        onClose={() => setDeletePatient(null)}
+        onConfirm={() => deletePatient && deleteMutation.mutate(deletePatient.id)}
+        title="Delete Patient"
+        message={`Delete "${deletePatient?.fullName ?? ''}"? They will be removed from the patients list.`}
+        confirmLabel="Delete Patient"
+        variant="danger"
+        loading={deleteMutation.isPending}
+      />
     </div>
   )
 }

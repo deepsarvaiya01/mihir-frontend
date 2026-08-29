@@ -2,8 +2,9 @@
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  ArrowLeft, Save, FlaskConical, Tag, Building2, Calculator,
-  X, Plus, Pencil, PlayCircle,
+  ArrowLeft, Save, FlaskConical, Tag, Building2, Calculator, Sigma,
+  X, Plus, Pencil, PlayCircle, CheckCircle2, Sliders, Trash2,
+  Hash,
 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Input, Select } from '../components/ui/Input'
@@ -15,7 +16,11 @@ import { PageLoader } from '../components/ui/Spinner'
 import { templateService } from '../services/templates'
 import { b2bLabService } from '../services/b2bLabs'
 import { testCategoryService } from '../services/testCategories'
-import type { FieldType, TestTemplateField, SummaryFormat } from '../types'
+import type { FieldType, TestTemplateField, SummaryFormat, TemplateValidationRule } from '../types'
+import {
+  describeRule,
+  type ComparisonOperator,
+} from '../utils/validationRules'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
 import { toTitleCase } from '../lib/utils'
@@ -192,6 +197,21 @@ export default function TemplateFormPage() {
   const [testValues, setTestValues] = useState<Record<number, string>>({})
   const [testResult, setTestResult] = useState<number | null>(null)
 
+  // Validation Rules State
+  const [rules, setRules] = useState<TemplateValidationRule[]>([])
+  const [ruleModalOpen, setRuleModalOpen] = useState(false)
+  const [editingRuleIndex, setEditingRuleIndex] = useState<number | null>(null)
+
+  // Rule Editor Form State
+  const [ruleKind, setRuleKind] = useState<'sum' | 'compare'>('sum')
+  const [ruleOp, setRuleOp] = useState<ComparisonOperator>('==')
+  const [sumFieldIds, setSumFieldIds] = useState<number[]>([])
+  const [compareLeftFieldId, setCompareLeftFieldId] = useState<string>('')
+  const [rightKind, setRightKind] = useState<'constant' | 'field'>('constant')
+  const [rightValue, setRightValue] = useState<string>('100')
+  const [rightFieldId, setRightFieldId] = useState<string>('')
+  const [ruleMessage, setRuleMessage] = useState<string>('')
+
   const { data: b2bLabs = [] } = useQuery({ queryKey: ['b2b-labs'], queryFn: b2bLabService.getAll })
   const activeB2bLabs = b2bLabs.filter(l => l.active)
 
@@ -217,10 +237,14 @@ export default function TemplateFormPage() {
       const prices: Record<number, string> = {}
       for (const p of template.b2bPrices ?? []) prices[p.b2bLabId] = String(p.amount)
       setB2bPrices(prices)
+      setRules(template.validationRules ?? [])
     }
   }, [template])
 
-  const numericFields = (template?.fields ?? []).filter(f => f.fieldType === 'number')
+  const numericFields = (template?.fields ?? []).filter(f =>
+    (f.fieldType === 'number' || f.fieldType === 'calculated')
+    && f.id !== editingField?.id
+  )
 
   const testFieldIds = Array.from(new Set(
     [
@@ -244,7 +268,150 @@ export default function TemplateFormPage() {
       fieldForm.formulaFirstKind, fieldForm.formulaFirstFieldId, fieldForm.formulaFirstValue,
       fieldForm.formulaPairs, fieldForm.formulaGroupStart, fieldForm.formulaGroupEnd,
     )
-    setTestResult(evalFormula(formulaJson, testValues))
+    // Include other calculated fields so nested formulas resolve during the test preview.
+    const otherCalculated = (template?.fields ?? []).filter(f =>
+      f.fieldType === 'calculated' && f.id !== editingField?.id,
+    )
+    const values: Record<number, string | boolean> = { ...testValues }
+    for (let pass = 0; pass < otherCalculated.length + 1; pass++) {
+      let changed = false
+      for (const f of otherCalculated) {
+        const n = evalFormula(f.optionsJson, values)
+        const asStr = String(n)
+        if (values[f.id] !== asStr) {
+          values[f.id] = asStr
+          changed = true
+        }
+      }
+      if (!changed) break
+    }
+    setTestResult(evalFormula(formulaJson, values))
+  }
+
+  function openAddRuleModal() {
+    const available = (template?.fields ?? []).filter(
+      f => !f.isSectionHeader && !f.isMainHeader && (f.fieldType === 'number' || f.fieldType === 'calculated'),
+    )
+    setEditingRuleIndex(null)
+    setRuleKind('sum')
+    setRuleOp('==')
+    setSumFieldIds([])
+    setCompareLeftFieldId(available[0] ? String(available[0].id) : '')
+    setRightKind('constant')
+    setRightValue('100')
+    setRightFieldId(available[1] ? String(available[1].id) : (available[0] ? String(available[0].id) : ''))
+    setRuleMessage('')
+    setRuleModalOpen(true)
+  }
+
+  function openEditRuleModal(index: number) {
+    const r = rules[index]
+    if (!r) return
+    setEditingRuleIndex(index)
+
+    if (r.type === 'sum_equals' || r.left?.kind === 'sum' || (!r.left && r.fieldIds)) {
+      setRuleKind('sum')
+      setRuleOp(r.operator ?? '==')
+      setSumFieldIds(r.left?.fieldIds ?? r.fieldIds ?? [])
+      if (r.right?.kind === 'field') {
+        setRightKind('field')
+        setRightFieldId(String(r.right.fieldId ?? ''))
+        setRightValue('')
+      } else {
+        setRightKind('constant')
+        setRightValue(String(r.right?.value ?? r.equals ?? 100))
+        setRightFieldId('')
+      }
+    } else {
+      setRuleKind('compare')
+      setRuleOp(r.operator ?? '<=')
+      setCompareLeftFieldId(String(r.left?.fieldId ?? ''))
+      if (r.right?.kind === 'field') {
+        setRightKind('field')
+        setRightFieldId(String(r.right.fieldId ?? ''))
+        setRightValue('')
+      } else {
+        setRightKind('constant')
+        setRightValue(String(r.right?.value ?? 0))
+        setRightFieldId('')
+      }
+    }
+    setRuleMessage(r.message ?? '')
+    setRuleModalOpen(true)
+  }
+
+  function saveRule() {
+    if (ruleKind === 'sum') {
+      if (sumFieldIds.length < 2) {
+        toast.error('Select at least 2 fields for the sum')
+        return
+      }
+      if (rightKind === 'constant' && !Number.isFinite(Number(rightValue))) {
+        toast.error('Enter a valid target number')
+        return
+      }
+      if (rightKind === 'field' && !rightFieldId) {
+        toast.error('Select a target field to compare against')
+        return
+      }
+
+      const newRule: TemplateValidationRule = {
+        type: 'sum',
+        operator: ruleOp,
+        left: {
+          kind: 'sum',
+          fieldIds: sumFieldIds,
+        },
+        right: rightKind === 'constant'
+          ? { kind: 'constant', value: Number(rightValue) }
+          : { kind: 'field', fieldId: Number(rightFieldId) },
+        message: ruleMessage.trim() || undefined,
+      }
+
+      if (editingRuleIndex !== null) {
+        setRules(prev => prev.map((item, idx) => idx === editingRuleIndex ? newRule : item))
+      } else {
+        setRules(prev => [...prev, newRule])
+      }
+    } else {
+      if (!compareLeftFieldId) {
+        toast.error('Select the primary field')
+        return
+      }
+      if (rightKind === 'constant' && !Number.isFinite(Number(rightValue))) {
+        toast.error('Enter a valid target number')
+        return
+      }
+      if (rightKind === 'field' && !rightFieldId) {
+        toast.error('Select a comparison field')
+        return
+      }
+
+      const newRule: TemplateValidationRule = {
+        type: 'compare',
+        operator: ruleOp,
+        left: {
+          kind: 'field',
+          fieldId: Number(compareLeftFieldId),
+        },
+        right: rightKind === 'constant'
+          ? { kind: 'constant', value: Number(rightValue) }
+          : { kind: 'field', fieldId: Number(rightFieldId) },
+        message: ruleMessage.trim() || undefined,
+      }
+
+      if (editingRuleIndex !== null) {
+        setRules(prev => prev.map((item, idx) => idx === editingRuleIndex ? newRule : item))
+      } else {
+        setRules(prev => [...prev, newRule])
+      }
+    }
+
+    setRuleModalOpen(false)
+  }
+
+  function deleteRule(index: number) {
+    setRules(prev => prev.filter((_, idx) => idx !== index))
   }
 
   function buildAddFieldDto(pf: typeof emptyFieldForm) {
@@ -268,6 +435,9 @@ export default function TemplateFormPage() {
       const b2bPricesPayload = activeB2bLabs
         .filter(l => b2bPrices[l.id] && Number(b2bPrices[l.id]) > 0)
         .map(l => ({ b2bLabId: l.id, amount: Number(b2bPrices[l.id]) }))
+
+      const validationRulesPayload = rules.length > 0 ? rules : null
+
       if (isEdit) {
         return templateService.update(Number(id), {
           name, code, active, amount: Number(amount) || 0,
@@ -276,6 +446,7 @@ export default function TemplateFormPage() {
           summaryFormat,
           categoryId: categoryId ? Number(categoryId) : null,
           b2bPrices: b2bPricesPayload,
+          validationRules: validationRulesPayload,
         })
       }
       return templateService.create({
@@ -285,6 +456,7 @@ export default function TemplateFormPage() {
         summaryFormat,
         categoryId: categoryId ? Number(categoryId) : null,
         b2bPrices: b2bPricesPayload,
+        validationRules: validationRulesPayload,
       })
     },
     onSuccess: (result) => {
@@ -570,6 +742,82 @@ export default function TemplateFormPage() {
               className="w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-y dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-500"
             />
           </div>
+
+          {/* Validation Conditions & Rules — edit mode only (needs saved fields) */}
+          {isEdit && (
+            <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50/50 p-4 dark:border-indigo-800/50 dark:bg-indigo-950/20">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Sliders className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                  <div>
+                    <p className="text-sm font-semibold text-indigo-950 dark:text-indigo-200">Validation Conditions & Approval Rules</p>
+                    <p className="text-xs text-indigo-700/80 dark:text-indigo-300/80">
+                      Enforce custom conditions before approving results (e.g. A + B + C == 100, Direct Bilirubin &le; Total Bilirubin).
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  type="button"
+                  variant="secondary"
+                  icon={<Plus className="h-3.5 w-3.5" />}
+                  onClick={openAddRuleModal}
+                >
+                  Add Condition Rule
+                </Button>
+              </div>
+
+              {rules.length === 0 ? (
+                <div className="mt-3 rounded-lg border border-dashed border-indigo-200 bg-white/70 p-3.5 text-center text-xs text-indigo-700/80 dark:border-indigo-800 dark:bg-gray-800/50 dark:text-indigo-300/80">
+                  No validation rules configured for this test. Click &ldquo;Add Condition Rule&rdquo; to define formulas, sums, or field comparisons.
+                </div>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  {rules.map((rule, idx) => (
+                    <div
+                      key={idx}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-indigo-100 bg-white px-3 py-2 shadow-xs dark:border-indigo-900/60 dark:bg-gray-800"
+                    >
+                      <div className="flex flex-1 min-w-0 items-center gap-2">
+                        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-bold text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300">
+                          {idx + 1}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="font-mono text-xs font-semibold text-gray-900 dark:text-gray-100">
+                            {describeRule(rule, template?.fields ?? [])}
+                          </p>
+                          {rule.message && (
+                            <p className="text-[11px] text-gray-500 truncate dark:text-gray-400">
+                              Error message: &ldquo;{rule.message}&rdquo;
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => openEditRuleModal(idx)}
+                          className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-blue-600 dark:hover:bg-gray-700 dark:hover:text-blue-400"
+                          title="Edit rule"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteRule(idx)}
+                          className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-red-600 dark:hover:bg-gray-700 dark:hover:text-red-400"
+                          title="Delete rule"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── Divider ── */}
           <div className="my-6 border-t border-gray-100 dark:border-gray-700/60" />
@@ -940,86 +1188,341 @@ export default function TemplateFormPage() {
 
                   {/* Formula builder — below table for calculated type */}
                   {addFieldOpen && fieldForm.fieldType === 'calculated' && !fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
-                    <div className="border-t border-amber-200 bg-amber-50/50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
-                      <div className="mb-3 flex items-center gap-2">
-                        <Calculator className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                        <span className="text-sm font-semibold text-amber-800 dark:text-amber-300">Formula Builder</span>
-                      </div>
-                      {numericFields.length === 0 && fieldForm.formulaFirstKind === 'field' ? (
-                        <p className="text-sm text-gray-500">No numeric fields yet — add numeric fields first, or use a constant number as the first operand.</p>
-                      ) : (
-                        <>
-                          <div className="flex flex-wrap items-start gap-2">
-                            <div className="flex flex-col gap-1">
-                              <div className="flex rounded-lg border border-amber-300 overflow-hidden text-xs font-semibold">
-                                {(['field', 'constant'] as FormulaOperandKind[]).map(k => (
-                                  <button key={k} type="button"
-                                    onClick={() => setFieldForm(p => ({ ...p, formulaFirstKind: k, formulaFirstFieldId: '', formulaFirstValue: '' }))}
-                                    className={`px-2.5 py-1 transition-colors ${fieldForm.formulaFirstKind === k ? 'bg-amber-400 text-white' : 'bg-white text-amber-700 hover:bg-amber-50 dark:bg-gray-700 dark:text-amber-400 dark:hover:bg-gray-600'}`}>
-                                    {k === 'field' ? 'Field' : '123'}
-                                  </button>
-                                ))}
-                              </div>
-                              {fieldForm.formulaFirstKind === 'field' ? (
-                                <select value={fieldForm.formulaFirstFieldId}
-                                  onChange={e => setFieldForm(p => ({ ...p, formulaFirstFieldId: e.target.value }))}
-                                  className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-amber-500 dark:border-amber-700 dark:bg-gray-700 dark:text-gray-100">
-                                  <option value="">Select field</option>
-                                  {numericFields.map(f => <option key={f.id} value={f.id}>{f.fieldName}</option>)}
-                                </select>
-                              ) : (
-                                <input type="number" placeholder="e.g. 100" value={fieldForm.formulaFirstValue}
-                                  onChange={e => setFieldForm(p => ({ ...p, formulaFirstValue: e.target.value }))}
-                                  className="w-28 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-amber-500 dark:border-amber-700 dark:bg-gray-700 dark:text-gray-100" />
-                              )}
+                    <div className="border-t border-amber-200/90 bg-gradient-to-b from-amber-50/70 to-orange-50/30 p-5 dark:border-amber-800/80 dark:from-amber-950/30 dark:to-orange-950/10">
+                      {/* Header */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-amber-200/60 dark:border-amber-800/60">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500 text-white shadow-xs">
+                            <Calculator className="h-4 w-4" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="text-sm font-bold text-amber-950 dark:text-amber-200">Formula Expression Builder</h4>
+                              <span className="rounded-full bg-amber-200/80 px-2 py-0.5 text-[10px] font-bold text-amber-900 dark:bg-amber-900/60 dark:text-amber-300">
+                                {1 + fieldForm.formulaPairs.length} {1 + fieldForm.formulaPairs.length === 1 ? 'Operand' : 'Operands'}
+                              </span>
                             </div>
-                            {fieldForm.formulaPairs.map((pair, i) => (
-                              <div key={i} className="flex items-end gap-1.5">
-                                <div className="flex flex-col gap-1">
-                                  <span className="text-xs text-amber-600 font-semibold px-0.5">Op</span>
-                                  <select value={pair.op}
-                                    onChange={e => setFieldForm(p => ({ ...p, formulaPairs: p.formulaPairs.map((fp, fi) => fi === i ? { ...fp, op: e.target.value as FormulaPair['op'] } : fp) }))}
-                                    className="rounded-lg border border-amber-300 bg-white px-2 py-1.5 text-sm outline-none dark:border-amber-700 dark:bg-gray-700 dark:text-gray-100">
-                                    {Object.entries(OP_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                                  </select>
-                                </div>
-                                <div className="flex flex-col gap-1">
-                                  <div className="flex rounded-lg border border-amber-300 overflow-hidden text-xs font-semibold">
-                                    {(['field', 'constant'] as FormulaOperandKind[]).map(k => (
-                                      <button key={k} type="button"
-                                        onClick={() => setFieldForm(p => ({ ...p, formulaPairs: p.formulaPairs.map((fp, fi) => fi === i ? { ...fp, kind: k, fieldId: '', value: '' } : fp) }))}
-                                        className={`px-2.5 py-1 transition-colors ${pair.kind === k ? 'bg-amber-400 text-white' : 'bg-white text-amber-700 hover:bg-amber-50 dark:bg-gray-700 dark:text-amber-400 dark:hover:bg-gray-600'}`}>
-                                        {k === 'field' ? 'Field' : '123'}
-                                      </button>
-                                    ))}
-                                  </div>
-                                  {pair.kind === 'field' ? (
-                                    <select value={pair.fieldId}
-                                      onChange={e => setFieldForm(p => ({ ...p, formulaPairs: p.formulaPairs.map((fp, fi) => fi === i ? { ...fp, fieldId: e.target.value } : fp) }))}
-                                      className="rounded-lg border border-amber-300 bg-white px-2 py-1.5 text-sm outline-none dark:border-amber-700 dark:bg-gray-700 dark:text-gray-100">
-                                      <option value="">Select field</option>
-                                      {numericFields.map(f => <option key={f.id} value={f.id}>{f.fieldName}</option>)}
-                                    </select>
-                                  ) : (
-                                    <input type="number" placeholder="e.g. 1.73" value={pair.value}
-                                      onChange={e => setFieldForm(p => ({ ...p, formulaPairs: p.formulaPairs.map((fp, fi) => fi === i ? { ...fp, value: e.target.value } : fp) }))}
-                                      className="w-28 rounded-lg border border-amber-300 bg-white px-2 py-1.5 text-sm outline-none dark:border-amber-700 dark:bg-gray-700 dark:text-gray-100" />
-                                  )}
-                                </div>
-                                <button onClick={() => setFieldForm(p => ({ ...p, formulaPairs: p.formulaPairs.filter((_, fi) => fi !== i), formulaGroupStart: null, formulaGroupEnd: null }))}
-                                  className="mb-0.5 rounded p-1.5 text-amber-600 hover:bg-amber-100"><X className="h-3.5 w-3.5" /></button>
-                              </div>
-                            ))}
-                            <button
-                              onClick={() => setFieldForm(p => ({ ...p, formulaPairs: [...p.formulaPairs, { op: '+', kind: 'field', fieldId: '', value: '' }], formulaGroupStart: null, formulaGroupEnd: null }))}
-                              className="self-end rounded-lg border border-dashed border-amber-400 px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100 mb-0.5">
-                              + Add Step
-                            </button>
+                            <p className="text-xs text-amber-800/80 dark:text-amber-300/80">
+                              Build automated calculations from patient test fields and constants
+                            </p>
+                          </div>
+                        </div>
+
+                        {(fieldForm.formulaFirstFieldId || fieldForm.formulaFirstValue) && (
+                          <Button
+                            size="xs"
+                            type="button"
+                            variant="warning"
+                            icon={<PlayCircle className="h-3.5 w-3.5" />}
+                            onClick={openTestFormula}
+                          >
+                            Test Formula
+                          </Button>
+                        )}
+                      </div>
+
+                      {/* Live Equation Token Bar */}
+                      <div className="mt-4 rounded-xl border border-amber-200 bg-white p-3 shadow-2xs dark:border-amber-800/80 dark:bg-gray-800/90">
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                            Live Formula Expression
+                          </span>
+                          <span className="text-[11px] text-gray-400 dark:text-gray-500">
+                            Evaluated in order of steps (with brackets)
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-1.5 min-h-[32px] py-1 font-mono text-xs">
+                          {(() => {
+                            const hasGroup = fieldForm.formulaGroupStart !== null && fieldForm.formulaGroupEnd !== null && fieldForm.formulaGroupStart <= fieldForm.formulaGroupEnd
+                            const operandTokens: Array<{ label: string; kind: FormulaOperandKind; raw: string }> = []
+
+                            // First operand
+                            if (fieldForm.formulaFirstKind === 'field') {
+                              const f = numericFields.find(nf => String(nf.id) === fieldForm.formulaFirstFieldId)
+                              operandTokens.push({
+                                label: f ? f.fieldName : (fieldForm.formulaFirstFieldId ? `Field #${fieldForm.formulaFirstFieldId}` : 'Select Field'),
+                                kind: 'field',
+                                raw: fieldForm.formulaFirstFieldId,
+                              })
+                            } else {
+                              operandTokens.push({
+                                label: fieldForm.formulaFirstValue ? fieldForm.formulaFirstValue : '0',
+                                kind: 'constant',
+                                raw: fieldForm.formulaFirstValue,
+                              })
+                            }
+
+                            // Pairs
+                            fieldForm.formulaPairs.forEach(p => {
+                              if (p.kind === 'field') {
+                                const f = numericFields.find(nf => String(nf.id) === p.fieldId)
+                                operandTokens.push({
+                                  label: f ? f.fieldName : (p.fieldId ? `Field #${p.fieldId}` : 'Select Field'),
+                                  kind: 'field',
+                                  raw: p.fieldId,
+                                })
+                              } else {
+                                operandTokens.push({
+                                  label: p.value ? p.value : '0',
+                                  kind: 'constant',
+                                  raw: p.value,
+                                })
+                              }
+                            })
+
+                            if (!fieldForm.formulaFirstFieldId && !fieldForm.formulaFirstValue) {
+                              return (
+                                <span className="text-xs text-gray-400 italic">
+                                  No formula defined yet. Configure the starting value below.
+                                </span>
+                              )
+                            }
+
+                            return operandTokens.map((token, i) => (
+                              <Fragment key={i}>
+                                {i > 0 && (
+                                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-100 font-bold text-amber-800 text-xs shadow-2xs dark:bg-amber-900/60 dark:text-amber-200">
+                                    {OP_SYMBOLS[fieldForm.formulaPairs[i - 1]?.op] || '+'}
+                                  </span>
+                                )}
+                                {hasGroup && i === fieldForm.formulaGroupStart && (
+                                  <span className="flex h-6 px-1.5 items-center justify-center rounded-md bg-indigo-100 font-bold text-indigo-700 text-sm dark:bg-indigo-900/70 dark:text-indigo-300">
+                                    (
+                                  </span>
+                                )}
+                                <span
+                                  className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold shadow-2xs ${
+                                    token.kind === 'field'
+                                      ? 'border border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-300'
+                                      : 'border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300'
+                                  }`}
+                                >
+                                  {token.kind === 'field' ? <Tag className="h-3 w-3" /> : <Hash className="h-3 w-3" />}
+                                  {token.label}
+                                </span>
+                                {hasGroup && i === fieldForm.formulaGroupEnd && (
+                                  <span className="flex h-6 px-1.5 items-center justify-center rounded-md bg-indigo-100 font-bold text-indigo-700 text-sm dark:bg-indigo-900/70 dark:text-indigo-300">
+                                    )
+                                  </span>
+                                )}
+                              </Fragment>
+                            ))
+                          })()}
+                        </div>
+                      </div>
+
+                      {/* Calculation Steps Pipeline */}
+                      <div className="mt-4 space-y-3">
+                        {/* Step 1: Initial Value */}
+                        <div className="rounded-xl border border-amber-200 bg-white p-3.5 shadow-2xs dark:border-amber-800/80 dark:bg-gray-800">
+                          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="flex h-5.5 px-2 items-center justify-center rounded-full bg-amber-500 text-[11px] font-bold text-white shadow-2xs">
+                                Step 1
+                              </span>
+                              <span className="text-xs font-bold text-gray-800 dark:text-gray-200">
+                                Starting Value (First Operand)
+                              </span>
+                            </div>
+
+                            {/* Kind Switcher */}
+                            <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs font-semibold dark:border-gray-700">
+                              <button
+                                type="button"
+                                onClick={() => setFieldForm(p => ({ ...p, formulaFirstKind: 'field', formulaFirstFieldId: '', formulaFirstValue: '' }))}
+                                className={`flex items-center gap-1 px-3 py-1 transition-colors ${
+                                  fieldForm.formulaFirstKind === 'field'
+                                    ? 'bg-amber-500 text-white'
+                                    : 'bg-white text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300'
+                                }`}
+                              >
+                                <Tag className="h-3 w-3" />
+                                Field
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setFieldForm(p => ({ ...p, formulaFirstKind: 'constant', formulaFirstFieldId: '', formulaFirstValue: '' }))}
+                                className={`flex items-center gap-1 px-3 py-1 transition-colors ${
+                                  fieldForm.formulaFirstKind === 'constant'
+                                    ? 'bg-amber-500 text-white'
+                                    : 'bg-white text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300'
+                                }`}
+                              >
+                                <Hash className="h-3 w-3" />
+                                Fixed Number
+                              </button>
+                            </div>
                           </div>
 
-                          {fieldForm.formulaPairs.length > 0 && (
-                            <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-white/60 px-3 py-2 dark:border-amber-800 dark:bg-gray-800/40">
-                              <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">Group in brackets ( ):</span>
+                          {fieldForm.formulaFirstKind === 'field' ? (
+                            numericFields.length === 0 ? (
+                              <p className="text-xs text-amber-700 dark:text-amber-400 py-1">
+                                No numeric fields available. Add numeric fields to the template first, or choose &ldquo;Fixed Number&rdquo;.
+                              </p>
+                            ) : (
+                              <select
+                                value={fieldForm.formulaFirstFieldId}
+                                onChange={e => setFieldForm(p => ({ ...p, formulaFirstFieldId: e.target.value }))}
+                                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                              >
+                                <option value="">Select a numeric field...</option>
+                                {numericFields.map(f => (
+                                  <option key={f.id} value={f.id}>
+                                    {f.fieldName} {f.unit ? `(${f.unit})` : ''} {f.fieldType === 'calculated' ? '— [Calculated]' : ''}
+                                  </option>
+                                ))}
+                              </select>
+                            )
+                          ) : (
+                            <input
+                              type="number"
+                              placeholder="Enter constant value (e.g. 100 or 1.73)"
+                              value={fieldForm.formulaFirstValue}
+                              onChange={e => setFieldForm(p => ({ ...p, formulaFirstValue: e.target.value }))}
+                              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                            />
+                          )}
+                        </div>
+
+                        {/* Subsequent Operation Steps */}
+                        {fieldForm.formulaPairs.map((pair, i) => (
+                          <div
+                            key={i}
+                            className="rounded-xl border border-amber-200 bg-white p-3.5 shadow-2xs dark:border-amber-800/80 dark:bg-gray-800"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="flex h-5.5 px-2 items-center justify-center rounded-full bg-amber-100 text-[11px] font-bold text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">
+                                  Step {i + 2}
+                                </span>
+                                <span className="text-xs font-bold text-gray-800 dark:text-gray-200">
+                                  Calculation Operation
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-2">
+                                {/* Kind Switcher */}
+                                <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs font-semibold dark:border-gray-700">
+                                  <button
+                                    type="button"
+                                    onClick={() => setFieldForm(p => ({ ...p, formulaPairs: p.formulaPairs.map((fp, fi) => fi === i ? { ...fp, kind: 'field', fieldId: '', value: '' } : fp) }))}
+                                    className={`flex items-center gap-1 px-2.5 py-1 transition-colors ${
+                                      pair.kind === 'field'
+                                        ? 'bg-amber-500 text-white'
+                                        : 'bg-white text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300'
+                                    }`}
+                                  >
+                                    <Tag className="h-3 w-3" />
+                                    Field
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setFieldForm(p => ({ ...p, formulaPairs: p.formulaPairs.map((fp, fi) => fi === i ? { ...fp, kind: 'constant', fieldId: '', value: '' } : fp) }))}
+                                    className={`flex items-center gap-1 px-2.5 py-1 transition-colors ${
+                                      pair.kind === 'constant'
+                                        ? 'bg-amber-500 text-white'
+                                        : 'bg-white text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300'
+                                    }`}
+                                  >
+                                    <Hash className="h-3 w-3" />
+                                    Number
+                                  </button>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => setFieldForm(p => ({ ...p, formulaPairs: p.formulaPairs.filter((_, fi) => fi !== i), formulaGroupStart: null, formulaGroupEnd: null }))}
+                                  className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors dark:hover:bg-red-950/40"
+                                  title="Remove Step"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
+                              {/* Operator Selector */}
+                              <div className="sm:col-span-4">
+                                <select
+                                  value={pair.op}
+                                  onChange={e => setFieldForm(p => ({ ...p, formulaPairs: p.formulaPairs.map((fp, fi) => fi === i ? { ...fp, op: e.target.value as FormulaPair['op'] } : fp) }))}
+                                  className="w-full rounded-lg border border-amber-300 bg-amber-50/70 px-3 py-2 text-sm font-semibold text-amber-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200"
+                                >
+                                  {Object.entries(OP_LABELS).map(([v, l]) => (
+                                    <option key={v} value={v}>{l}</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              {/* Target Selector */}
+                              <div className="sm:col-span-8">
+                                {pair.kind === 'field' ? (
+                                  <select
+                                    value={pair.fieldId}
+                                    onChange={e => setFieldForm(p => ({ ...p, formulaPairs: p.formulaPairs.map((fp, fi) => fi === i ? { ...fp, fieldId: e.target.value } : fp) }))}
+                                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                                  >
+                                    <option value="">Select a field...</option>
+                                    {numericFields.map(f => (
+                                      <option key={f.id} value={f.id}>
+                                        {f.fieldName} {f.unit ? `(${f.unit})` : ''} {f.fieldType === 'calculated' ? '— [Calculated]' : ''}
+                                      </option>
+                                    ))}
+                                  </select>
+                                ) : (
+                                  <input
+                                    type="number"
+                                    placeholder="Enter constant value (e.g. 100 or 1.73)"
+                                    value={pair.value}
+                                    onChange={e => setFieldForm(p => ({ ...p, formulaPairs: p.formulaPairs.map((fp, fi) => fi === i ? { ...fp, value: e.target.value } : fp) }))}
+                                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                                  />
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+
+                        {/* Add Step Action */}
+                        <button
+                          type="button"
+                          onClick={() => setFieldForm(p => ({ ...p, formulaPairs: [...p.formulaPairs, { op: '+', kind: 'field', fieldId: '', value: '' }], formulaGroupStart: null, formulaGroupEnd: null }))}
+                          className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-amber-300 bg-white/70 py-2.5 text-xs font-bold text-amber-800 hover:bg-amber-100/70 hover:border-amber-400 transition-all dark:border-amber-700 dark:bg-gray-800/40 dark:text-amber-300 dark:hover:bg-amber-950/40"
+                        >
+                          <Plus className="h-4 w-4" />
+                          Add Next Operation (+, −, ×, ÷, %)
+                        </button>
+                      </div>
+
+                      {/* Parentheses & Grouping */}
+                      {fieldForm.formulaPairs.length > 0 && (
+                        <div className="mt-4 rounded-xl border border-indigo-200/80 bg-indigo-50/50 p-3.5 dark:border-indigo-800/60 dark:bg-indigo-950/20">
+                          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                            <div className="flex items-center gap-1.5">
+                              <span className="flex h-5 w-5 items-center justify-center rounded bg-indigo-200 text-xs font-bold text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200">
+                                ( )
+                              </span>
+                              <span className="text-xs font-bold text-indigo-950 dark:text-indigo-200">
+                                Group Expression in Parentheses (Order of Operations)
+                              </span>
+                            </div>
+                            {(fieldForm.formulaGroupStart !== null || fieldForm.formulaGroupEnd !== null) && (
+                              <button
+                                type="button"
+                                onClick={() => setFieldForm(p => ({ ...p, formulaGroupStart: null, formulaGroupEnd: null }))}
+                                className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200"
+                              >
+                                Clear Brackets
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[11px] font-semibold text-indigo-900/80 dark:text-indigo-300/80 mb-1">
+                                Open Bracket &lsquo;(&rsquo; Before:
+                              </label>
                               <select
                                 value={fieldForm.formulaGroupStart ?? ''}
                                 onChange={e => setFieldForm(p => {
@@ -1027,50 +1530,48 @@ export default function TemplateFormPage() {
                                   const end = p.formulaGroupEnd !== null && start !== null && p.formulaGroupEnd < start ? start : p.formulaGroupEnd
                                   return { ...p, formulaGroupStart: start, formulaGroupEnd: start === null ? null : end }
                                 })}
-                                className="rounded-lg border border-amber-300 bg-white px-2 py-1 text-xs outline-none dark:border-amber-700 dark:bg-gray-700 dark:text-gray-100">
-                                <option value="">From…</option>
+                                className="w-full rounded-lg border border-indigo-200 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-indigo-500 dark:border-indigo-700 dark:bg-gray-800 dark:text-gray-100"
+                              >
+                                <option value="">No opening bracket</option>
                                 {Array.from({ length: fieldForm.formulaPairs.length + 1 }, (_, idx) => (
                                   <option key={idx} value={idx}>
-                                    Operand {idx + 1} ({operandLabelAt(idx, fieldForm.formulaFirstKind, fieldForm.formulaFirstFieldId, fieldForm.formulaFirstValue, fieldForm.formulaPairs, numericFields)})
+                                    Operand {idx + 1}: {operandLabelAt(idx, fieldForm.formulaFirstKind, fieldForm.formulaFirstFieldId, fieldForm.formulaFirstValue, fieldForm.formulaPairs, numericFields)}
                                   </option>
                                 ))}
                               </select>
-                              <span className="text-xs text-amber-600">to</span>
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-semibold text-indigo-900/80 dark:text-indigo-300/80 mb-1">
+                                Close Bracket &lsquo;)&rsquo; After:
+                              </label>
                               <select
                                 value={fieldForm.formulaGroupEnd ?? ''}
                                 onChange={e => setFieldForm(p => ({ ...p, formulaGroupEnd: e.target.value === '' ? null : Number(e.target.value) }))}
                                 disabled={fieldForm.formulaGroupStart === null}
-                                className="rounded-lg border border-amber-300 bg-white px-2 py-1 text-xs outline-none disabled:opacity-50 dark:border-amber-700 dark:bg-gray-700 dark:text-gray-100">
-                                <option value="">To…</option>
+                                className="w-full rounded-lg border border-indigo-200 bg-white px-2.5 py-1.5 text-xs outline-none disabled:opacity-50 focus:border-indigo-500 dark:border-indigo-700 dark:bg-gray-800 dark:text-gray-100"
+                              >
+                                <option value="">No closing bracket</option>
                                 {Array.from({ length: fieldForm.formulaPairs.length + 1 }, (_, idx) => idx)
                                   .filter(idx => fieldForm.formulaGroupStart === null || idx >= fieldForm.formulaGroupStart)
                                   .map(idx => (
                                     <option key={idx} value={idx}>
-                                      Operand {idx + 1} ({operandLabelAt(idx, fieldForm.formulaFirstKind, fieldForm.formulaFirstFieldId, fieldForm.formulaFirstValue, fieldForm.formulaPairs, numericFields)})
+                                      Operand {idx + 1}: {operandLabelAt(idx, fieldForm.formulaFirstKind, fieldForm.formulaFirstFieldId, fieldForm.formulaFirstValue, fieldForm.formulaPairs, numericFields)}
                                     </option>
                                   ))}
                               </select>
-                              {(fieldForm.formulaGroupStart !== null || fieldForm.formulaGroupEnd !== null) && (
-                                <button onClick={() => setFieldForm(p => ({ ...p, formulaGroupStart: null, formulaGroupEnd: null }))}
-                                  className="text-xs text-amber-600 hover:underline">Clear</button>
-                              )}
                             </div>
-                          )}
-                          {(fieldForm.formulaFirstFieldId || fieldForm.formulaFirstValue) && (
-                            <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg bg-white border border-amber-200 px-3 py-2 dark:bg-gray-700 dark:border-amber-700">
-                              <span className="text-xs text-amber-600 font-medium dark:text-amber-400">Preview: </span>
-                              <span className="text-sm font-mono text-gray-700 dark:text-gray-200">
-                                {previewFormulaText(fieldForm.formulaFirstKind, fieldForm.formulaFirstFieldId, fieldForm.formulaFirstValue, fieldForm.formulaPairs, numericFields, fieldForm.formulaGroupStart, fieldForm.formulaGroupEnd)}
-                              </span>
-                              <button
-                                onClick={openTestFormula}
-                                className="ml-auto flex items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50">
-                                <PlayCircle className="h-3.5 w-3.5" /> Test Formula
-                              </button>
-                            </div>
-                          )}
-                        </>
+                          </div>
+                        </div>
                       )}
+
+                      {/* Common Lab Examples Footer */}
+                      <div className="mt-3.5 flex flex-wrap items-center gap-1.5 text-[11px] text-amber-900/70 dark:text-amber-300/70">
+                        <span className="font-semibold text-amber-950 dark:text-amber-200">Examples:</span>
+                        <span className="rounded bg-amber-100/70 px-1.5 py-0.5 dark:bg-amber-900/40">Globulin = Total Protein − Albumin</span>
+                        <span className="rounded bg-amber-100/70 px-1.5 py-0.5 dark:bg-amber-900/40">A/G Ratio = Albumin ÷ Globulin</span>
+                        <span className="rounded bg-amber-100/70 px-1.5 py-0.5 dark:bg-amber-900/40">VLDL = Triglycerides ÷ 5</span>
+                      </div>
                     </div>
                   )}
 
@@ -1193,6 +1694,227 @@ export default function TemplateFormPage() {
               <p className="mt-0.5 text-2xl font-bold text-emerald-700 dark:text-emerald-300">{testResult}{fieldForm.unit ? ` ${fieldForm.unit}` : ''}</p>
             </div>
           )}
+        </div>
+      </Modal>
+
+      {/* Validation Rule Editor Modal */}
+      <Modal
+        open={ruleModalOpen}
+        onClose={() => setRuleModalOpen(false)}
+        title={editingRuleIndex !== null ? 'Edit Validation Condition' : 'Add Validation Condition'}
+        subtitle="Enforce equations and logical comparisons before lab results can be sent for approval"
+        size="md"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setRuleModalOpen(false)}>Cancel</Button>
+            <Button icon={<CheckCircle2 className="h-4 w-4" />} onClick={saveRule}>
+              {editingRuleIndex !== null ? 'Update Rule' : 'Save Rule'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          {/* Rule Type Selector */}
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1.5">
+              Condition Type
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setRuleKind('sum')}
+                className={`flex items-center justify-center gap-2 rounded-xl border p-2.5 text-xs font-semibold transition-all ${
+                  ruleKind === 'sum'
+                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:border-indigo-500 dark:bg-indigo-950/40 dark:text-indigo-300'
+                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                }`}
+              >
+                <Sigma className="h-4 w-4" />
+                Sum of Multiple Fields
+              </button>
+              <button
+                type="button"
+                onClick={() => setRuleKind('compare')}
+                className={`flex items-center justify-center gap-2 rounded-xl border p-2.5 text-xs font-semibold transition-all ${
+                  ruleKind === 'compare'
+                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:border-indigo-500 dark:bg-indigo-950/40 dark:text-indigo-300'
+                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                }`}
+              >
+                <Sliders className="h-4 w-4" />
+                Field Comparison
+              </button>
+            </div>
+          </div>
+
+          {/* Left Hand Side */}
+          {ruleKind === 'sum' ? (
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1.5">
+                Select Fields to Sum (Left Side)
+              </label>
+              <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-2 dark:border-gray-700 dark:bg-gray-800/40">
+                {(template?.fields ?? [])
+                  .filter(f => !f.isSectionHeader && !f.isMainHeader && (f.fieldType === 'number' || f.fieldType === 'calculated'))
+                  .map(f => {
+                    const on = sumFieldIds.includes(f.id)
+                    return (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => setSumFieldIds(prev => on ? prev.filter(id => id !== f.id) : [...prev, f.id])}
+                        className={`rounded-lg border px-2 py-1 text-xs font-semibold transition-colors ${
+                          on
+                            ? 'border-indigo-500 bg-indigo-500 text-white'
+                            : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                        }`}
+                      >
+                        {f.fieldName}
+                      </button>
+                    )
+                  })}
+              </div>
+              {sumFieldIds.length === 0 && (
+                <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">Click to select at least 2 fields to sum.</p>
+              )}
+            </div>
+          ) : (
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1.5">
+                Primary Field (Left Side)
+              </label>
+              <Select
+                value={compareLeftFieldId}
+                onChange={e => setCompareLeftFieldId(e.target.value)}
+              >
+                <option value="">Select a field...</option>
+                {(template?.fields ?? [])
+                  .filter(f => !f.isSectionHeader && !f.isMainHeader && (f.fieldType === 'number' || f.fieldType === 'calculated'))
+                  .map(f => (
+                    <option key={f.id} value={f.id}>
+                      {f.fieldName} ({f.fieldType})
+                    </option>
+                  ))}
+              </Select>
+            </div>
+          )}
+
+          {/* Comparison Operator & Right side kind */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1.5">
+                Comparison Operator
+              </label>
+              <Select
+                value={ruleOp}
+                onChange={e => setRuleOp(e.target.value as ComparisonOperator)}
+              >
+                <option value="==">== Equal to</option>
+                <option value="<=">&le; Less than or equal to (&lt;=)</option>
+                <option value=">=">&ge; Greater than or equal to (&gt;=)</option>
+                <option value="<">&lt; Less than (&lt;)</option>
+                <option value=">">&gt; Greater than (&gt;)</option>
+                <option value="!=">!= Not equal to (!=)</option>
+              </Select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1.5">
+                Compare Against (Right Side)
+              </label>
+              <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs font-semibold dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={() => setRightKind('constant')}
+                  className={`flex-1 py-2 text-center transition-colors ${
+                    rightKind === 'constant'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-white text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300'
+                  }`}
+                >
+                  Fixed Number
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRightKind('field')}
+                  className={`flex-1 py-2 text-center transition-colors ${
+                    rightKind === 'field'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-white text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300'
+                  }`}
+                >
+                  Another Field
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Hand Target */}
+          {rightKind === 'constant' ? (
+            <Input
+              label="Target Number / Value"
+              type="number"
+              value={rightValue}
+              onChange={e => setRightValue(e.target.value)}
+              placeholder="e.g. 100"
+            />
+          ) : (
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1.5">
+                Target Field
+              </label>
+              <Select
+                value={rightFieldId}
+                onChange={e => setRightFieldId(e.target.value)}
+              >
+                <option value="">Select target field...</option>
+                {(template?.fields ?? [])
+                  .filter(f => !f.isSectionHeader && !f.isMainHeader && (f.fieldType === 'number' || f.fieldType === 'calculated'))
+                  .map(f => (
+                    <option key={f.id} value={f.id}>
+                      {f.fieldName} ({f.fieldType})
+                    </option>
+                  ))}
+              </Select>
+            </div>
+          )}
+
+          {/* Custom Error Message */}
+          <div>
+            <Input
+              label="Custom Error Message (optional)"
+              value={ruleMessage}
+              onChange={e => setRuleMessage(e.target.value)}
+              placeholder="e.g. Differential leukocyte count must total 100%"
+            />
+            <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+              If left blank, a clear automatic error message is displayed when this condition fails.
+            </p>
+          </div>
+
+          {/* Live Condition Preview */}
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50/70 p-3 dark:border-indigo-900 dark:bg-indigo-950/30">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
+              Condition Preview
+            </span>
+            <p className="mt-0.5 font-mono text-xs font-semibold text-indigo-950 dark:text-indigo-200">
+              {ruleKind === 'sum' ? (
+                <>
+                  {sumFieldIds.length > 0
+                    ? (template?.fields ?? []).filter(f => sumFieldIds.includes(f.id)).map(f => f.fieldName).join(' + ')
+                    : '(Select fields to sum)'}
+                  {' '}{ruleOp}{' '}
+                  {rightKind === 'constant' ? (rightValue || '0') : ((template?.fields ?? []).find(f => f.id === Number(rightFieldId))?.fieldName || '(Select target field)')}
+                </>
+              ) : (
+                <>
+                  {(template?.fields ?? []).find(f => f.id === Number(compareLeftFieldId))?.fieldName || '(Select primary field)'}
+                  {' '}{ruleOp}{' '}
+                  {rightKind === 'constant' ? (rightValue || '0') : ((template?.fields ?? []).find(f => f.id === Number(rightFieldId))?.fieldName || '(Select target field)')}
+                </>
+              )}
+            </p>
+          </div>
         </div>
       </Modal>
     </div>

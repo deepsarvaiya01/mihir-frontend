@@ -23,7 +23,8 @@ import { Header } from '../components/layout/Header'
 import { PageContent } from '../components/ui/PageContent'
 import { PageLoader } from '../components/ui/Spinner'
 import { Input, Select } from '../components/ui/Input'
-import { evalFormula } from '../utils/formula'
+import { evalFormula, evalCalculatedFields } from '../utils/formula'
+import { checkValidationRules } from '../utils/validationRules'
 import type { TestTemplateField, Order, OrderFormData } from '../types'
 
 function formatBytes(bytes: number): string {
@@ -55,14 +56,16 @@ function FormCard({ title, icon, children, action }: { title: string; icon: Reac
 function ResultField({
   field,
   values,
+  calculatedValues,
   onChange,
 }: {
   field: TestTemplateField
   values: Record<number, string | boolean>
+  calculatedValues?: Record<number, number>
   onChange: (id: number, val: string | boolean) => void
 }) {
   if (field.fieldType === 'calculated') {
-    const computed = evalFormula(field.optionsJson, values)
+    const computed = calculatedValues?.[field.id] ?? evalFormula(field.optionsJson, values)
     return (
       <div className="relative">
         <Calculator className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-amber-500" />
@@ -120,6 +123,8 @@ function FieldsGrid({
   gender: string | null | undefined
   onChange: (fieldId: number, val: string | boolean) => void
 }) {
+  const calculatedValues = evalCalculatedFields(fields, values)
+
   if (fields.length === 0) {
     return <p className="text-center text-sm text-gray-400">No fields defined for this test template.</p>
   }
@@ -157,7 +162,7 @@ function FieldsGrid({
               })()}
               {field.required && <span className="ml-1 text-red-500">*</span>}
             </label>
-            <ResultField field={field} values={values} onChange={onChange} />
+            <ResultField field={field} values={values} calculatedValues={calculatedValues} onChange={onChange} />
           </div>
         )
       })}
@@ -390,6 +395,7 @@ export default function EnterResultsPage() {
       : nonSectionFields
 
     const attachment = attachments[oid]
+    const calculatedValues = evalCalculatedFields(sectionFields, sectionValues)
 
     return {
       values: fieldsToSend.map(field => ({
@@ -399,7 +405,7 @@ export default function EnterResultsPage() {
         numberValue: field.fieldType === 'number' && sectionValues[field.id] !== undefined
           ? Number(sectionValues[field.id])
           : field.fieldType === 'calculated'
-            ? evalFormula(field.optionsJson, sectionValues)
+            ? (calculatedValues[field.id] ?? 0)
             : undefined,
         booleanValue: field.fieldType === 'checkbox' ? Boolean(sectionValues[field.id]) : undefined,
         dateValue: field.fieldType === 'date' ? String(sectionValues[field.id] ?? '') : undefined,
@@ -456,6 +462,23 @@ export default function EnterResultsPage() {
   })
 
   const handleSubmit = () => {
+    for (const s of sections) {
+      const sectionValues = values[s.orderId] ?? {}
+      const calculated = evalCalculatedFields(s.data.fields, sectionValues)
+      const merged: Record<number, string | boolean | number> = { ...sectionValues }
+      for (const [id, n] of Object.entries(calculated)) merged[Number(id)] = n
+      const ruleError = checkValidationRules(
+        s.data.order.template?.validationRules,
+        s.data.fields,
+        merged,
+      )
+      if (ruleError) {
+        const testName = s.data.order.template?.name
+        toast.error(testName ? `${testName}: ${ruleError}` : ruleError)
+        return
+      }
+    }
+
     if (isBatch) {
       submitBatchMut.mutate()
       return

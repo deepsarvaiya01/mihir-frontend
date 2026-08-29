@@ -1,5 +1,5 @@
 import { api } from '../lib/api'
-import type { TestTemplate, SummaryFormat } from '../types'
+import type { TestTemplate, SummaryFormat, TemplateValidationRule } from '../types'
 
 export const templateService = {
   getAll: async (): Promise<TestTemplate[]> => {
@@ -23,6 +23,7 @@ export const templateService = {
     summaryFormat?: SummaryFormat
     categoryId?: number | null
     b2bPrices?: Array<{ b2bLabId: number; amount: number }>
+    validationRules?: TemplateValidationRule[] | null
   }): Promise<TestTemplate> => {
     const { data } = await api.post('/tests/templates', payload)
     return data
@@ -38,6 +39,7 @@ export const templateService = {
     summaryFormat?: SummaryFormat
     categoryId?: number | null
     b2bPrices?: Array<{ b2bLabId: number; amount: number }>
+    validationRules?: TemplateValidationRule[] | null
   }): Promise<TestTemplate> => {
     const { data } = await api.patch(`/tests/templates/${id}`, payload)
     return data
