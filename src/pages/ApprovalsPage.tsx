@@ -29,6 +29,14 @@ function isOutOfRange(result: HistoryResult): boolean {
   return isValueOutOfRange(result.value, result.referenceRange)
 }
 
+function formatDateTime(iso?: string | null) {
+  if (!iso) return { date: '—', time: '' }
+  const d = new Date(iso)
+  const date = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+  const time = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+  return { date, time }
+}
+
 function InfoPill({ label, value }: { label: string; value?: string | number | null }) {
   if (!value && value !== 0) return null
   return (
@@ -658,58 +666,63 @@ export default function ApprovalsPage() {
                           <th className="w-10 px-4 py-3.5">
                             <Checkbox checked={allSelected} indeterminate={someSelected} onChange={toggleAll} />
                           </th>
-                          <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Order</th>
+                          <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Date & Time</th>
+                          <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Patient Code</th>
                           <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Patient</th>
                           <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Test</th>
-                          <th className="px-4 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Date</th>
                           <th className="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-400">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
-                        {pending.map(order => (
-                          <tr
-                            key={order.id}
-                            onClick={() => toggleOne(order.id)}
-                            className={`cursor-pointer transition-colors
-                              ${selected.has(order.id)
-                                ? 'bg-blue-50/60 dark:bg-blue-900/20'
-                                : 'hover:bg-gray-50/60 dark:hover:bg-gray-700/40'}`}
-                          >
-                            <td className="px-4 py-3.5" onClick={e => e.stopPropagation()}>
-                              <Checkbox checked={selected.has(order.id)} onChange={() => toggleOne(order.id)} />
-                            </td>
-                            <td className="whitespace-nowrap px-4 py-3.5 font-bold text-amber-600 dark:text-amber-400">
-                              {order.receiptNumber ?? order.template?.name ?? '—'}
-                            </td>
-                            <td className="px-4 py-3.5">
-                              <p className="font-medium text-gray-900 dark:text-white">{order.patient?.fullName ?? '—'}</p>
-                              <p className="text-xs text-gray-400">{order.patient?.patientCode ?? ''}</p>
-                            </td>
-                            <td className="whitespace-nowrap px-4 py-3.5 text-gray-600 dark:text-gray-300">{order.template?.name ?? '—'}</td>
-                            <td className="whitespace-nowrap px-4 py-3.5 text-xs text-gray-400">
-                              {order.createdAt
-                                ? new Date(order.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-                                : '—'}
-                            </td>
-                            <td className="px-4 py-3.5 text-right" onClick={e => e.stopPropagation()}>
-                              <div className="flex flex-wrap justify-end gap-1.5">
-                                <Button size="sm" variant="secondary" icon={<FileText className="h-3 w-3" />}
-                                  loading={loadResults.isPending && loadResults.variables === order.id}
-                                  onClick={() => loadResults.mutate(order.id)}>
-                                  Review
-                                </Button>
-                                <Button size="sm" variant="success" icon={<CheckCircle2 className="h-3 w-3" />}
-                                  onClick={() => setConfirmAction({ type: 'approve', order })}>
-                                  Approve
-                                </Button>
-                                <Button size="sm" variant="danger" icon={<XCircle className="h-3 w-3" />}
-                                  onClick={() => setConfirmAction({ type: 'reject', order })}>
-                                  Reject
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
+                        {pending.map(order => {
+                          const dt = formatDateTime(order.createdAt)
+                          return (
+                            <tr
+                              key={order.id}
+                              onClick={() => toggleOne(order.id)}
+                              className={`cursor-pointer transition-colors
+                                ${selected.has(order.id)
+                                  ? 'bg-blue-50/60 dark:bg-blue-900/20'
+                                  : 'hover:bg-gray-50/60 dark:hover:bg-gray-700/40'}`}
+                            >
+                              <td className="px-4 py-3.5" onClick={e => e.stopPropagation()}>
+                                <Checkbox checked={selected.has(order.id)} onChange={() => toggleOne(order.id)} />
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3.5">
+                                <div className="flex flex-col">
+                                  <span className="font-semibold text-gray-800 dark:text-gray-200 text-xs">{dt.date}</span>
+                                  <span className="text-[11px] text-gray-400 dark:text-gray-500 font-medium">{dt.time}</span>
+                                </div>
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3.5">
+                                <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 font-mono text-xs font-semibold text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                                  {order.patient?.patientCode || '—'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3.5">
+                                <p className="font-medium text-gray-900 dark:text-white">{order.patient?.fullName ?? '—'}</p>
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-3.5 text-gray-600 dark:text-gray-300">{order.template?.name ?? '—'}</td>
+                              <td className="px-4 py-3.5 text-right" onClick={e => e.stopPropagation()}>
+                                <div className="flex flex-wrap justify-end gap-1.5">
+                                  <Button size="sm" variant="secondary" icon={<FileText className="h-3 w-3" />}
+                                    loading={loadResults.isPending && loadResults.variables === order.id}
+                                    onClick={() => loadResults.mutate(order.id)}>
+                                    Review
+                                  </Button>
+                                  <Button size="sm" variant="success" icon={<CheckCircle2 className="h-3 w-3" />}
+                                    onClick={() => setConfirmAction({ type: 'approve', order })}>
+                                    Approve
+                                  </Button>
+                                  <Button size="sm" variant="danger" icon={<XCircle className="h-3 w-3" />}
+                                    onClick={() => setConfirmAction({ type: 'reject', order })}>
+                                    Reject
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -749,7 +762,8 @@ export default function ApprovalsPage() {
                     <table className="min-w-[750px] w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-100 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/50">
-                          <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Order</th>
+                          <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Date & Time</th>
+                          <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Patient Code</th>
                           <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Patient</th>
                           <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Test</th>
                           <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Status</th>
@@ -757,16 +771,27 @@ export default function ApprovalsPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
-                        {reviewed.map(order => (
-                          <tr key={order.id} className="transition-colors hover:bg-gray-50/50 dark:hover:bg-gray-700/40">
-                            <td className="whitespace-nowrap px-5 py-4 font-bold text-gray-700 dark:text-gray-300">{order.receiptNumber ?? order.template?.name ?? '—'}</td>
-                            <td className="px-5 py-4">
-                              <p className="font-medium text-gray-800 dark:text-gray-200">{order.patient?.fullName ?? '—'}</p>
-                              <p className="text-xs text-gray-400">{order.patient?.patientCode ?? ''}</p>
-                            </td>
-                            <td className="whitespace-nowrap px-5 py-4 text-gray-600 dark:text-gray-300">{order.template?.name ?? '—'}</td>
-                            <td className="px-5 py-4"><OrderStatusBadge status={order.status} /></td>
-                            <td className="px-5 py-4 text-right">
+                        {reviewed.map(order => {
+                          const dt = formatDateTime(order.createdAt)
+                          return (
+                            <tr key={order.id} className="transition-colors hover:bg-gray-50/50 dark:hover:bg-gray-700/40">
+                              <td className="whitespace-nowrap px-5 py-4">
+                                <div className="flex flex-col">
+                                  <span className="font-semibold text-gray-800 dark:text-gray-200 text-xs">{dt.date}</span>
+                                  <span className="text-[11px] text-gray-400 dark:text-gray-500 font-medium">{dt.time}</span>
+                                </div>
+                              </td>
+                              <td className="whitespace-nowrap px-5 py-4">
+                                <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 font-mono text-xs font-semibold text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                                  {order.patient?.patientCode || '—'}
+                                </span>
+                              </td>
+                              <td className="px-5 py-4">
+                                <p className="font-medium text-gray-800 dark:text-gray-200">{order.patient?.fullName ?? '—'}</p>
+                              </td>
+                              <td className="whitespace-nowrap px-5 py-4 text-gray-600 dark:text-gray-300">{order.template?.name ?? '—'}</td>
+                              <td className="px-5 py-4"><OrderStatusBadge status={order.status} /></td>
+                              <td className="px-5 py-4 text-right">
                               <div className="flex flex-wrap justify-end gap-2">
                                 {order.status === 'APPROVED' && (
                                   <>
@@ -790,7 +815,8 @@ export default function ApprovalsPage() {
                               </div>
                             </td>
                           </tr>
-                        ))}
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>

@@ -44,6 +44,14 @@ function GroupStatusSummary({ orders }: { orders: Order[] }) {
   )
 }
 
+function formatDateTime(iso?: string | null) {
+  if (!iso) return { date: '—', time: '' }
+  const d = new Date(iso)
+  const date = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+  const time = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+  return { date, time }
+}
+
 type StatusFilter = 'ALL' | 'PENDING' | 'IN_PROGRESS' | 'AWAITING_APPROVAL' | 'REJECTED'
 
 interface BatchForm {
@@ -79,6 +87,7 @@ export default function OrdersPage() {
   const [dateTo, setDateTo]     = useState('')
   const [templateFilter, setTemplateFilter] = useState('')
   const [selectedResults, setSelectedResults] = useState<OrderResult | null>(null)
+  const [testsModalOrders, setTestsModalOrders] = useState<Order[] | null>(null)
 
   // Create modal state
   const [batchForm, setBatchForm] = useState<BatchForm>(EMPTY_BATCH)
@@ -372,12 +381,11 @@ export default function OrdersPage() {
             <table className="min-w-[720px] w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/50">
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Order</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Date & Time</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Patient Code</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Patient</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">B2B</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Test</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Status</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Date</th>
                   <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Actions</th>
                 </tr>
               </thead>
@@ -386,32 +394,39 @@ export default function OrdersPage() {
                   if (row.kind === 'group') {
                     const group = row.orders
                     const primary = group[0]
-                    const testNames = group.map(o => o.template?.name).filter(Boolean).join(', ')
+                    const testNames = group.map(o => o.template?.name || o.template?.code).filter(Boolean).join(', ')
                     const editableOrder = group.find(o => o.status === 'PENDING' || o.status === 'IN_PROGRESS')
                     const readyToSubmit = canSubmitBatch(row.receipt)
                     const allAwaiting = group.every(o => o.status === 'AWAITING_APPROVAL')
                     const firstRejected = group.find(o => o.status === 'REJECTED')
                     const allPending = group.every(o => o.status === 'PENDING')
+                    const dt = formatDateTime(primary.createdAt)
 
                     return (
                       <tr key={`grp-${row.receipt}`} className="hover:bg-gray-50/50 transition-colors dark:hover:bg-gray-700/30">
-                        <td className="px-5 py-4">
-                          <span className="font-bold text-gray-700 dark:text-gray-200">{row.receipt}</span>
+                        <td className="px-5 py-4 whitespace-nowrap">
+                          <div className="flex flex-col">
+                            <span className="font-semibold text-gray-800 dark:text-gray-200 text-xs">{dt.date}</span>
+                            <span className="text-[11px] text-gray-400 dark:text-gray-500 font-medium">{dt.time}</span>
+                          </div>
+                        </td>
+                        <td className="px-5 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 font-mono text-xs font-semibold text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                            {primary.patient?.patientCode || '—'}
+                          </span>
                         </td>
                         <td className="px-5 py-4">
                           <p className="font-medium text-gray-800 dark:text-gray-200">{primary.patient?.fullName ?? '—'}</p>
-                          <p className="text-xs text-gray-400 dark:text-gray-500">{primary.patient?.patientCode ?? ''}</p>
                         </td>
                         <td className="px-5 py-4"><B2bCell patient={primary.patient} /></td>
-                        <td className="px-5 py-4 text-gray-600 max-w-[200px] truncate dark:text-gray-300" title={testNames || undefined}>
-                          {testNames || '—'} <span className="text-xs text-gray-400">({group.length})</span>
-                        </td>
                         <td className="px-5 py-4"><GroupStatusSummary orders={group} /></td>
-                        <td className="px-5 py-4 text-xs text-gray-400 dark:text-gray-500">
-                          {primary.createdAt ? new Date(primary.createdAt).toLocaleDateString() : '—'}
-                        </td>
                         <td className="px-5 py-4">
                           <div className="flex flex-wrap justify-end gap-2">
+                            <Button size="sm" variant="ghost" icon={<FlaskConical className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />}
+                              title={testNames ? `Tests on this order:\n${group.map((o, idx) => `${idx + 1}. ${o.template?.name || o.template?.code}`).join('\n')}` : 'View tests'}
+                              onClick={() => setTestsModalOrders(group)}>
+                              Tests ({group.length})
+                            </Button>
                             {row.receipt && (
                               <Button size="sm" variant="ghost" icon={<Barcode className="h-3.5 w-3.5" />}
                                 onClick={() => printTubeLabels(group)}>
@@ -459,23 +474,32 @@ export default function OrdersPage() {
                   }
 
                   const order = row.order
+                  const dt = formatDateTime(order.createdAt)
                   return (
                     <tr key={order.id} className="hover:bg-gray-50/50 transition-colors dark:hover:bg-gray-700/30">
-                      <td className="px-5 py-4">
-                        <span className="font-bold text-gray-700 dark:text-gray-200">{order.receiptNumber ?? order.template?.name ?? '—'}</span>
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-gray-800 dark:text-gray-200 text-xs">{dt.date}</span>
+                          <span className="text-[11px] text-gray-400 dark:text-gray-500 font-medium">{dt.time}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 font-mono text-xs font-semibold text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                          {order.patient?.patientCode || '—'}
+                        </span>
                       </td>
                       <td className="px-5 py-4">
                         <p className="font-medium text-gray-800 dark:text-gray-200">{order.patient?.fullName ?? '—'}</p>
-                        <p className="text-xs text-gray-400 dark:text-gray-500">{order.patient?.patientCode ?? ''}</p>
                       </td>
                       <td className="px-5 py-4"><B2bCell patient={order.patient} /></td>
-                      <td className="px-5 py-4 text-gray-600 max-w-[180px] truncate dark:text-gray-300">{order.template?.name ?? '—'}</td>
                       <td className="px-5 py-4"><OrderStatusBadge status={order.status} /></td>
-                      <td className="px-5 py-4 text-xs text-gray-400 dark:text-gray-500">
-                        {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : '—'}
-                      </td>
                       <td className="px-5 py-4">
                         <div className="flex justify-end gap-2">
+                          <Button size="sm" variant="ghost" icon={<FlaskConical className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />}
+                            title={order.template?.name ? `Test: ${order.template.name}${order.template.code ? ` (${order.template.code})` : ''}` : 'View test'}
+                            onClick={() => setTestsModalOrders([order])}>
+                            Test
+                          </Button>
                           {order.receiptNumber && (
                             <Button size="sm" variant="ghost" icon={<Barcode className="h-3.5 w-3.5" />}
                               onClick={() => printTubeLabels([order])}>
@@ -901,6 +925,62 @@ export default function OrdersPage() {
         message={`Archive all ${deleteGroupOrders?.length ?? 0} tests on this receipt? They will be moved to the archive and can be restored later.`}
         confirmLabel="Archive All" variant="danger" loading={removeGroupMutation.isPending}
       />
+
+      {/* Tests list modal */}
+      {testsModalOrders && (
+        <Modal
+          open={!!testsModalOrders}
+          onClose={() => setTestsModalOrders(null)}
+          title="Order Tests"
+          subtitle={`${testsModalOrders[0]?.patient?.fullName ?? 'Patient'} ${testsModalOrders[0]?.patient?.patientCode ? `(${testsModalOrders[0].patient.patientCode})` : ''}`}
+          size="md"
+          footer={
+            <Button variant="secondary" onClick={() => setTestsModalOrders(null)}>
+              Close
+            </Button>
+          }
+        >
+          <div className="space-y-4">
+            <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50/80 px-3.5 py-2.5 dark:border-gray-700 dark:bg-gray-800/60">
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                <span>Date: </span>
+                <span className="font-semibold text-gray-700 dark:text-gray-200">
+                  {formatDateTime(testsModalOrders[0]?.createdAt).date} {formatDateTime(testsModalOrders[0]?.createdAt).time}
+                </span>
+              </div>
+              <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                {testsModalOrders.length} {testsModalOrders.length === 1 ? 'Test' : 'Tests'}
+              </span>
+            </div>
+
+            <div className="divide-y divide-gray-100 rounded-xl border border-gray-200 overflow-hidden dark:divide-gray-700 dark:border-gray-700">
+              {testsModalOrders.map((o, idx) => (
+                <div key={o.id || idx} className="flex items-center justify-between gap-3 bg-white p-3.5 dark:bg-gray-800">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs font-bold text-blue-600 dark:bg-blue-900/40 dark:text-blue-400">
+                      {idx + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm text-gray-800 dark:text-gray-100 truncate">
+                        {o.template?.name ?? 'Test'}
+                      </p>
+                      {o.template?.code && (
+                        <p className="font-mono text-xs text-gray-400 dark:text-gray-500">
+                          {o.template.code}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="shrink-0">
+                    <OrderStatusBadge status={o.status} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

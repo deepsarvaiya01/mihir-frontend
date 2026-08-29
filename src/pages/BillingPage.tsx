@@ -4,7 +4,7 @@ import {
   Search, Receipt, ChevronDown, DollarSign,
   CheckCircle, Clock, FileText, Pencil,
   RefreshCw, Download, Share2, Loader2, Eye, Paperclip, X, Printer,
-  Banknote, Landmark, Smartphone, CircleDot, Barcode,
+  Banknote, Landmark, Smartphone, CircleDot, Barcode, FlaskConical,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Card } from '../components/ui/Card'
@@ -252,6 +252,14 @@ function PaymentModal({ orders, onClose, onSave, saving }: PaymentModalProps) {
   )
 }
 
+function formatDateTime(iso?: string | null) {
+  if (!iso) return { date: '—', time: '' }
+  const d = new Date(iso)
+  const date = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+  const time = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+  return { date, time }
+}
+
 /* ─── Main page ──────────────────────────────────────────── */
 export default function BillingPage() {
   const qc = useQueryClient()
@@ -260,6 +268,7 @@ export default function BillingPage() {
   const [dateFrom, setDateFrom] = useState(TODAY)
   const [dateTo, setDateTo] = useState('')
   const [editGroup, setEditGroup] = useState<Order[] | null>(null)
+  const [testsModalGroup, setTestsModalGroup] = useState<Order[] | null>(null)
 
   const { data: orders = [], isLoading, refetch } = useQuery({
     queryKey: ['orders'],
@@ -579,10 +588,10 @@ export default function BillingPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/50">
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Order</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Date & Time</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Patient Code</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Patient</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">B2B</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Test</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Amount</th>
                   <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Payment</th>
                   <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Actions</th>
@@ -594,34 +603,38 @@ export default function BillingPage() {
                   const totalAmount = group.reduce((s, o) => s + Number(o.amount ?? 0), 0)
                   const totalNet = group.reduce((s, o) => s + Number(o.netAmount ?? 0), 0)
                   const savings = totalAmount - totalNet
-                  const testNames = group.map(o => o.template?.name).filter(Boolean).join(', ')
+                  const testNames = group.map(o => o.template?.name || o.template?.code).filter(Boolean).join(', ')
                   const anyApproved = group.some(o => o.status === 'APPROVED')
                   const attachmentUrls = group.map(o => o.attachmentUrl).filter((u): u is string => !!u)
+                  const dt = formatDateTime(primary.createdAt)
 
                   return (
                     <tr key={primary.receiptNumber ?? primary.id} className="group hover:bg-gray-50/60 transition-colors dark:hover:bg-gray-700/30">
-                      <td className="px-5 py-4">
-                        <span className="font-bold text-gray-700 dark:text-gray-300">{primary.receiptNumber ?? primary.template?.name ?? '—'}</span>
-                        <p className="text-[11px] text-gray-400 dark:text-gray-500">{primary.createdAt ? new Date(primary.createdAt).toLocaleDateString() : ''}</p>
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-gray-800 dark:text-gray-200 text-xs">{dt.date}</span>
+                          <span className="text-[11px] text-gray-400 dark:text-gray-500 font-medium">{dt.time}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 whitespace-nowrap">
+                        <span className="inline-flex items-center rounded-md bg-gray-100 px-2 py-0.5 font-mono text-xs font-semibold text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                          {primary.patient?.patientCode || '—'}
+                        </span>
                       </td>
                       <td className="px-5 py-4">
                         <p className="font-semibold text-gray-800 dark:text-white">{primary.patient?.fullName ?? '—'}</p>
-                        <p className="text-xs text-gray-400 dark:text-gray-500">{primary.patient?.patientCode ?? ''}</p>
                       </td>
                       <td className="px-5 py-4">
                         {primary.patient?.isB2b
-                          ? <span className="text-sm text-violet-700 dark:text-violet-400">{primary.patient.b2bLab?.name ?? 'B2B'}</span>
+                          ? <span className="text-sm font-medium text-violet-700 dark:text-violet-400">{primary.patient.b2bLab?.name ?? 'B2B'}</span>
                           : <span className="text-xs text-gray-300 dark:text-gray-600">—</span>}
                       </td>
-                      <td className="px-5 py-4 text-gray-600 dark:text-gray-300 max-w-[200px] truncate" title={testNames || undefined}>
-                        {testNames || '—'}
-                      </td>
-                      <td className="px-5 py-4">
+                      <td className="px-5 py-4 whitespace-nowrap">
                         <span className="font-bold text-gray-900 dark:text-white">₹{totalNet.toLocaleString()}</span>
                         {savings > 0 && (
                           <>
                             <span className="ml-1.5 text-xs text-gray-400 line-through dark:text-gray-500">₹{totalAmount.toLocaleString()}</span>
-                            <span className="ml-1 text-xs text-emerald-600">−₹{savings.toLocaleString()}</span>
+                            <span className="ml-1 text-xs font-semibold text-emerald-600">−₹{savings.toLocaleString()}</span>
                           </>
                         )}
                       </td>
@@ -637,6 +650,15 @@ export default function BillingPage() {
                       </td>
                       <td className="px-5 py-4">
                         <div className="flex items-center justify-end gap-0.5">
+                          {/* View tests list — modal on click, tooltip on hover */}
+                          <IBtn
+                            title={testNames ? `Tests (${group.length}):\n${group.map((o, idx) => `${idx + 1}. ${o.template?.name || o.template?.code}`).join('\n')}` : 'View Tests'}
+                            onClick={() => setTestsModalGroup(group)}
+                            color="text-blue-500 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/30"
+                          >
+                            <FlaskConical className="h-4 w-4" />
+                          </IBtn>
+
                           {/* Edit payment */}
                           <IBtn
                             title="Edit Payment"
@@ -763,6 +785,76 @@ export default function BillingPage() {
           saving={updatePayment.isPending}
           onSave={(updates) => updatePayment.mutate(updates)}
         />
+      )}
+
+      {/* Tests list modal */}
+      {testsModalGroup && (
+        <Modal
+          open={!!testsModalGroup}
+          onClose={() => setTestsModalGroup(null)}
+          title="Order Tests"
+          subtitle={`${testsModalGroup[0]?.patient?.fullName ?? 'Patient'} ${testsModalGroup[0]?.patient?.patientCode ? `(${testsModalGroup[0].patient.patientCode})` : ''}`}
+          size="md"
+          footer={
+            <Button variant="secondary" onClick={() => setTestsModalGroup(null)}>
+              Close
+            </Button>
+          }
+        >
+          <div className="space-y-4">
+            <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50/80 px-3.5 py-2.5 dark:border-gray-700 dark:bg-gray-800/60">
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                <span>Date: </span>
+                <span className="font-semibold text-gray-700 dark:text-gray-200">
+                  {formatDateTime(testsModalGroup[0]?.createdAt).date} {formatDateTime(testsModalGroup[0]?.createdAt).time}
+                </span>
+              </div>
+              <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-bold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                {testsModalGroup.length} {testsModalGroup.length === 1 ? 'Test' : 'Tests'}
+              </span>
+            </div>
+
+            <div className="divide-y divide-gray-100 rounded-xl border border-gray-200 overflow-hidden dark:divide-gray-700 dark:border-gray-700">
+              {testsModalGroup.map((o, idx) => (
+                <div key={o.id || idx} className="flex items-center justify-between gap-3 bg-white p-3.5 dark:bg-gray-800">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs font-bold text-blue-600 dark:bg-blue-900/40 dark:text-blue-400">
+                      {idx + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-sm text-gray-800 dark:text-gray-100 truncate">
+                        {o.template?.name ?? 'Test'}
+                      </p>
+                      {o.template?.code && (
+                        <p className="font-mono text-xs text-gray-400 dark:text-gray-500">
+                          {o.template.code}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <p className="font-bold text-sm text-gray-900 dark:text-gray-100">
+                      ₹{Number(o.netAmount ?? o.amount ?? 0).toLocaleString()}
+                    </p>
+                    {Number(o.amount) > Number(o.netAmount) && (
+                      <p className="text-xs text-gray-400 line-through">
+                        ₹{Number(o.amount).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between border-t border-gray-100 pt-3 dark:border-gray-700">
+              <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Total Bill</span>
+              <span className="text-base font-bold text-gray-900 dark:text-white">
+                ₹{testsModalGroup.reduce((s, o) => s + Number(o.netAmount ?? o.amount ?? 0), 0).toLocaleString()}
+              </span>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   )
