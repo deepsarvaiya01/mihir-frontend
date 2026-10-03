@@ -1206,19 +1206,27 @@ async function buildCombinedReportBytes(
   optionsList: GenerateReportOptions[],
   type: 'letterhead' | 'plain',
 ): Promise<Uint8Array> {
-  // Every test in a combined report belongs to the same receipt — resolve one
-  // shared receipt number up front so every section shows the identical value,
-  // even if an individual order's own record is missing it.
+  // Usually every test belongs to one receipt; a section missing its own receipt
+  // number borrows the shared one. A patient-wide report spans several receipts,
+  // so each section keeps its own number when it has one.
   const sharedReceiptNumber = optionsList.find(o => o.order.receiptNumber)?.order.receiptNumber ?? null
+  // Visits stay grouped in the order given (first appearance of each receipt)
+  const visitIndex = new Map<string, number>()
+  for (const opt of optionsList) {
+    const key = opt.order.receiptNumber ?? ''
+    if (!visitIndex.has(key)) visitIndex.set(key, visitIndex.size)
+  }
   const normalizedList = optionsList
     .map(opt => ({
       ...opt,
-      order: { ...opt.order, receiptNumber: sharedReceiptNumber },
+      order: { ...opt.order, receiptNumber: opt.order.receiptNumber ?? sharedReceiptNumber },
     }))
-    // Tests print in test-category order (e.g. Biochemistry before Hematology),
-    // not in whatever order they happened to be approved — tests with no
-    // category, or the same category, keep their original relative order.
-    .sort((a, b) => (a.order.template?.category?.displayOrder ?? Infinity) - (b.order.template?.category?.displayOrder ?? Infinity))
+    // Within a visit, tests print in test-category order (e.g. Biochemistry before
+    // Hematology), not in whatever order they happened to be approved — tests with
+    // no category, or the same category, keep their original relative order.
+    .sort((a, b) =>
+      (visitIndex.get(a.order.receiptNumber ?? '') ?? 0) - (visitIndex.get(b.order.receiptNumber ?? '') ?? 0) ||
+      (a.order.template?.category?.displayOrder ?? Infinity) - (b.order.template?.category?.displayOrder ?? Infinity))
 
   if (normalizedList.length === 1) {
     return type === 'letterhead' ? buildLabReportBytes(normalizedList[0]) : buildPlainReportDoc(normalizedList[0]).then(d => new Uint8Array(d.output('arraybuffer') as ArrayBuffer))

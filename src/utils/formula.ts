@@ -2,11 +2,29 @@ interface FormulaFrame { result: number; pendingOp: string | null; isFirst: bool
 
 export interface FormulaStep { fieldId?: number; op?: string; value?: number; paren?: '(' | ')' }
 
+/** Parses a stored formula: `{ common }` for a plain steps array, `{ male, female }` for a gendered one. */
+export function parseFormula(optionsJson: string | null): { common?: FormulaStep[]; male?: FormulaStep[]; female?: FormulaStep[] } {
+  if (!optionsJson) return {}
+  try {
+    const parsed = JSON.parse(optionsJson)
+    if (Array.isArray(parsed)) return { common: parsed }
+    if (parsed && typeof parsed === 'object') return { male: parsed.male ?? [], female: parsed.female ?? [] }
+  } catch { /* malformed JSON — treat as no formula */ }
+  return {}
+}
+
+/** Picks the steps to evaluate for a patient's gender — male formula is the fallback when gender is unknown. */
+export function resolveFormulaSteps(optionsJson: string | null, gender?: string | null): FormulaStep[] {
+  const f = parseFormula(optionsJson)
+  if (f.common) return f.common
+  return (gender === 'Female' ? f.female : f.male) ?? []
+}
+
 /** Evaluates a stored calculated-field formula (steps with optional paren grouping and a %-of operator). */
-export function evalFormula(optionsJson: string | null, values: Record<number, string | boolean>): number {
+export function evalFormula(optionsJson: string | null, values: Record<number, string | boolean>, gender?: string | null): number {
   if (!optionsJson) return 0
   try {
-    const steps: FormulaStep[] = JSON.parse(optionsJson)
+    const steps = resolveFormulaSteps(optionsJson, gender)
     const stack: FormulaFrame[] = [{ result: 0, pendingOp: null, isFirst: true }]
 
     const applyOp = (frame: FormulaFrame, val: number) => {
@@ -45,6 +63,7 @@ export function evalFormula(optionsJson: string | null, values: Record<number, s
 export function evalCalculatedFields(
   fields: { id: number; fieldType: string; optionsJson: string | null }[],
   inputValues: Record<number, string | boolean>,
+  gender?: string | null,
 ): Record<number, number> {
   const calculated = fields.filter(f => f.fieldType === 'calculated')
   const values: Record<number, string | boolean> = { ...inputValues }
@@ -53,7 +72,7 @@ export function evalCalculatedFields(
   for (let pass = 0; pass < calculated.length + 1; pass++) {
     let changed = false
     for (const f of calculated) {
-      const n = evalFormula(f.optionsJson, values)
+      const n = evalFormula(f.optionsJson, values, gender)
       if (results[f.id] !== n) {
         results[f.id] = n
         values[f.id] = String(n)

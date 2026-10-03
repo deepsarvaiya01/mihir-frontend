@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, FlaskConical, Users, ClipboardList,
   History, LogOut, FlaskRound, ChevronRight,
-  UserCog, Settings, Building2, MapPin, Receipt, PanelLeft,
+  UserCog, Settings, Building2, MapPin, PanelLeft,
   PenLine, ImageIcon, Shield, Stethoscope, Layers, ListOrdered,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
@@ -14,10 +14,9 @@ import { toast } from 'sonner'
 interface NavItem { to: string; label: string; icon: React.ReactNode }
 
 const labNavItems: NavItem[] = [
-  { to: '/patients',     label: 'Patients',           icon: <Users className="h-4 w-4" /> },
+  { to: '/patients',     label: 'Patient Registration', icon: <Users className="h-4 w-4" /> },
   { to: '/orders',       label: 'Orders & Results',   icon: <ClipboardList className="h-4 w-4" /> },
   { to: '/templates',    label: 'Test Catalogue',     icon: <FlaskConical className="h-4 w-4" /> },
-  { to: '/billing',      label: 'Billing & Reports',  icon: <Receipt className="h-4 w-4" /> },
   { to: '/history',      label: 'Result History',     icon: <History className="h-4 w-4" /> },
   { to: '/settings',     label: 'Profile',            icon: <Settings className="h-4 w-4" /> },
 ]

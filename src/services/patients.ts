@@ -1,5 +1,5 @@
 import { api } from '../lib/api'
-import type { Patient, PatientDocument, PatientHistory } from '../types'
+import type { Patient, PatientDocument, PatientHistory, PatientRemark } from '../types'
 
 export interface CreatePatientDto {
   fullName: string
@@ -31,7 +31,8 @@ export const patientService = {
     const params: Record<string, unknown> = {}
     if (search) params.search = search
     if (page) params.page = page
-    if (limit) params.limit = limit
+    // The API defaults to 50 rows — ask for everything unless a caller pages explicitly
+    params.limit = limit ?? 100000
     const { data } = await api.get('/patients', { params })
     if (Array.isArray(data)) return data
     if (Array.isArray(data.data)) return data.data
@@ -84,6 +85,20 @@ export const patientService = {
 
   permanentDelete: async (id: number): Promise<void> => {
     await api.delete(`/patients/${id}/permanent`)
+  },
+
+  getRemarks: async (patientId: number): Promise<PatientRemark[]> => {
+    const { data } = await api.get(`/patients/${patientId}/remarks`)
+    return data
+  },
+
+  addRemark: async (patientId: number, text: string): Promise<PatientRemark> => {
+    const { data } = await api.post(`/patients/${patientId}/remarks`, { text })
+    return data
+  },
+
+  deleteRemark: async (patientId: number, remarkId: number): Promise<void> => {
+    await api.delete(`/patients/${patientId}/remarks/${remarkId}`)
   },
 
   getDocuments: async (patientId: number): Promise<PatientDocument[]> => {

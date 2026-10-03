@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Calculator,
   CheckCircle2,
+  ChevronDown,
   FileText,
   Lock,
   Paperclip,
@@ -25,6 +26,7 @@ import { PageLoader } from '../components/ui/Spinner'
 import { Input, Select } from '../components/ui/Input'
 import { evalFormula, evalCalculatedFields } from '../utils/formula'
 import { checkValidationRules } from '../utils/validationRules'
+import { OTHER_OPTION, isOtherOption, parseMultiValue, parseOptions, serializeMultiValue } from '../utils/selectOptions'
 import type { TestTemplateField, Order, OrderFormData } from '../types'
 
 function formatBytes(bytes: number): string {
@@ -52,20 +54,79 @@ function FormCard({ title, icon, children, action }: { title: string; icon: Reac
   )
 }
 
+/* ─── multi-select dropdown (checkbox list + optional free-text "Other") ── */
+function MultiSelectInput({ field, value, onChange }: {
+  field: TestTemplateField
+  value: string
+  onChange: (val: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const { options, allowOther } = parseOptions(field.optionsJson)
+  const { selected, otherOn, otherText } = parseMultiValue(value, options)
+
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [open])
+
+  const toggle = (o: string) => {
+    const next = selected.includes(o) ? selected.filter(s => s !== o) : [...selected, o]
+    onChange(serializeMultiValue(next, options, otherOn, otherText))
+  }
+  const summary = [...selected, ...(otherOn ? [otherText || OTHER_OPTION] : [])].join(', ')
+
+  return (
+    <div ref={ref} className="relative space-y-2">
+      <button type="button" onClick={() => setOpen(o => !o)}
+        className="flex w-full items-center justify-between gap-2 rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-left text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100">
+        <span className={`truncate ${summary ? '' : 'text-gray-400'}`}>{summary || 'Select options'}</span>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-60 overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-600 dark:bg-gray-800">
+          {options.map(o => (
+            <label key={o} className="flex cursor-pointer items-center gap-2.5 px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-700">
+              <input type="checkbox" checked={selected.includes(o)} onChange={() => toggle(o)} className="h-4 w-4 accent-blue-600" />
+              {o}
+            </label>
+          ))}
+          {allowOther && (
+            <label className="flex cursor-pointer items-center gap-2.5 border-t border-gray-100 px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-700">
+              <input type="checkbox" checked={otherOn}
+                onChange={() => onChange(serializeMultiValue(selected, options, !otherOn, otherText))}
+                className="h-4 w-4 accent-blue-600" />
+              {OTHER_OPTION}
+            </label>
+          )}
+        </div>
+      )}
+      {otherOn && (
+        <Input value={otherText} placeholder="Type other value"
+          onChange={e => onChange(serializeMultiValue(selected, options, true, e.target.value))} />
+      )}
+    </div>
+  )
+}
+
 /* ─── single result field ────────────────────────────────── */
 function ResultField({
   field,
   values,
   calculatedValues,
+  gender,
   onChange,
 }: {
   field: TestTemplateField
   values: Record<number, string | boolean>
   calculatedValues?: Record<number, number>
+  gender?: string | null
   onChange: (id: number, val: string | boolean) => void
 }) {
   if (field.fieldType === 'calculated') {
-    const computed = calculatedValues?.[field.id] ?? evalFormula(field.optionsJson, values)
+    const computed = calculatedValues?.[field.id] ?? evalFormula(field.optionsJson, values, gender)
     return (
       <div className="relative">
         <Calculator className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-amber-500" />
@@ -94,13 +155,28 @@ function ResultField({
     )
   }
 
+  if (field.fieldType === 'multiselect') {
+    return <MultiSelectInput field={field} value={String(value ?? '')} onChange={v => onChange(field.id, v)} />
+  }
+
   if (field.fieldType === 'select') {
-    const options = field.optionsJson ? (JSON.parse(field.optionsJson) as string[]) : []
+    const { options, allowOther } = parseOptions(field.optionsJson)
+    const v = String(value ?? '')
+    // Any value that isn't a listed option was typed in via "Other" ("Other" itself = picked, nothing typed yet)
+    const isOther = allowOther && v !== '' && !options.includes(v)
     return (
-      <Select value={String(value ?? '')} onChange={e => onChange(field.id, e.target.value)}>
-        <option value="">Select option</option>
-        {options.map(o => <option key={o} value={o}>{o}</option>)}
-      </Select>
+      <div className="space-y-2">
+        <Select value={isOther ? OTHER_OPTION : v}
+          onChange={e => onChange(field.id, e.target.value)}>
+          <option value="">Select option</option>
+          {options.map(o => <option key={o} value={o}>{o}</option>)}
+          {allowOther && <option value={OTHER_OPTION}>{OTHER_OPTION}</option>}
+        </Select>
+        {isOther && (
+          <Input value={isOtherOption(v) ? '' : v} placeholder="Type other value"
+            onChange={e => onChange(field.id, e.target.value || OTHER_OPTION)} />
+        )}
+      </div>
     )
   }
 
@@ -123,7 +199,7 @@ function FieldsGrid({
   gender: string | null | undefined
   onChange: (fieldId: number, val: string | boolean) => void
 }) {
-  const calculatedValues = evalCalculatedFields(fields, values)
+  const calculatedValues = evalCalculatedFields(fields, values, gender)
 
   if (fields.length === 0) {
     return <p className="text-center text-sm text-gray-400">No fields defined for this test template.</p>
@@ -162,7 +238,7 @@ function FieldsGrid({
               })()}
               {field.required && <span className="ml-1 text-red-500">*</span>}
             </label>
-            <ResultField field={field} values={values} calculatedValues={calculatedValues} onChange={onChange} />
+            <ResultField field={field} values={values} calculatedValues={calculatedValues} gender={gender} onChange={onChange} />
           </div>
         )
       })}
@@ -395,12 +471,13 @@ export default function EnterResultsPage() {
       : nonSectionFields
 
     const attachment = attachments[oid]
-    const calculatedValues = evalCalculatedFields(sectionFields, sectionValues)
+    const gender = sections.find(s => s.orderId === oid)?.data.order.patient?.gender
+    const calculatedValues = evalCalculatedFields(sectionFields, sectionValues, gender)
 
     return {
       values: fieldsToSend.map(field => ({
         fieldId: field.id,
-        textValue: field.fieldType === 'text' || field.fieldType === 'select'
+        textValue: field.fieldType === 'text' || field.fieldType === 'select' || field.fieldType === 'multiselect'
           ? String(sectionValues[field.id] ?? '') : undefined,
         numberValue: field.fieldType === 'number' && sectionValues[field.id] !== undefined
           ? Number(sectionValues[field.id])
@@ -464,7 +541,7 @@ export default function EnterResultsPage() {
   const handleSubmit = () => {
     for (const s of sections) {
       const sectionValues = values[s.orderId] ?? {}
-      const calculated = evalCalculatedFields(s.data.fields, sectionValues)
+      const calculated = evalCalculatedFields(s.data.fields, sectionValues, s.data.order.patient?.gender)
       const merged: Record<number, string | boolean | number> = { ...sectionValues }
       for (const [id, n] of Object.entries(calculated)) merged[Number(id)] = n
       const ruleError = checkValidationRules(

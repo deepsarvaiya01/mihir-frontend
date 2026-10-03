@@ -19,7 +19,6 @@ import TestCategoriesPage from './pages/TestCategoriesPage'
 import LabBranchesPage from './pages/LabBranchesPage'
 import PatientFormPage from './pages/PatientFormPage'
 import TemplateFormPage from './pages/TemplateFormPage'
-import BillingPage from './pages/BillingPage'
 import SignaturesPage from './pages/SignaturesPage'
 import LogosPage from './pages/LogosPage'
 import EnterResultsPage from './pages/EnterResultsPage'
@@ -75,7 +74,8 @@ export default function App() {
             <Route path="/patients/:id/edit" element={<RoleRoute roles={['SUPER_ADMIN', 'LAB_USER']}><PatientFormPage /></RoleRoute>} />
             <Route path="/orders" element={<RoleRoute roles={['SUPER_ADMIN', 'LAB_USER']}><OrdersPage /></RoleRoute>} />
             <Route path="/orders/:id/enter-results" element={<RoleRoute roles={['SUPER_ADMIN', 'LAB_USER']}><EnterResultsPage /></RoleRoute>} />
-            <Route path="/billing" element={<RoleRoute roles={['SUPER_ADMIN', 'LAB_USER']}><BillingPage /></RoleRoute>} />
+            {/* Billing & Reports now lives on the Patients page */}
+            <Route path="/billing" element={<Navigate to="/patients" replace />} />
             <Route path="/history" element={<RoleRoute roles={['SUPER_ADMIN', 'LAB_USER']}><HistoryPage /></RoleRoute>} />
             <Route path="/users" element={<RoleRoute roles={['SUPER_ADMIN']}><UsersPage /></RoleRoute>} />
             <Route path="/b2b-labs" element={<RoleRoute roles={['SUPER_ADMIN']}><B2bLabsPage /></RoleRoute>} />

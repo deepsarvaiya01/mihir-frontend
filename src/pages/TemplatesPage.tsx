@@ -22,10 +22,10 @@ import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
 
 const fieldTypeLabels: Record<FieldType, string> = {
-  text: 'Text', number: 'Number', checkbox: 'Checkbox', date: 'Date', select: 'Select', calculated: 'Calculated',
+  text: 'Text', number: 'Number', checkbox: 'Checkbox', date: 'Date', select: 'Select', multiselect: 'Multi-Select', calculated: 'Calculated',
 }
 const fieldTypeBadgeVariants: Record<FieldType, 'default' | 'info' | 'success' | 'warning' | 'purple' | 'danger'> = {
-  text: 'default', number: 'info', checkbox: 'success', date: 'warning', select: 'purple', calculated: 'danger',
+  text: 'default', number: 'info', checkbox: 'success', date: 'warning', select: 'purple', multiselect: 'purple', calculated: 'danger',
 }
 
 export default function TemplatesPage() {

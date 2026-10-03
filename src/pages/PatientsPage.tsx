@@ -1,11 +1,9 @@
-﻿import { useState, useEffect } from 'react'
+import { useState, useMemo, Fragment } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Plus, Users, Search, Pencil,
-  Building2, History,
-  Eye, X, Phone, MapPin, UserCircle2,
-  Stethoscope, AlertCircle, FileText, ExternalLink, Trash2,
+  Plus, Users, Search, Pencil, History, Eye, Trash2, ChevronRight, Building2,
+  CalendarDays, ChevronsUpDown, ChevronsDownUp, X,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
@@ -15,245 +13,174 @@ import { PageContent } from '../components/ui/PageContent'
 import { FilterBar, FilterSelect } from '../components/ui/FilterBar'
 import { Pagination } from '../components/ui/Pagination'
 import { ConfirmModal } from '../components/ui/Modal'
+import { PatientDrawer } from '../components/patients/PatientDrawer'
+import { RemarksModal } from '../components/patients/RemarksModal'
+import { PaymentModal } from '../components/billing/PaymentModal'
+import { ReceiptCard, BillActions } from '../components/billing/ReceiptCard'
+import { formatDateTime } from '../components/billing/format'
+import { useReceiptActions, groupByReceipt } from '../components/billing/useReceiptActions'
 import { patientService } from '../services/patients'
+import { orderService } from '../services/orders'
+import { doctorService } from '../services/doctors'
+import { labBranchService } from '../services/labBranches'
+import { b2bLabService } from '../services/b2bLabs'
 import { formatAge } from '../lib/utils'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
-import type { Patient } from '../types'
+import type { Order, Patient, PaymentStatus } from '../types'
 
-/* ── Patient detail slide-over ───────────────────────────────────────────── */
+type PaymentFilter = 'ALL' | PaymentStatus
 
-function DetailRow({ label, value }: { label: string; value?: string | number | null }) {
-  if (!value && value !== 0) return null
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">{label}</span>
-      <span className="text-sm text-gray-800 dark:text-gray-200">{value}</span>
-    </div>
-  )
+/** yyyy-mm-dd in local time (toISOString would shift the day for IST before 5:30 am) */
+function localDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
+const daysAgo = (n: number) => localDate(new Date(Date.now() - n * 86_400_000))
 
-function Section({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
-  return (
-    <div>
-      <div className="mb-3 flex items-center gap-2">
-        <span className="text-gray-400 dark:text-gray-500">{icon}</span>
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{title}</h4>
-      </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{children}</div>
-    </div>
-  )
-}
+/** Quick ranges just fill in the From / To dates. */
+const DATE_SHORTCUTS: { label: string; range: () => [string, string] }[] = [
+  { label: 'Today', range: () => [daysAgo(0), daysAgo(0)] },
+  { label: '7 days', range: () => [daysAgo(6), daysAgo(0)] },
+  { label: '30 days', range: () => [daysAgo(29), daysAgo(0)] },
+  { label: 'All', range: () => ['', ''] },
+]
 
-function PatientDrawer({ patientId, onClose, onEdit }: { patientId: number; onClose: () => void; onEdit: () => void }) {
-  const { data: p, isLoading } = useQuery({
-    queryKey: ['patient', patientId],
-    queryFn: () => patientService.getById(patientId),
-  })
+/** B2B filter values: ALL · B2B (any lab) · INDIVIDUAL · <lab id> */
+type B2bFilter = string
+/** Doctor filter values: ALL · SELF (no doctor) · <doctor name> */
+type DoctorFilter = string
 
-  return (
-    <div className="fixed inset-0 z-50 flex justify-end" onClick={e => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative flex h-full w-full max-w-md flex-col bg-white shadow-2xl dark:bg-gray-900 overflow-hidden">
+const sameName = (a: string | null | undefined, b: string) => (a ?? '').trim().toLowerCase() === b.trim().toLowerCase()
 
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-gray-800">
-          <h3 className="text-base font-semibold text-gray-900 dark:text-white">Patient Details</h3>
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="secondary" icon={<Pencil className="h-3.5 w-3.5" />} onClick={onEdit}>Edit</Button>
-            <button onClick={onClose} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-
-        {isLoading || !p ? (
-          <div className="flex flex-1 items-center justify-center">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-          </div>
-        ) : (
-          <div className="flex-1 overflow-y-auto">
-
-            {/* Profile hero */}
-            <div className="bg-gradient-to-br from-blue-50 to-white px-5 py-5 dark:from-gray-800 dark:to-gray-900">
-              <div className="flex items-center gap-4">
-                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-2xl font-bold text-white shadow-md">
-                  {p.fullName.charAt(0).toUpperCase()}
-                </div>
-                <div className="min-w-0">
-                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">{p.fullName}</h2>
-                  <p className="font-mono text-sm text-blue-600 dark:text-blue-400">{p.patientCode}</p>
-                  <div className="mt-1.5 flex flex-wrap gap-2">
-                    {p.isB2b ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-700 dark:bg-violet-900/40 dark:text-violet-400">
-                        <Building2 className="h-3 w-3" /> B2B
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Individual
-                      </span>
-                    )}
-                    {p.gender && (
-                      <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-300">
-                        {p.gender}
-                      </span>
-                    )}
-                    {p.bloodGroup && (
-                      <span className="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-600 dark:bg-red-900/30 dark:text-red-400">
-                        {p.bloodGroup}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-6 px-5 py-5">
-
-              {/* Personal */}
-              <Section title="Personal" icon={<UserCircle2 className="h-4 w-4" />}>
-                <DetailRow label="Age" value={formatAge(p.ageYears, p.ageMonths, p.ageDays)} />
-                <DetailRow label="Date of Birth" value={p.dateOfBirth ? new Date(p.dateOfBirth).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null} />
-                <DetailRow label="Gender" value={p.gender} />
-                <DetailRow label="Blood Group" value={p.bloodGroup} />
-              </Section>
-
-              {/* Contact */}
-              {(p.phoneNumber || p.email) && (
-                <Section title="Contact" icon={<Phone className="h-4 w-4" />}>
-                  <DetailRow label="Phone" value={p.phoneNumber} />
-                  <DetailRow label="Email" value={p.email} />
-                </Section>
-              )}
-
-              {/* Address */}
-              {(p.addressLine || p.city || p.state || p.postalCode) && (
-                <Section title="Address" icon={<MapPin className="h-4 w-4" />}>
-                  {p.addressLine && <div className="col-span-2 sm:col-span-3"><DetailRow label="Street" value={p.addressLine} /></div>}
-                  <DetailRow label="City" value={p.city} />
-                  <DetailRow label="State" value={p.state} />
-                  <DetailRow label="Postal Code" value={p.postalCode} />
-                </Section>
-              )}
-
-              {/* Medical */}
-              {(p.doctorName || p.reportDate) && (
-                <Section title="Medical" icon={<Stethoscope className="h-4 w-4" />}>
-                  <DetailRow label="Referring Doctor" value={p.doctorName} />
-                  <DetailRow label="Report Date" value={p.reportDate ? new Date(p.reportDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null} />
-                </Section>
-              )}
-
-              {/* B2B */}
-              {p.isB2b && p.b2bLab && (
-                <Section title="B2B Lab" icon={<Building2 className="h-4 w-4" />}>
-                  <div className="col-span-2 sm:col-span-3">
-                    <DetailRow label="Lab Name" value={p.b2bLab.name} />
-                  </div>
-                  <DetailRow label="Contact Person" value={p.b2bLab.contactPerson} />
-                  <DetailRow label="Phone" value={p.b2bLab.phone} />
-                  <DetailRow label="Email" value={p.b2bLab.email} />
-                  {p.b2bLab.city && <DetailRow label="City" value={p.b2bLab.city} />}
-                </Section>
-              )}
-
-              {/* Emergency Contact */}
-              {(p.emergencyContactName || p.emergencyContactPhone) && (
-                <Section title="Emergency Contact" icon={<AlertCircle className="h-4 w-4" />}>
-                  <DetailRow label="Name" value={p.emergencyContactName} />
-                  <DetailRow label="Phone" value={p.emergencyContactPhone} />
-                </Section>
-              )}
-
-              {/* Documents */}
-              <div>
-                <div className="mb-3 flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-gray-400 dark:text-gray-500" />
-                  <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                    Documents
-                  </h4>
-                  {(p.documents?.length ?? 0) > 0 && (
-                    <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-500 dark:bg-gray-700 dark:text-gray-400">
-                      {p.documents!.length}
-                    </span>
-                  )}
-                </div>
-                {(p.documents?.length ?? 0) === 0 ? (
-                  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 py-8 text-center dark:border-gray-700 dark:bg-gray-800">
-                    <FileText className="mb-2 h-7 w-7 text-gray-300 dark:text-gray-600" />
-                    <p className="text-sm text-gray-400 dark:text-gray-500">No documents uploaded</p>
-                    <p className="mt-0.5 text-xs text-gray-300 dark:text-gray-600">Add documents from the edit page</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {p.documents!.map(doc => (
-                      <a
-                        key={doc.id}
-                        href={doc.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="group flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 transition-colors hover:border-blue-200 hover:bg-blue-50/40 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-blue-800 dark:hover:bg-blue-900/20"
-                      >
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-100 bg-white dark:border-gray-700 dark:bg-gray-700">
-                          <FileText className="h-4 w-4 text-blue-500" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium text-gray-800 group-hover:text-blue-700 dark:text-gray-200 dark:group-hover:text-blue-400">
-                            {doc.name}
-                          </p>
-                          <p className="text-xs text-gray-400 dark:text-gray-500">
-                            {new Date(doc.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
-                          </p>
-                        </div>
-                        <ExternalLink className="h-3.5 w-3.5 shrink-0 text-gray-300 group-hover:text-blue-500 dark:text-gray-600 dark:group-hover:text-blue-400" />
-                      </a>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Registered on */}
-              <p className="text-center text-xs text-gray-300 dark:text-gray-600">
-                Registered on {p.createdAt ? new Date(p.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' }) : '—'}
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ── Status badge ─────────────────────────────────────────────────────────────
-function TypeBadge({ isB2b }: { isB2b: boolean }) {
-  return isB2b ? (
-    <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-700 dark:bg-violet-900/30 dark:text-violet-400">
-      <Building2 className="h-3 w-3" /> B2B
+function TypeBadge({ patient }: { patient: Patient }) {
+  return patient.isB2b ? (
+    <span className="inline-flex max-w-[160px] items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700 ring-1 ring-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:ring-violet-800">
+      <Building2 className="h-3 w-3 shrink-0" />
+      <span className="truncate">{patient.b2bLab?.name ?? 'B2B'}</span>
     </span>
-  ) : (
-    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Individual
+  ) : null
+}
+
+const GENDER_EMOJI = {
+  male: { emoji: '👨', label: 'Male' },
+  female: { emoji: '👩', label: 'Female' },
+}
+
+/** Older records store gender as "male", "M", etc. — match any spelling. */
+function genderInfo(gender: string | null): { emoji: string; label: string } | undefined {
+  const g = gender?.trim().toLowerCase()
+  if (g === 'male' || g === 'm') return GENDER_EMOJI.male
+  if (g === 'female' || g === 'f') return GENDER_EMOJI.female
+  return undefined
+}
+
+type BillStage = 'APPROVED' | 'AWAITING' | 'RESULTS_PENDING' | 'NONE'
+
+/** Where a bill stands: results still to enter → waiting for approval → all approved. */
+function billStage(bill: Order[] | undefined): BillStage {
+  if (!bill || bill.length === 0) return 'NONE'
+  if (bill.some(o => o.status === 'PENDING' || o.status === 'IN_PROGRESS' || o.status === 'REJECTED')) return 'RESULTS_PENDING'
+  if (bill.some(o => o.status === 'AWAITING_APPROVAL')) return 'AWAITING'
+  return 'APPROVED'
+}
+
+const STAGE_STYLE: Record<BillStage, { chip: string; dot: string; label: string }> = {
+  APPROVED:        { chip: 'bg-emerald-600 text-white', dot: 'bg-emerald-600', label: 'Approved' },
+  AWAITING:        { chip: 'bg-orange-500 text-white', dot: 'bg-orange-500', label: 'Approval pending' },
+  RESULTS_PENDING: { chip: 'bg-gray-700 text-white dark:bg-gray-600', dot: 'bg-gray-700 dark:bg-gray-500', label: 'Result pending' },
+  NONE:            { chip: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300', dot: '', label: 'No bills yet' },
+}
+
+/** Gender emoji — age (and gender) appear in a tooltip on hover. */
+function GenderEmoji({ gender, age }: { gender: string | null; age: string | null }) {
+  const g = genderInfo(gender)
+  if (!g && !age) return <span className="text-gray-300">—</span>
+  const label = [g?.label ?? gender, age].filter(Boolean).join(' · ')
+  return (
+    <span className="group/gender relative inline-flex" tabIndex={0} aria-label={label}>
+      <span className="flex h-8 w-8 cursor-default items-center justify-center rounded-full text-lg leading-none transition-colors group-hover/gender:bg-gray-100 dark:group-hover/gender:bg-gray-700" aria-hidden>
+        {g?.emoji ?? '🧑'}
+      </span>
+      {/* Opens to the right so the table's scroll container never clips it */}
+      <span role="tooltip"
+        className="pointer-events-none absolute left-full top-1/2 z-20 ml-1.5 -translate-y-1/2 whitespace-nowrap rounded-md bg-gray-900 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity duration-100 group-hover/gender:opacity-100 group-focus/gender:opacity-100 dark:bg-gray-100 dark:text-gray-900">
+        {label}
+      </span>
     </span>
   )
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+/** Opens the remarks window — 📝 with a count badge once the patient has remarks. */
+function RemarksButton({ count, onClick }: { count: number; onClick: () => void }) {
+  return (
+    <button type="button" onClick={e => { e.stopPropagation(); onClick() }}
+      title={count > 0 ? `${count} remark${count !== 1 ? 's' : ''} — click to view or add` : 'Add a remark'}
+      className={`relative flex h-8 w-8 items-center justify-center rounded-lg text-lg transition-all hover:bg-amber-50 dark:hover:bg-amber-900/20 ${
+        count > 0 ? '' : 'opacity-35 grayscale hover:opacity-100 hover:grayscale-0'
+      }`}>
+      <span aria-hidden>📝</span>
+      {count > 0 && (
+        <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white dark:ring-gray-800">
+          {count}
+        </span>
+      )}
+    </button>
+  )
+}
+
+function RowIcon({ title, onClick, hover, children }: { title: string; onClick: () => void; hover: string; children: React.ReactNode }) {
+  return (
+    <button type="button" title={title}
+      onClick={e => { e.stopPropagation(); onClick() }}
+      className={`rounded-lg p-1.5 text-gray-400 transition-colors ${hover}`}>
+      {children}
+    </button>
+  )
+}
+
 export default function PatientsPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
 
   const [viewPatientId, setViewPatientId] = useState<number | null>(null)
   const [deletePatient, setDeletePatient] = useState<Patient | null>(null)
+  const [editBill, setEditBill] = useState<Order[] | null>(null)
+  const [remarksPatient, setRemarksPatient] = useState<Patient | null>(null)
+  const [expanded, setExpanded] = useState<Set<number>>(new Set())
+
   const [search, setSearch] = useState('')
   const [genderFilter, setGenderFilter] = useState('')
-  const [typeFilter, setTypeFilter] = useState<'ALL' | 'B2B' | 'INDIVIDUAL'>('ALL')
+  const [b2bFilter, setB2bFilter] = useState<B2bFilter>('ALL')
+  const [doctorFilter, setDoctorFilter] = useState<DoctorFilter>('ALL')
+  const [branchFilter, setBranchFilter] = useState('ALL')
+  const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>('ALL')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
 
-  const { data: patients = [], isLoading, isFetching, refetch } = useQuery({
-    queryKey: ['patients'],
-    queryFn: () => patientService.getAll(),
-  })
+  const patientsQuery = useQuery({ queryKey: ['patients'], queryFn: () => patientService.getAll() })
+  const ordersQuery = useQuery({ queryKey: ['orders'], queryFn: orderService.getAll })
+  const patients = useMemo(() => patientsQuery.data ?? [], [patientsQuery.data])
+  const orders = useMemo(() => ordersQuery.data ?? [], [ordersQuery.data])
+  const { data: doctors = [] } = useQuery({ queryKey: ['doctors'], queryFn: doctorService.getAll })
+  /** Degree for the doctor names stored on patients (patients keep the name only) */
+  const doctorDegree = useMemo(() => new Map(doctors.map(d => [d.name, d.degreeName])), [doctors])
+  const { data: branches = [] } = useQuery({ queryKey: ['lab-branches'], queryFn: labBranchService.getAll })
+  const { data: b2bLabs = [] } = useQuery({ queryKey: ['b2b-labs'], queryFn: b2bLabService.getAll })
+
+  /** Doctors list plus any older doctor names saved on patients that aren't in it */
+  const doctorOptions = useMemo(() => {
+    const names = new Map<string, string>()
+    for (const d of doctors) names.set(d.name.trim().toLowerCase(), d.name)
+    for (const p of patients) {
+      const n = p.doctorName?.trim()
+      if (n && !names.has(n.toLowerCase())) names.set(n.toLowerCase(), n)
+    }
+    return Array.from(names.values()).sort((a, b) => a.localeCompare(b))
+  }, [doctors, patients])
+
+  const actions = useReceiptActions(orders, () => setEditBill(null))
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => patientService.delete(id),
@@ -266,33 +193,109 @@ export default function PatientsPage() {
     onError: (err) => toastError(err, 'Failed to delete patient'),
   })
 
-  // Reset to page 1 whenever filters change
-  useEffect(() => { setPage(1) }, [search, genderFilter, typeFilter, pageSize])
+  // Reset to page 1 whenever filters change (adjusting state during render, not in an effect)
+  const filterKey = [search, genderFilter, b2bFilter, doctorFilter, branchFilter, paymentFilter, dateFrom, dateTo, pageSize].join('|')
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey)
+  if (prevFilterKey !== filterKey) {
+    setPrevFilterKey(filterKey)
+    setPage(1)
+  }
 
-  const filtered = patients.filter(p => {
-    const q = search.toLowerCase()
-    const matchSearch = !q ||
-      p.fullName.toLowerCase().includes(q) ||
-      p.patientCode.toLowerCase().includes(q) ||
-      (p.phoneNumber ?? '').includes(q) ||
-      (p.city ?? '').toLowerCase().includes(q) ||
-      (p.doctorName ?? '').toLowerCase().includes(q)
-    const matchGender = !genderFilter || p.gender === genderFilter
-    const matchType = typeFilter === 'ALL' ||
-      (typeFilter === 'B2B' && p.isB2b) ||
-      (typeFilter === 'INDIVIDUAL' && !p.isB2b)
-    return matchSearch && matchGender && matchType
+  /** Bills (orders grouped by receipt, newest first) per patient id. */
+  const billsByPatient = useMemo(() => {
+    const map = new Map<number, Order[][]>()
+    for (const g of groupByReceipt(orders)) {
+      const pid = g[0].patient?.id
+      if (pid === undefined) continue
+      const list = map.get(pid)
+      if (list) list.push(g)
+      else map.set(pid, [g])
+    }
+    return map
+  }, [orders])
+
+  const billFilterActive = paymentFilter !== 'ALL' || !!dateFrom || !!dateTo
+
+  const rows = useMemo(() => {
+    const start = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null
+    const end = dateTo ? new Date(`${dateTo}T23:59:59.999`) : null
+    const billMatches = (g: Order[]) => {
+      const p = g[0]
+      if (paymentFilter !== 'ALL' && p.paymentStatus !== paymentFilter) return false
+      const d = p.createdAt ? new Date(p.createdAt) : null
+      if (start && (!d || d < start)) return false
+      if (end && (!d || d > end)) return false
+      return true
+    }
+    const q = search.trim().toLowerCase()
+
+    return patients
+      .map(patient => {
+        const allBills = billsByPatient.get(patient.id) ?? []
+        const bills = billFilterActive ? allBills.filter(billMatches) : allBills
+        const lastVisit = allBills[0]?.[0]?.createdAt ?? null
+        return { patient, allBills, bills, lastVisit }
+      })
+      .filter(({ patient: p, allBills, bills }) => {
+        if (genderFilter && genderInfo(p.gender)?.label !== genderFilter) return false
+        if (branchFilter !== 'ALL' && String(p.labBranchId ?? '') !== branchFilter) return false
+        if (b2bFilter === 'B2B' && !p.isB2b) return false
+        if (b2bFilter === 'INDIVIDUAL' && p.isB2b) return false
+        if (b2bFilter !== 'ALL' && b2bFilter !== 'B2B' && b2bFilter !== 'INDIVIDUAL' && String(p.b2bLabId ?? '') !== b2bFilter) return false
+        if (doctorFilter === 'SELF' && p.doctorName?.trim()) return false
+        if (doctorFilter !== 'ALL' && doctorFilter !== 'SELF' && !sameName(p.doctorName, doctorFilter)) return false
+        if (billFilterActive && bills.length === 0) return false
+        if (!q) return true
+        return p.fullName.toLowerCase().includes(q) ||
+          p.patientCode.toLowerCase().includes(q) ||
+          (p.phoneNumber ?? '').includes(q) ||
+          (p.city ?? '').toLowerCase().includes(q) ||
+          (p.doctorName ?? '').toLowerCase().includes(q) ||
+          allBills.some(g => (g[0].receiptNumber ?? '').toLowerCase().includes(q) ||
+            g.some(o => (o.template?.name ?? '').toLowerCase().includes(q)))
+      })
+      // Most recent activity first: latest visit, else registration date
+      .sort((a, b) => {
+        const ta = new Date(a.lastVisit ?? a.patient.createdAt ?? 0).getTime()
+        const tb = new Date(b.lastVisit ?? b.patient.createdAt ?? 0).getTime()
+        return tb - ta || b.patient.id - a.patient.id
+      })
+  }, [patients, billsByPatient, search, genderFilter, b2bFilter, doctorFilter, branchFilter, paymentFilter, dateFrom, dateTo, billFilterActive])
+
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize))
+  const safePage = Math.min(page, totalPages)
+  const paginated = rows.slice((safePage - 1) * pageSize, safePage * pageSize)
+  const allExpanded = paginated.length > 0 && paginated.every(r => expanded.has(r.patient.id))
+
+  const toggleRow = (id: number) => setExpanded(prev => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    return next
+  })
+  const toggleAll = () => setExpanded(prev => {
+    const next = new Set(prev)
+    for (const r of paginated) {
+      if (allExpanded) next.delete(r.patient.id)
+      else next.add(r.patient.id)
+    }
+    return next
   })
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
-  const safePage = Math.min(page, totalPages)
-  const paginated = filtered.slice((safePage - 1) * pageSize, safePage * pageSize)
+  const filtersActive = !!search || !!genderFilter || b2bFilter !== 'ALL' || doctorFilter !== 'ALL' || branchFilter !== 'ALL' || billFilterActive
+  const clearFilters = () => {
+    setSearch(''); setGenderFilter(''); setB2bFilter('ALL'); setDoctorFilter('ALL'); setBranchFilter('ALL'); setPaymentFilter('ALL')
+    setDateFrom(''); setDateTo('')
+  }
+
+  const isLoading = patientsQuery.isLoading || ordersQuery.isLoading
+  const viewRow = viewPatientId !== null ? rows.find(r => r.patient.id === viewPatientId) : undefined
 
   return (
     <div>
       <Header
-        title="Patients"
-        subtitle="Manage patient profiles and records"
+        title="Patient Registration"
+        subtitle="Patient records, bills, payments and reports in one place"
         action={
           <Button icon={<Plus className="h-4 w-4" />} onClick={() => navigate('/patients/new')}>
             New Patient
@@ -300,30 +303,108 @@ export default function PatientsPage() {
         }
       />
 
-      <PageContent className="space-y-4">
-        <FilterBar
-          search={search}
-          onSearchChange={setSearch}
-          searchPlaceholder="Name, code, phone, city..."
-          onRefresh={() => refetch()}
-          isRefreshing={isFetching}
-          count={filtered.length}
-          countLabel={`patient${filtered.length !== 1 ? 's' : ''}`}
-        >
-          <FilterSelect value={genderFilter} onChange={setGenderFilter}>
-            <option value="">All Genders</option>
-            <option value="Male">Male</option>
-            <option value="Female">Female</option>
-            <option value="Other">Other</option>
-          </FilterSelect>
-          <FilterSelect value={typeFilter} onChange={v => setTypeFilter(v as typeof typeFilter)}>
-            <option value="ALL">All Types</option>
-            <option value="INDIVIDUAL">Individual</option>
-            <option value="B2B">B2B</option>
-          </FilterSelect>
-        </FilterBar>
+      <PageContent className="space-y-5">
+        {/* Filters */}
+        <div className="space-y-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <FilterBar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Name, code, phone, receipt no., test..."
+            onRefresh={() => { patientsQuery.refetch(); ordersQuery.refetch() }}
+            isRefreshing={patientsQuery.isFetching || ordersQuery.isFetching}
+          >
+            <FilterSelect value={paymentFilter} onChange={v => setPaymentFilter(v as PaymentFilter)}>
+              <option value="ALL">All Payments</option>
+              <option value="PENDING">Pending</option>
+              <option value="PARTIAL">Partial</option>
+              <option value="PAID">Paid</option>
+            </FilterSelect>
+            <FilterSelect value={branchFilter} onChange={setBranchFilter}>
+              <option value="ALL">All Branches</option>
+              {branches.map(b => (
+                <option key={b.id} value={String(b.id)}>{b.name}{b.active ? '' : ' (inactive)'}</option>
+              ))}
+            </FilterSelect>
+            <FilterSelect value={b2bFilter} onChange={setB2bFilter} className="max-w-[200px]">
+              <option value="ALL">All B2B / Individual</option>
+              <option value="B2B">B2B only</option>
+              <option value="INDIVIDUAL">Individual only</option>
+              {b2bLabs.length > 0 && (
+                <optgroup label="B2B Partners">
+                  {b2bLabs.map(l => <option key={l.id} value={String(l.id)}>{l.name}</option>)}
+                </optgroup>
+              )}
+            </FilterSelect>
+            <FilterSelect value={doctorFilter} onChange={setDoctorFilter} className="max-w-[200px]">
+              <option value="ALL">All Doctors</option>
+              <option value="SELF">Self (no doctor)</option>
+              {doctorOptions.length > 0 && (
+                <optgroup label="Doctors">
+                  {doctorOptions.map(n => <option key={n} value={n}>{n}</option>)}
+                </optgroup>
+              )}
+            </FilterSelect>
+            <FilterSelect value={genderFilter} onChange={setGenderFilter}>
+              <option value="">All Genders</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+            </FilterSelect>
+          </FilterBar>
 
-        {/* ── Table ── */}
+          <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3 dark:border-gray-700">
+            <CalendarDays className="h-4 w-4 text-gray-400" />
+            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Visit date</span>
+            <div className="flex items-center gap-1.5">
+              <label className="flex items-center gap-1.5 text-xs text-gray-400">
+                From
+                <input type="date" value={dateFrom} max={dateTo || undefined} onChange={e => setDateFrom(e.target.value)}
+                  className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200" />
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-gray-400">
+                To
+                <input type="date" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)}
+                  className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200" />
+              </label>
+            </div>
+            <div className="flex rounded-lg bg-gray-100 p-0.5 dark:bg-gray-900/60">
+              {DATE_SHORTCUTS.map(d => {
+                const [f, t] = d.range()
+                const active = dateFrom === f && dateTo === t
+                return (
+                  <button key={d.label} type="button" onClick={() => { setDateFrom(f); setDateTo(t) }}
+                    className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                      active
+                        ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-white'
+                        : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'
+                    }`}>
+                    {d.label}
+                  </button>
+                )
+              })}
+            </div>
+            <div className="ml-auto flex items-center gap-3">
+              {filtersActive && (
+                <button type="button" onClick={clearFilters}
+                  className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-red-600 dark:text-gray-400">
+                  <X className="h-3.5 w-3.5" /> Clear filters
+                </button>
+              )}
+              <div className="hidden items-center gap-3 border-l border-gray-200 pl-3 md:flex dark:border-gray-700">
+                {(['APPROVED', 'AWAITING', 'RESULTS_PENDING'] as const).map(st => (
+                  <span key={st} className="flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400">
+                    <span className={`h-2.5 w-2.5 rounded-sm ${STAGE_STYLE[st].dot}`} />
+                    {STAGE_STYLE[st].label}
+                  </span>
+                ))}
+              </div>
+              <span className="text-xs text-gray-400">
+                {rows.length} patient{rows.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Patient list */}
         {isLoading ? (
           <PageLoader />
         ) : patients.length === 0 ? (
@@ -331,133 +412,176 @@ export default function PatientsPage() {
             icon={<Users className="h-12 w-12" />}
             title="No patients registered"
             description="Start by adding your first patient profile"
-            action={
-              <Button icon={<Plus className="h-4 w-4" />} onClick={() => navigate('/patients/new')}>
-                Add Patient
-              </Button>
-            }
+            action={<Button icon={<Plus className="h-4 w-4" />} onClick={() => navigate('/patients/new')}>Add Patient</Button>}
           />
-        ) : filtered.length === 0 ? (
+        ) : rows.length === 0 ? (
           <EmptyState icon={<Search className="h-10 w-10" />} title="No results" description="Try adjusting your search or filters" />
         ) : (
           <>
             <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-              <table className="min-w-[780px] w-full text-sm">
+              <table className="w-full min-w-[1100px] text-sm">
                 <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50 text-left dark:border-gray-700 dark:bg-gray-900/50">
-                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">#</th>
-                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Patient</th>
-                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Age / Gender</th>
-                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Contact</th>
-                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">City</th>
-                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Status</th>
-                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Report Date</th>
-                    <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Actions</th>
+                  <tr className="border-b border-gray-100 bg-gray-50/80 text-left dark:border-gray-700 dark:bg-gray-900/50">
+                    <th className="w-10 py-3 pl-4">
+                      <button type="button" onClick={toggleAll} title={allExpanded ? 'Collapse all' : 'Expand all'}
+                        className="rounded-md p-1 text-gray-400 hover:bg-gray-200/60 hover:text-gray-600 dark:hover:bg-gray-700">
+                        {allExpanded ? <ChevronsDownUp className="h-4 w-4" /> : <ChevronsUpDown className="h-4 w-4" />}
+                      </button>
+                    </th>
+                    <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Date</th>
+                    <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Patient Code</th>
+                    <th className="w-14 px-2 py-3" aria-label="Gender" />
+                    <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Patient Name</th>
+                    <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Doc / B2B</th>
+                    <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
-                  {paginated.map((patient, idx) => (
-                    <tr key={patient.id} className="group hover:bg-gray-50/60 transition-colors dark:hover:bg-gray-700/40">
-                      {/* # */}
-                      <td className="px-5 py-3.5 text-xs text-gray-400 font-mono dark:text-gray-500">
-                        {(safePage - 1) * pageSize + idx + 1}
-                      </td>
+                <tbody>
+                  {paginated.map(({ patient, allBills, bills }) => {
+                    const isOpen = expanded.has(patient.id)
+                    const age = formatAge(patient.ageYears, patient.ageMonths, patient.ageDays)
+                    // The bill the row's actions work on (latest, after filters); fall back to registration date
+                    const rowDate = formatDateTime(bills[0]?.[0]?.createdAt ?? patient.createdAt)
+                    return (
+                      <Fragment key={patient.id}>
+                        <tr
+                          onClick={() => toggleRow(patient.id)}
+                          className={`cursor-pointer border-b border-gray-100 transition-colors dark:border-gray-700/60 ${
+                            isOpen ? 'bg-blue-50/40 dark:bg-blue-900/10' : 'hover:bg-gray-50/70 dark:hover:bg-gray-700/30'
+                          }`}
+                        >
+                          <td className="py-3.5 pl-4">
+                            <ChevronRight className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-90 text-blue-600' : ''}`} />
+                          </td>
 
-                      {/* Patient */}
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-600">
-                            {patient.fullName.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <p
-                              className="font-semibold text-gray-800 cursor-pointer hover:text-blue-600 transition-colors dark:text-white"
-                              onClick={() => setViewPatientId(patient.id)}
-                            >{patient.fullName}</p>
-                            <p className="text-xs font-mono text-gray-400 dark:text-gray-500">{patient.patientCode}</p>
-                          </div>
-                        </div>
-                      </td>
+                          <td className="whitespace-nowrap px-4 py-3.5">
+                            <div className="flex flex-col">
+                              <span className="text-xs font-semibold text-gray-800 dark:text-gray-100">{rowDate.date}</span>
+                              <span className="text-[11px] text-gray-400">{bills[0] ? rowDate.time : 'Registered'}</span>
+                            </div>
+                          </td>
 
-                      {/* Age / Gender */}
-                      <td className="px-5 py-3.5 text-gray-600 dark:text-gray-300">
-                        {formatAge(patient.ageYears, patient.ageMonths, patient.ageDays) || patient.gender ? (
-                          <span>
-                            {formatAge(patient.ageYears, patient.ageMonths, patient.ageDays) ?? '—'}
-                            {patient.gender ? <span className="ml-1.5 text-gray-400">· {patient.gender}</span> : null}
-                          </span>
-                        ) : <span className="text-gray-300">—</span>}
-                      </td>
+                          <td className="whitespace-nowrap px-4 py-3.5">
+                            {(() => {
+                              const stage = STAGE_STYLE[billStage(bills[0])]
+                              return (
+                                <span title={stage.label}
+                                  className={`inline-flex items-center rounded-md px-2 py-0.5 font-mono text-xs font-semibold ${stage.chip}`}>
+                                  {patient.patientCode}
+                                </span>
+                              )
+                            })()}
+                          </td>
 
-                      {/* Contact */}
-                      <td className="px-5 py-3.5 text-gray-600 dark:text-gray-300">
-                        {patient.phoneNumber ?? <span className="text-gray-300">—</span>}
-                      </td>
+                          <td className="px-2 py-3.5">
+                            <GenderEmoji gender={patient.gender} age={age} />
+                          </td>
 
-                      {/* City */}
-                      <td className="px-5 py-3.5 text-gray-600 max-w-[140px] truncate dark:text-gray-300">
-                        {patient.city
-                          ? [patient.city, patient.state].filter(Boolean).join(', ')
-                          : <span className="text-gray-300">—</span>}
-                      </td>
+                          <td className="px-4 py-3.5">
+                            <p className="max-w-[240px] truncate font-semibold text-gray-900 dark:text-white" title={patient.fullName}>{patient.fullName}</p>
+                            {allBills.length > 1 && (
+                              <p className="text-[11px] text-gray-400">{allBills.length} visits</p>
+                            )}
+                          </td>
 
-                      {/* Status */}
-                      <td className="px-5 py-3.5">
-                        <TypeBadge isB2b={patient.isB2b} />
-                      </td>
+                          <td className="px-4 py-3.5">
+                            {patient.isB2b ? (
+                              <div className="flex flex-col items-start gap-0.5">
+                                <TypeBadge patient={patient} />
+                                {patient.doctorName && (
+                                  <span className="max-w-[180px] truncate text-[11px] text-gray-400" title={patient.doctorName}>{patient.doctorName}</span>
+                                )}
+                              </div>
+                            ) : patient.doctorName ? (
+                              <div className="flex max-w-[200px] flex-col">
+                                <span className="truncate text-gray-700 dark:text-gray-200" title={patient.doctorName}>{patient.doctorName}</span>
+                                {doctorDegree.get(patient.doctorName) && (
+                                  <span className="truncate text-[11px] text-gray-400">{doctorDegree.get(patient.doctorName)}</span>
+                                )}
+                              </div>
+                            ) : <span className="text-xs text-gray-400">Self</span>}
+                          </td>
 
-                      {/* Report Date */}
-                      <td className="px-5 py-3.5 text-xs text-gray-500 dark:text-gray-400">
-                        {patient.reportDate
-                          ? new Date(patient.reportDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-                          : <span className="text-gray-300">—</span>}
-                      </td>
 
-                      {/* Actions */}
-                      <td className="px-5 py-3.5">
-                        <div className="flex justify-end gap-1">
-                          <button
-                            onClick={() => setViewPatientId(patient.id)}
-                            className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                            title="View Details"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={() => navigate(`/history?patientId=${patient.id}`)}
-                            className="rounded-lg p-1.5 text-gray-400 hover:bg-purple-50 hover:text-purple-600 transition-colors"
-                            title="View History"
-                          >
-                            <History className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={() => navigate(`/patients/${patient.id}/edit`)}
-                            className="rounded-lg p-1.5 text-gray-400 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                            title="Edit"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            onClick={() => setDeletePatient(patient)}
-                            className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                          {/* Actions — bill actions apply to the latest (filtered) bill; expand the row for older bills */}
+                          <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center justify-end gap-2">
+                              {bills[0] ? (
+                                <div title={`Latest bill: ${bills[0][0].receiptNumber ?? `Order #${bills[0][0].id}`}`}>
+                                  <BillActions group={bills[0]} actions={actions} onEditPayment={setEditBill} reportScope={allBills.flat()} className="flex-nowrap" />
+                                </div>
+                              ) : (
+                                <span className="px-2 text-xs text-gray-300 dark:text-gray-600">No bills</span>
+                              )}
+                              <span className="h-6 w-px shrink-0 bg-gray-200 dark:bg-gray-700" />
+                              <div className="flex shrink-0 items-center gap-0.5">
+                                <RemarksButton count={patient.remarkCount ?? 0} onClick={() => setRemarksPatient(patient)} />
+                                <RowIcon title="Patient details" onClick={() => setViewPatientId(patient.id)} hover="hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/30">
+                                  <Eye className="h-4 w-4" />
+                                </RowIcon>
+                                <RowIcon title="Result history" onClick={() => navigate(`/history?patientId=${patient.id}`)} hover="hover:bg-purple-50 hover:text-purple-600 dark:hover:bg-purple-900/30">
+                                  <History className="h-4 w-4" />
+                                </RowIcon>
+                                <RowIcon title="Edit patient" onClick={() => navigate(`/patients/${patient.id}/edit`)} hover="hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/30">
+                                  <Pencil className="h-4 w-4" />
+                                </RowIcon>
+                                <RowIcon title="Delete patient" onClick={() => setDeletePatient(patient)} hover="hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30">
+                                  <Trash2 className="h-4 w-4" />
+                                </RowIcon>
+                              </div>
+                            </div>
+                            {bills.length > 1 && (
+                              <button type="button" onClick={() => toggleRow(patient.id)}
+                                className="mt-1 block w-full text-right text-[10px] text-gray-400 hover:text-blue-600">
+                                Actions apply to latest bill · {isOpen ? 'hide' : 'show'} all {bills.length} bills
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+
+                        {isOpen && (
+                          <tr className="border-b border-gray-100 dark:border-gray-700/60">
+                            <td colSpan={7} className="bg-gray-50/70 px-4 pb-4 pt-3 dark:bg-gray-900/30">
+                              <div className="ml-6 space-y-2.5">
+                                <div className="flex items-center justify-between">
+                                  <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                                    Bills & Reports
+                                    {billFilterActive && bills.length !== allBills.length && (
+                                      <span className="ml-2 font-normal normal-case tracking-normal">
+                                        showing {bills.length} of {allBills.length} (filtered)
+                                      </span>
+                                    )}
+                                  </p>
+                                </div>
+                                {bills.length === 0 ? (
+                                  <div className="flex items-center justify-between rounded-xl border border-dashed border-gray-200 bg-white px-4 py-5 dark:border-gray-700 dark:bg-gray-800">
+                                    <p className="text-sm text-gray-400">No bills yet for this patient.</p>
+                                    <Button size="sm" variant="secondary" icon={<Plus className="h-3.5 w-3.5" />}
+                                      onClick={() => navigate('/orders')}>
+                                      Order Tests
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  bills.map(g => (
+                                    <ReceiptCard key={g[0].receiptNumber ?? g[0].id} group={g} actions={actions} onEditPayment={setEditBill} />
+                                  ))
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
 
-            {/* ── Pagination ── */}
             <Pagination
               page={safePage}
               totalPages={totalPages}
               pageSize={pageSize}
-              total={filtered.length}
+              total={rows.length}
               onPage={setPage}
               onPageSize={s => { setPageSize(s); setPage(1) }}
               itemLabel="patients"
@@ -466,11 +590,25 @@ export default function PatientsPage() {
         )}
       </PageContent>
 
-      {viewPatientId && (
+      {viewPatientId !== null && (
         <PatientDrawer
           patientId={viewPatientId}
+          bills={viewRow?.allBills ?? billsByPatient.get(viewPatientId) ?? []}
           onClose={() => setViewPatientId(null)}
           onEdit={() => { navigate(`/patients/${viewPatientId}/edit`); setViewPatientId(null) }}
+        />
+      )}
+
+      {remarksPatient && (
+        <RemarksModal patient={remarksPatient} onClose={() => setRemarksPatient(null)} />
+      )}
+
+      {editBill && (
+        <PaymentModal
+          orders={editBill}
+          onClose={() => setEditBill(null)}
+          saving={actions.updatePayment.isPending}
+          onSave={(updates) => actions.updatePayment.mutate(updates)}
         />
       )}
 
@@ -487,4 +625,3 @@ export default function PatientsPage() {
     </div>
   )
 }
-

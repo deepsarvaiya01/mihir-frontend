@@ -23,7 +23,7 @@ const TYPE_ICON: Record<string, React.ReactNode> = {
 
 const TYPE_ROUTE: Record<string, string> = {
   ORDER_AWAITING_APPROVAL: '/approvals',
-  ORDER_APPROVED:          '/billing',
+  ORDER_APPROVED:          '/patients',
   ORDER_REJECTED:          '/history',
 }
 

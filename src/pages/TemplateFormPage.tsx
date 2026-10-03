@@ -24,7 +24,8 @@ import {
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
 import { toTitleCase } from '../lib/utils'
-import { evalFormula } from '../utils/formula'
+import { evalFormula, parseFormula } from '../utils/formula'
+import { OTHER_OPTION, isOtherOption, parseOptions } from '../utils/selectOptions'
 
 const OP_LABELS: Record<string, string> = { '+': 'Add (+)', '-': 'Subtract (−)', '*': 'Multiply (×)', '/': 'Divide (÷)', '%': 'Percent of (%)' }
 const OP_SYMBOLS: Record<string, string> = { '+': '+', '-': '−', '*': '×', '/': '÷', '%': '%' }
@@ -41,10 +42,42 @@ type FormulaStep = { fieldId?: number; op?: string; value?: number; paren?: '(' 
 
 const fieldTypeLabels: Record<FieldType, string> = {
   text: 'Text', number: 'Number', checkbox: 'Checkbox (Yes/No)',
-  date: 'Date', select: 'Dropdown Select', calculated: 'Calculated (Auto)',
+  date: 'Date', select: 'Dropdown Select', multiselect: 'Multi-Select Dropdown', calculated: 'Calculated (Auto)',
 }
 const fieldTypeBadgeVariants: Record<FieldType, 'default' | 'info' | 'success' | 'warning' | 'purple' | 'danger'> = {
-  text: 'default', number: 'info', checkbox: 'success', date: 'warning', select: 'purple', calculated: 'danger',
+  text: 'default', number: 'info', checkbox: 'success', date: 'warning', select: 'purple', multiselect: 'purple', calculated: 'danger',
+}
+
+const hasOptions = (t: FieldType) => t === 'select' || t === 'multiselect'
+
+/** One formula's builder state — keys match the fieldForm keys the builder UI edits. */
+type FormulaDraft = {
+  formulaFirstKind: FormulaOperandKind
+  formulaFirstFieldId: string
+  formulaFirstValue: string
+  formulaPairs: FormulaPair[]
+  formulaGroupStart: number | null
+  formulaGroupEnd: number | null
+}
+const emptyFormulaDraft: FormulaDraft = {
+  formulaFirstKind: 'field', formulaFirstFieldId: '', formulaFirstValue: '',
+  formulaPairs: [], formulaGroupStart: null, formulaGroupEnd: null,
+}
+function pickDraft(f: FormulaDraft): FormulaDraft {
+  return {
+    formulaFirstKind: f.formulaFirstKind, formulaFirstFieldId: f.formulaFirstFieldId, formulaFirstValue: f.formulaFirstValue,
+    formulaPairs: f.formulaPairs, formulaGroupStart: f.formulaGroupStart, formulaGroupEnd: f.formulaGroupEnd,
+  }
+}
+function draftToSteps(d: FormulaDraft): FormulaStep[] {
+  return JSON.parse(buildFormulaJson(d.formulaFirstKind, d.formulaFirstFieldId, d.formulaFirstValue, d.formulaPairs, d.formulaGroupStart, d.formulaGroupEnd))
+}
+function draftError(d: FormulaDraft): string | null {
+  const firstEmpty = d.formulaFirstKind === 'field' ? !d.formulaFirstFieldId : !d.formulaFirstValue
+  if (firstEmpty) return 'Set the first operand for the formula'
+  if (d.formulaPairs.length === 0) return 'Formula needs at least two operands'
+  if (d.formulaPairs.some(p => p.kind === 'field' ? !p.fieldId : !p.value)) return 'Complete all formula steps'
+  return null
 }
 
 /** Operand slot index 0 is the first operand; index i+1 is pairs[i]'s operand. */
@@ -114,13 +147,74 @@ function FormCard({ children }: { children: React.ReactNode }) {
 
 const emptyFieldForm = {
   fieldName: '', fieldType: 'text' as FieldType, required: false,
-  options: '', unit: '', referenceRangeMale: '', referenceRangeFemale: '', isSectionHeader: false,
+  options: '', allowOther: false,
+  unit: '', referenceRangeMale: '', referenceRangeFemale: '', isSectionHeader: false,
   isMainHeader: false, isLineResult: false, displayOrder: '',
-  formulaFirstKind: 'field' as FormulaOperandKind,
-  formulaFirstFieldId: '', formulaFirstValue: '',
-  formulaPairs: [] as FormulaPair[],
-  formulaGroupStart: null as number | null,
-  formulaGroupEnd: null as number | null,
+  ...emptyFormulaDraft,
+  /** When true the field has separate male/female formulas. The builder edits the
+   *  active gender's formula in the formula* keys; the other one waits in formulaOther. */
+  formulaGendered: false,
+  formulaActiveGender: 'male' as 'male' | 'female',
+  formulaOther: emptyFormulaDraft,
+}
+
+/** Resets everything type-specific when the field type changes. */
+const resetForType = (p: typeof emptyFieldForm, fieldType: FieldType): typeof emptyFieldForm => ({
+  ...p, ...emptyFormulaDraft, fieldType,
+  formulaGendered: false, formulaActiveGender: 'male', formulaOther: emptyFormulaDraft,
+})
+
+/** Options to send for select/multiselect fields — "Other" is appended when free text is allowed. */
+function optionsPayload(pf: typeof emptyFieldForm): string[] | undefined {
+  if (!hasOptions(pf.fieldType)) return undefined
+  const list = pf.options.split(',').map(o => o.trim()).filter(o => o && !isOtherOption(o))
+  return pf.allowOther ? [...list, OTHER_OPTION] : list
+}
+
+/** Formula JSON for a calculated field — a plain steps array, or { male, female } when gendered. */
+function formulaPayload(pf: typeof emptyFieldForm): string {
+  const active = pickDraft(pf)
+  if (!pf.formulaGendered) return JSON.stringify(draftToSteps(active))
+  const male = pf.formulaActiveGender === 'male' ? active : pf.formulaOther
+  const female = pf.formulaActiveGender === 'male' ? pf.formulaOther : active
+  return JSON.stringify({ male: draftToSteps(male), female: draftToSteps(female) })
+}
+
+function stepsToDraft(steps: FormulaStep[]): FormulaDraft {
+  const draft: FormulaDraft = { ...emptyFormulaDraft }
+  const operandSteps = steps.filter(s => 'fieldId' in s || 'value' in s)
+  const opSteps = steps.filter(s => 'op' in s)
+  if (operandSteps.length > 0) {
+    const first = operandSteps[0]
+    if ('fieldId' in first && first.fieldId !== undefined) {
+      draft.formulaFirstKind = 'field'
+      draft.formulaFirstFieldId = String(first.fieldId)
+    } else if ('value' in first && first.value !== undefined) {
+      draft.formulaFirstKind = 'constant'
+      draft.formulaFirstValue = String(first.value)
+    }
+  }
+  draft.formulaPairs = opSteps.map((o, i) => {
+    const operand = operandSteps[i + 1]
+    if (!operand) return { op: (o.op ?? '+') as FormulaOp, kind: 'field' as FormulaOperandKind, fieldId: '', value: '' }
+    if ('fieldId' in operand && operand.fieldId !== undefined) {
+      return { op: (o.op ?? '+') as FormulaOp, kind: 'field' as FormulaOperandKind, fieldId: String(operand.fieldId), value: '' }
+    }
+    return { op: (o.op ?? '+') as FormulaOp, kind: 'constant' as FormulaOperandKind, fieldId: '', value: String(operand.value ?? '') }
+  })
+
+  // Reconstruct group boundaries from '(' / ')' markers, tracked by operand position.
+  let operandIndex = -1
+  for (const s of steps) {
+    if (s.paren === '(') {
+      draft.formulaGroupStart = operandIndex + 1
+    } else if (s.paren === ')') {
+      draft.formulaGroupEnd = operandIndex
+    } else if ('fieldId' in s || 'value' in s) {
+      operandIndex++
+    }
+  }
+  return draft
 }
 
 function fieldToForm(field: TestTemplateField): typeof emptyFieldForm {
@@ -128,45 +222,20 @@ function fieldToForm(field: TestTemplateField): typeof emptyFieldForm {
     return { ...emptyFieldForm, fieldName: field.fieldName, isSectionHeader: field.isSectionHeader, isMainHeader: field.isMainHeader, displayOrder: String(field.displayOrder) }
   }
   const base = { ...emptyFieldForm, fieldName: field.fieldName, fieldType: field.fieldType, required: field.required, unit: field.unit ?? '', referenceRangeMale: field.referenceRangeMale ?? '', referenceRangeFemale: field.referenceRangeFemale ?? '', isLineResult: field.isLineResult ?? false, displayOrder: String(field.displayOrder) }
-  if (field.fieldType === 'select' && field.optionsJson) {
-    try { base.options = (JSON.parse(field.optionsJson) as string[]).join(', ') } catch {}
+  if (hasOptions(field.fieldType)) {
+    const { options, allowOther } = parseOptions(field.optionsJson)
+    base.options = options.join(', ')
+    base.allowOther = allowOther
   }
-  if (field.fieldType === 'calculated' && field.optionsJson) {
-    try {
-      const steps: FormulaStep[] = JSON.parse(field.optionsJson)
-      const operandSteps = steps.filter(s => 'fieldId' in s || 'value' in s)
-      const opSteps = steps.filter(s => 'op' in s)
-      if (operandSteps.length > 0) {
-        const first = operandSteps[0]
-        if ('fieldId' in first && first.fieldId !== undefined) {
-          base.formulaFirstKind = 'field'
-          base.formulaFirstFieldId = String(first.fieldId)
-        } else if ('value' in first && first.value !== undefined) {
-          base.formulaFirstKind = 'constant'
-          base.formulaFirstValue = String(first.value)
-        }
+  if (field.fieldType === 'calculated') {
+    const parsed = parseFormula(field.optionsJson)
+    if (parsed.common) return { ...base, ...stepsToDraft(parsed.common) }
+    if (parsed.male || parsed.female) {
+      return {
+        ...base, ...stepsToDraft(parsed.male ?? []),
+        formulaGendered: true, formulaActiveGender: 'male', formulaOther: stepsToDraft(parsed.female ?? []),
       }
-      base.formulaPairs = opSteps.map((o, i) => {
-        const operand = operandSteps[i + 1]
-        if (!operand) return { op: (o.op ?? '+') as FormulaOp, kind: 'field' as FormulaOperandKind, fieldId: '', value: '' }
-        if ('fieldId' in operand && operand.fieldId !== undefined) {
-          return { op: (o.op ?? '+') as FormulaOp, kind: 'field' as FormulaOperandKind, fieldId: String(operand.fieldId), value: '' }
-        }
-        return { op: (o.op ?? '+') as FormulaOp, kind: 'constant' as FormulaOperandKind, fieldId: '', value: String(operand.value ?? '') }
-      })
-
-      // Reconstruct group boundaries from '(' / ')' markers, tracked by operand position.
-      let operandIndex = -1
-      for (const s of steps) {
-        if (s.paren === '(') {
-          base.formulaGroupStart = operandIndex + 1
-        } else if (s.paren === ')') {
-          base.formulaGroupEnd = operandIndex
-        } else if ('fieldId' in s || 'value' in s) {
-          operandIndex++
-        }
-      }
-    } catch {}
+    }
   }
   return base
 }
@@ -272,11 +341,12 @@ export default function TemplateFormPage() {
     const otherCalculated = (template?.fields ?? []).filter(f =>
       f.fieldType === 'calculated' && f.id !== editingField?.id,
     )
+    const gender = fieldForm.formulaActiveGender === 'female' ? 'Female' : 'Male'
     const values: Record<number, string | boolean> = { ...testValues }
     for (let pass = 0; pass < otherCalculated.length + 1; pass++) {
       let changed = false
       for (const f of otherCalculated) {
-        const n = evalFormula(f.optionsJson, values)
+        const n = evalFormula(f.optionsJson, values, gender)
         const asStr = String(n)
         if (values[f.id] !== asStr) {
           values[f.id] = asStr
@@ -424,7 +494,7 @@ export default function TemplateFormPage() {
       required: pf.required, displayOrder,
       isLineResult: pf.isLineResult,
       unit: pf.isLineResult ? undefined : pf.unit || undefined,
-      options: pf.fieldType === 'select' ? pf.options.split(',').map(o => o.trim()).filter(Boolean) : undefined,
+      options: optionsPayload(pf),
       referenceRangeMale: pf.isLineResult ? undefined : pf.referenceRangeMale || undefined,
       referenceRangeFemale: pf.isLineResult ? undefined : pf.referenceRangeFemale || undefined,
     }
@@ -486,7 +556,7 @@ export default function TemplateFormPage() {
           fieldName: fieldForm.fieldName, fieldType: 'calculated', required: false,
           isLineResult: fieldForm.isLineResult,
           unit: fieldForm.isLineResult ? undefined : fieldForm.unit || undefined, displayOrder,
-          formulaJson: buildFormulaJson(fieldForm.formulaFirstKind, fieldForm.formulaFirstFieldId, fieldForm.formulaFirstValue, fieldForm.formulaPairs, fieldForm.formulaGroupStart, fieldForm.formulaGroupEnd),
+          formulaJson: formulaPayload(fieldForm),
           referenceRangeMale: fieldForm.isLineResult ? undefined : fieldForm.referenceRangeMale || undefined,
           referenceRangeFemale: fieldForm.isLineResult ? undefined : fieldForm.referenceRangeFemale || undefined,
         })
@@ -496,8 +566,7 @@ export default function TemplateFormPage() {
         required: fieldForm.required, displayOrder,
         isLineResult: fieldForm.isLineResult,
         unit: fieldForm.isLineResult ? undefined : fieldForm.unit || undefined,
-        options: fieldForm.fieldType === 'select'
-          ? fieldForm.options.split(',').map(o => o.trim()).filter(Boolean) : undefined,
+        options: optionsPayload(fieldForm),
         referenceRangeMale: fieldForm.isLineResult ? undefined : fieldForm.referenceRangeMale || undefined,
         referenceRangeFemale: fieldForm.isLineResult ? undefined : fieldForm.referenceRangeFemale || undefined,
       })
@@ -527,7 +596,7 @@ export default function TemplateFormPage() {
           fieldName: fieldForm.fieldName, fieldType: 'calculated', required: false,
           isLineResult: fieldForm.isLineResult,
           unit: fieldForm.isLineResult ? undefined : fieldForm.unit || undefined, displayOrder,
-          formulaJson: buildFormulaJson(fieldForm.formulaFirstKind, fieldForm.formulaFirstFieldId, fieldForm.formulaFirstValue, fieldForm.formulaPairs, fieldForm.formulaGroupStart, fieldForm.formulaGroupEnd),
+          formulaJson: formulaPayload(fieldForm),
           referenceRangeMale: fieldForm.isLineResult ? undefined : fieldForm.referenceRangeMale || undefined,
           referenceRangeFemale: fieldForm.isLineResult ? undefined : fieldForm.referenceRangeFemale || undefined,
         })
@@ -537,8 +606,7 @@ export default function TemplateFormPage() {
         required: fieldForm.required, displayOrder,
         isLineResult: fieldForm.isLineResult,
         unit: fieldForm.isLineResult ? undefined : fieldForm.unit || undefined,
-        options: fieldForm.fieldType === 'select'
-          ? fieldForm.options.split(',').map(o => o.trim()).filter(Boolean) : undefined,
+        options: optionsPayload(fieldForm),
         referenceRangeMale: fieldForm.isLineResult ? undefined : fieldForm.referenceRangeMale || undefined,
         referenceRangeFemale: fieldForm.isLineResult ? undefined : fieldForm.referenceRangeFemale || undefined,
       })
@@ -598,6 +666,9 @@ export default function TemplateFormPage() {
 
   const handleAddField = () => {
     if (!fieldForm.fieldName.trim()) { toast.error('Field name is required'); return }
+    if (!fieldForm.isSectionHeader && !fieldForm.isMainHeader && hasOptions(fieldForm.fieldType) && !optionsPayload(fieldForm)?.length) {
+      toast.error('Add at least one option'); return
+    }
 
     if (!isEdit) {
       // Create mode: buffer locally
@@ -615,13 +686,12 @@ export default function TemplateFormPage() {
       editingField ? updateFieldMutation.mutate() : addFieldMutation.mutate(); return
     }
     if (fieldForm.fieldType === 'calculated') {
-      const firstEmpty = fieldForm.formulaFirstKind === 'field' ? !fieldForm.formulaFirstFieldId : !fieldForm.formulaFirstValue
-      if (firstEmpty) { toast.error('Set the first operand for the formula'); return }
-      if (fieldForm.formulaPairs.length === 0) { toast.error('Formula needs at least two operands'); return }
-      const pairIncomplete = fieldForm.formulaPairs.some(p =>
-        p.kind === 'field' ? !p.fieldId : !p.value
-      )
-      if (pairIncomplete) { toast.error('Complete all formula steps'); return }
+      const activeLabel = fieldForm.formulaActiveGender === 'male' ? 'Male' : 'Female'
+      const otherLabel = fieldForm.formulaActiveGender === 'male' ? 'Female' : 'Male'
+      const activeErr = draftError(pickDraft(fieldForm))
+      if (activeErr) { toast.error(fieldForm.formulaGendered ? `${activeLabel} formula: ${activeErr}` : activeErr); return }
+      const otherErr = fieldForm.formulaGendered ? draftError(fieldForm.formulaOther) : null
+      if (otherErr) { toast.error(`${otherLabel} formula: ${otherErr}`); return }
     }
     editingField ? updateFieldMutation.mutate() : addFieldMutation.mutate()
   }
@@ -922,7 +992,7 @@ export default function TemplateFormPage() {
                                 <td className="px-2 py-2">
                                   {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
                                     <Select size="sm" value={fieldForm.fieldType}
-                                      onChange={e => setFieldForm(p => ({ ...p, fieldType: e.target.value as FieldType, formulaFirstFieldId: '', formulaPairs: [], formulaGroupStart: null, formulaGroupEnd: null }))}>
+                                      onChange={e => setFieldForm(p => resetForType(p, e.target.value as FieldType))}>
                                       {(Object.entries(fieldTypeLabels) as [FieldType, string][])
                                         .map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                                     </Select>
@@ -1041,7 +1111,7 @@ export default function TemplateFormPage() {
                                 <td className="px-2 py-2">
                                   {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
                                     <Select size="sm" value={fieldForm.fieldType}
-                                      onChange={e => setFieldForm(p => ({ ...p, fieldType: e.target.value as FieldType, formulaFirstFieldId: '', formulaPairs: [], formulaGroupStart: null, formulaGroupEnd: null }))}>
+                                      onChange={e => setFieldForm(p => resetForType(p, e.target.value as FieldType))}>
                                       {(Object.entries(fieldTypeLabels) as [FieldType, string][])
                                         .filter(([v]) => v !== 'calculated')
                                         .map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -1127,7 +1197,7 @@ export default function TemplateFormPage() {
                           <td className="px-2 py-2">
                             {!fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
                               <Select size="sm" value={fieldForm.fieldType}
-                                onChange={e => setFieldForm(p => ({ ...p, fieldType: e.target.value as FieldType, formulaFirstFieldId: '', formulaPairs: [], formulaGroupStart: null, formulaGroupEnd: null }))}>
+                                onChange={e => setFieldForm(p => resetForType(p, e.target.value as FieldType))}>
                                 {(Object.entries(fieldTypeLabels) as [FieldType, string][])
                                   .filter(([v]) => isEdit || v !== 'calculated')
                                   .map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -1178,11 +1248,21 @@ export default function TemplateFormPage() {
                   </table>
 
                   {/* Dropdown options — below table for select type */}
-                  {addFieldOpen && fieldForm.fieldType === 'select' && !fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
-                    <div className="border-t border-gray-200 dark:border-gray-700 bg-blue-50/30 dark:bg-blue-900/5 px-4 py-3">
-                      <Input size="sm" label="Dropdown Options" placeholder="Option 1, Option 2, Option 3"
+                  {addFieldOpen && hasOptions(fieldForm.fieldType) && !fieldForm.isSectionHeader && !fieldForm.isMainHeader && (
+                    <div className="border-t border-gray-200 dark:border-gray-700 bg-blue-50/30 dark:bg-blue-900/5 px-4 py-3 space-y-2">
+                      <Input size="sm"
+                        label={fieldForm.fieldType === 'multiselect' ? 'Multi-Select Options' : 'Dropdown Options'}
+                        placeholder="Option 1, Option 2, Option 3"
                         value={fieldForm.options} onChange={e => setFieldForm(p => ({ ...p, options: e.target.value }))}
-                        hint="Comma-separated list" />
+                        hint={fieldForm.fieldType === 'multiselect'
+                          ? 'Comma-separated list — more than one option can be picked when entering results'
+                          : 'Comma-separated list'} />
+                      <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+                        <input type="checkbox" checked={fieldForm.allowOther}
+                          onChange={e => setFieldForm(p => ({ ...p, allowOther: e.target.checked }))}
+                          className="h-3.5 w-3.5 accent-blue-600" />
+                        Add an &ldquo;Other&rdquo; option — lets the user type any value
+                      </label>
                     </div>
                   )}
 
@@ -1220,6 +1300,58 @@ export default function TemplateFormPage() {
                           </Button>
                         )}
                       </div>
+
+                      {/* Same formula for everyone, or separate male / female formulas */}
+                      <div className="mt-4 flex flex-wrap items-center gap-3">
+                        <div className="flex rounded-lg border border-amber-300 overflow-hidden text-xs font-semibold dark:border-amber-700">
+                          <button type="button"
+                            onClick={() => setFieldForm(p => p.formulaGendered
+                              // Back to one formula: keep the male formula
+                              ? { ...p, ...(p.formulaActiveGender === 'female' ? p.formulaOther : {}), formulaGendered: false, formulaActiveGender: 'male', formulaOther: emptyFormulaDraft }
+                              : p)}
+                            className={`px-3 py-1.5 transition-colors ${!fieldForm.formulaGendered ? 'bg-amber-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300'}`}>
+                            Same for All
+                          </button>
+                          <button type="button"
+                            onClick={() => setFieldForm(p => p.formulaGendered
+                              ? p
+                              // Start the female formula as a copy of the current one — usually only a constant differs
+                              : { ...p, formulaGendered: true, formulaActiveGender: 'male', formulaOther: pickDraft(p) })}
+                            className={`border-l border-amber-300 px-3 py-1.5 transition-colors dark:border-amber-700 ${fieldForm.formulaGendered ? 'bg-amber-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300'}`}>
+                            Separate Male / Female
+                          </button>
+                        </div>
+
+                        {fieldForm.formulaGendered && (
+                          <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs font-semibold dark:border-gray-700">
+                            {(['male', 'female'] as const).map(g => (
+                              <button key={g} type="button"
+                                onClick={() => setFieldForm(p => p.formulaActiveGender === g
+                                  ? p
+                                  : { ...p, ...p.formulaOther, formulaOther: pickDraft(p), formulaActiveGender: g })}
+                                className={`px-3 py-1.5 transition-colors ${g === 'female' ? 'border-l border-gray-200 dark:border-gray-700' : ''} ${
+                                  fieldForm.formulaActiveGender === g
+                                    ? (g === 'male' ? 'bg-blue-600 text-white' : 'bg-pink-600 text-white')
+                                    : 'bg-white text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300'
+                                }`}>
+                                {g === 'male' ? '♂ Male Formula' : '♀ Female Formula'}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {fieldForm.formulaGendered && (
+                        <p className="mt-2 text-[11px] text-amber-800/80 dark:text-amber-300/80">
+                          Editing the <strong>{fieldForm.formulaActiveGender}</strong> formula.{' '}
+                          {fieldForm.formulaActiveGender === 'male' ? 'Female' : 'Male'} formula:{' '}
+                          <span className="font-mono">
+                            {draftError(fieldForm.formulaOther)
+                              ? 'not complete yet'
+                              : previewFormulaText(fieldForm.formulaOther.formulaFirstKind, fieldForm.formulaOther.formulaFirstFieldId, fieldForm.formulaOther.formulaFirstValue, fieldForm.formulaOther.formulaPairs, numericFields, fieldForm.formulaOther.formulaGroupStart, fieldForm.formulaOther.formulaGroupEnd)}
+                          </span>
+                          . Patients with no gender use the male formula.
+                        </p>
+                      )}
 
                       {/* Live Equation Token Bar */}
                       <div className="mt-4 rounded-xl border border-amber-200 bg-white p-3 shadow-2xs dark:border-amber-800/80 dark:bg-gray-800/90">

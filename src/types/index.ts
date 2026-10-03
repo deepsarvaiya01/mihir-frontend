@@ -1,5 +1,5 @@
 export type UserRole = 'SUPER_ADMIN' | 'LAB_USER'
-export type FieldType = 'text' | 'number' | 'checkbox' | 'date' | 'select' | 'calculated'
+export type FieldType = 'text' | 'number' | 'checkbox' | 'date' | 'select' | 'multiselect' | 'calculated'
 export type OrderStatus = 'PENDING' | 'IN_PROGRESS' | 'AWAITING_APPROVAL' | 'APPROVED' | 'REJECTED'
 export type PaymentStatus = 'PENDING' | 'PAID' | 'PARTIAL'
 export type PaymentType = 'CASH' | 'CHEQUE' | 'ONLINE'
@@ -36,6 +36,7 @@ export interface TestTemplate { id: number; name: string; code: string; active: 
 export interface TestProfile { id: number; name: string; code: string; active: boolean; amount: number; templates: TestTemplate[]; deletedAt?: string | null }
 
 export interface B2bLab { id: number; name: string; contactPerson: string | null; phone: string | null; email: string | null; address: string | null; city: string | null; active: boolean; deletedAt?: string | null }
+export interface PatientRemark { id: number; patientId: number; text: string; createdBy: string | null; createdAt: string }
 export interface PatientDocument { id: number; patientId: number; name: string; url: string; createdAt: string }
 export interface LabBranch { id: number; name: string; address: string | null; phone: string | null; active: boolean; deletedAt?: string | null }
 export interface Doctor { id: number; name: string; degreeName: string | null; active: boolean; deletedAt?: string | null }
@@ -49,6 +50,8 @@ export interface Patient {
   isB2b: boolean; b2bLabId: number | null; labBranchId: number | null; doctorName: string | null; reportDate: string | null
   b2bLab?: B2bLab | null
   documents?: PatientDocument[]
+  /** Only set on the patient list */
+  remarkCount?: number
   createdAt?: string
 }
 
