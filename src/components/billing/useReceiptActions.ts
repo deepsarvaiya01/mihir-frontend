@@ -78,7 +78,7 @@ export function useReceiptActions(allOrders: Order[], onPaymentSaved?: () => voi
     onSuccess: (optionsList) => {
       generateCombinedReport(optionsList, 'letterhead')
         .then(() => toast.success('Report downloaded'))
-        .catch(() => toast.error('Failed to generate report'))
+        .catch((e: Error) => toast.error(e?.message || 'Failed to generate report'))
     },
     onError: (err) => toastError(err, 'Failed to generate report'),
   })
@@ -86,7 +86,7 @@ export function useReceiptActions(allOrders: Order[], onPaymentSaved?: () => voi
   const viewReport = useMutation({
     mutationFn: fetchReportOptions,
     onSuccess: (optionsList) => {
-      viewCombinedReport(optionsList, 'letterhead').catch(() => toast.error('Failed to open report'))
+      viewCombinedReport(optionsList, 'letterhead').catch((e: Error) => toast.error(e?.message || 'Failed to open report'))
     },
     onError: (err) => toastError(err, 'Failed to open report'),
   })
@@ -94,7 +94,7 @@ export function useReceiptActions(allOrders: Order[], onPaymentSaved?: () => voi
   const printReport = useMutation({
     mutationFn: fetchReportOptions,
     onSuccess: (optionsList) => {
-      printCombinedReport(optionsList, 'letterhead').catch(() => toast.error('Failed to print report'))
+      printCombinedReport(optionsList, 'letterhead').catch((e: Error) => toast.error(e?.message || 'Failed to print report'))
     },
     onError: (err) => toastError(err, 'Failed to print report'),
   })
@@ -104,7 +104,7 @@ export function useReceiptActions(allOrders: Order[], onPaymentSaved?: () => voi
     onSuccess: (optionsList) => {
       generateCombinedReport(optionsList, 'plain')
         .then(() => toast.success('Plain report downloaded'))
-        .catch(() => toast.error('Failed to generate report'))
+        .catch((e: Error) => toast.error(e?.message || 'Failed to generate report'))
     },
     onError: (err) => toastError(err, 'Failed to generate report'),
   })
@@ -112,7 +112,7 @@ export function useReceiptActions(allOrders: Order[], onPaymentSaved?: () => voi
   const printPlainReport = useMutation({
     mutationFn: fetchReportOptions,
     onSuccess: (optionsList) => {
-      printCombinedReport(optionsList, 'plain').catch(() => toast.error('Failed to print report'))
+      printCombinedReport(optionsList, 'plain').catch((e: Error) => toast.error(e?.message || 'Failed to print report'))
     },
     onError: (err) => toastError(err, 'Failed to print report'),
   })

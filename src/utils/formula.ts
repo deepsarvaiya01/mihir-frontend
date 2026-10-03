@@ -13,6 +13,13 @@ export function parseFormula(optionsJson: string | null): { common?: FormulaStep
   return {}
 }
 
+/** Every field a calculated field's formula reads (from both the male and female formulas when gendered). */
+export function formulaFieldIds(optionsJson: string | null): number[] {
+  const f = parseFormula(optionsJson)
+  const steps = [...(f.common ?? []), ...(f.male ?? []), ...(f.female ?? [])]
+  return Array.from(new Set(steps.filter(s => s.fieldId !== undefined).map(s => s.fieldId!)))
+}
+
 /** Picks the steps to evaluate for a patient's gender — male formula is the fallback when gender is unknown. */
 export function resolveFormulaSteps(optionsJson: string | null, gender?: string | null): FormulaStep[] {
   const f = parseFormula(optionsJson)

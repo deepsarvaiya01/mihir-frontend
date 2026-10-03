@@ -82,7 +82,7 @@ export default function PublicReportPage() {
               <p className="mt-0.5 font-semibold text-gray-900">{order.patient?.fullName ?? '—'}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-400">Patient Code</p>
+              <p className="text-xs text-gray-400">Lab ID</p>
               <p className="mt-0.5 font-mono text-sm font-semibold text-blue-600">{order.patient?.patientCode ?? '—'}</p>
             </div>
             {(order.patient?.ageYears || order.patient?.ageMonths || order.patient?.ageDays) && (
@@ -108,10 +108,6 @@ export default function PublicReportPage() {
               <div>
                 <p className="text-xs text-gray-400">Test Name</p>
                 <p className="mt-0.5 font-semibold text-gray-900">{order.template?.name ?? '—'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-400">Receipt No.</p>
-                <p className="mt-0.5 font-semibold text-gray-700">{order.receiptNumber ?? '—'}</p>
               </div>
               <div>
                 <p className="text-xs text-gray-400">Report Date</p>

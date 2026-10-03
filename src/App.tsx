@@ -25,6 +25,8 @@ import EnterResultsPage from './pages/EnterResultsPage'
 import AuditLogPage from './pages/AuditLogPage'
 import RequestLogsPage from './pages/RequestLogsPage'
 import PublicReportPage from './pages/PublicReportPage'
+import QuotationPage from './pages/QuotationPage'
+import AnalysisPage from './pages/AnalysisPage'
 import { useAuthStore } from './store/authStore'
 import { useThemeStore } from './store/themeStore'
 
@@ -67,6 +69,8 @@ export default function App() {
             <Route path="/templates" element={<RoleRoute roles={['SUPER_ADMIN', 'LAB_USER']}><TemplatesPage /></RoleRoute>} />
             <Route path="/templates/new" element={<RoleRoute roles={['SUPER_ADMIN']}><TemplateFormPage /></RoleRoute>} />
             <Route path="/templates/:id/edit" element={<RoleRoute roles={['SUPER_ADMIN']}><TemplateFormPage /></RoleRoute>} />
+            <Route path="/analysis" element={<RoleRoute roles={['SUPER_ADMIN']}><AnalysisPage /></RoleRoute>} />
+            <Route path="/quotation" element={<RoleRoute roles={['SUPER_ADMIN', 'LAB_USER']}><QuotationPage /></RoleRoute>} />
             <Route path="/profiles" element={<RoleRoute roles={['SUPER_ADMIN']}><ProfilesPage /></RoleRoute>} />
             <Route path="/approvals" element={<RoleRoute roles={['SUPER_ADMIN']}><ApprovalsPage /></RoleRoute>} />
             <Route path="/patients" element={<RoleRoute roles={['SUPER_ADMIN', 'LAB_USER']}><PatientsPage /></RoleRoute>} />

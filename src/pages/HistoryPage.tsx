@@ -15,6 +15,10 @@ import type { PatientHistory } from '../types'
 import { toastError } from '../lib/errors'
 import { formatAge } from '../lib/utils'
 
+/** "04 Oct 2026" — the date the patient was registered */
+const registeredOn = (iso?: string) =>
+  iso ? new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : null
+
 export default function HistoryPage() {
   const [query, setQuery]           = useState('')
   const [dropOpen, setDropOpen]     = useState(false)
@@ -188,6 +192,7 @@ export default function HistoryPage() {
                           {p.patientCode}
                           {p.phoneNumber ? ` · ${p.phoneNumber}` : ''}
                           {formatAge(p.ageYears, p.ageMonths, p.ageDays) ? ` · ${formatAge(p.ageYears, p.ageMonths, p.ageDays)}` : ''}
+                          {registeredOn(p.createdAt) ? ` · Reg. ${registeredOn(p.createdAt)}` : ''}
                         </p>
                       </div>
                       {p.gender && (
@@ -216,6 +221,7 @@ export default function HistoryPage() {
                 </div>
 
                 <dl className="mt-5 space-y-2.5 border-t border-gray-100 pt-4 text-sm dark:border-gray-700">
+                  <InfoRow label="Registered" value={registeredOn(patient.createdAt)} />
                   <InfoRow label="Age" value={patientAge} />
                   <InfoRow label="Gender" value={patient.gender} />
                   <InfoRow label="Blood group" value={patient.bloodGroup} />

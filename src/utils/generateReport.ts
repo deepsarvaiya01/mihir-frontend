@@ -36,6 +36,10 @@ export interface ReportOrder {
   }
   template?: { name: string; code: string; summaryTitle?: string | null; summary?: string | null; summaryFormat?: SummaryFormat; category?: { displayOrder: number } | null }
   createdAt?: string
+  /** Uploaded result document — merged in right after this test's report pages */
+  attachmentUrl?: string | null
+  /** Result is the uploaded document; with no values entered the report section is skipped */
+  resultByDocument?: boolean
 }
 
 export interface GenerateReportOptions {
@@ -407,8 +411,8 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
 
     doc.setFont('helvetica', 'bold');  doc.text("Patient's Name", ML, startY)
     doc.setFont('helvetica', 'normal'); doc.text(`: ${p?.fullName ?? '—'}`, ML + 35, startY)
-    doc.setFont('helvetica', 'bold');  doc.text('Receipt No.', col2X, startY)
-    doc.setFont('helvetica', 'normal'); doc.text(`: ${order.receiptNumber ?? '—'}`, col2X + 24, startY)
+    doc.setFont('helvetica', 'bold');  doc.text('Lab ID', col2X, startY)
+    doc.setFont('helvetica', 'normal'); doc.text(`: ${p?.patientCode ?? '—'}`, col2X + 24, startY)
 
     doc.setFont('helvetica', 'bold');  doc.text('Age / Gender', ML, startY + 7)
     doc.setFont('helvetica', 'normal'); doc.text(`: ${fmtAgeGender(p?.ageYears ?? null, p?.ageMonths ?? null, p?.ageDays ?? null, p?.gender ?? null)}`, ML + 35, startY + 7)
@@ -655,14 +659,14 @@ async function buildLabReportBytes(options: GenerateReportOptions): Promise<Uint
 }
 
 export async function generateLabReport(options: GenerateReportOptions): Promise<void> {
-  const bytes = await buildLabReportBytes(options)
+  const bytes = await buildCombinedReportBytes([options], 'letterhead')
   const patientSlug = options.order.patient?.fullName?.replace(/\s+/g, '-') ?? 'patient'
   downloadBlob(bytes, `report-${options.order.id}-${patientSlug}.pdf`)
 }
 
 /** Generate letterhead report and return it as a base64 string (no download). */
 export async function generateLabReportBase64(options: GenerateReportOptions): Promise<string> {
-  return uint8ToBase64(await buildLabReportBytes(options))
+  return uint8ToBase64(await buildCombinedReportBytes([options], 'letterhead'))
 }
 
 /* ─── Receipt generator ─────────────────────────────────── */
@@ -926,8 +930,8 @@ async function buildPlainReportDoc(options: GenerateReportOptions): Promise<jsPD
 
     doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text("Patient's Name", ML, y)
     doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${p?.fullName ?? '—'}`, ML + 35, y)
-    doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text('Receipt No.', col2X, y)
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${order.receiptNumber ?? '—'}`, col2X + 24, y)
+    doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text('Lab ID', col2X, y)
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${order.patient?.patientCode ?? '—'}`, col2X + 24, y)
 
     doc.setFont('helvetica', 'bold');   doc.setTextColor(10, 10, 10); doc.text('Age / Gender', ML, y + 7)
     doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.text(`: ${fmtAgeGender(p?.ageYears ?? null, p?.ageMonths ?? null, p?.ageDays ?? null, p?.gender ?? null)}`, ML + 35, y + 7)
@@ -1162,10 +1166,12 @@ const FOOTER_ML_MM = 15
  * page and restamps correct, combined-wide numbering + footer note directly
  * on the final PDF.
  */
-async function restampCombinedFooters(pdf: PDFDocument, footerNote: string): Promise<void> {
+/** Restamps "Page x of y" + footer note on the report pages only — merged-in documents are left untouched. */
+async function restampCombinedFooters(pdf: PDFDocument, footerNote: string, reportPageIndices?: number[]): Promise<void> {
   const font = await pdf.embedFont(StandardFonts.Helvetica)
   const italicFont = await pdf.embedFont(StandardFonts.HelveticaOblique)
-  const pages = pdf.getPages()
+  const allPages = pdf.getPages()
+  const pages = reportPageIndices ? reportPageIndices.map(i => allPages[i]) : allPages
   const total = pages.length
 
   pages.forEach((page, idx) => {
@@ -1228,31 +1234,82 @@ async function buildCombinedReportBytes(
       (visitIndex.get(a.order.receiptNumber ?? '') ?? 0) - (visitIndex.get(b.order.receiptNumber ?? '') ?? 0) ||
       (a.order.template?.category?.displayOrder ?? Infinity) - (b.order.template?.category?.displayOrder ?? Infinity))
 
-  if (normalizedList.length === 1) {
-    return type === 'letterhead' ? buildLabReportBytes(normalizedList[0]) : buildPlainReportDoc(normalizedList[0]).then(d => new Uint8Array(d.output('arraybuffer') as ArrayBuffer))
+  const buildSection = (opt: GenerateReportOptions) => {
+    // The document is merged in below, after this test's report pages, so the section itself goes without it
+    const section = { ...opt, attachmentUrl: null }
+    return type === 'letterhead'
+      ? buildLabReportBytes(section)
+      : buildPlainReportDoc(section).then(d => new Uint8Array(d.output('arraybuffer') as ArrayBuffer))
   }
 
-  const pdfBytesArray = await Promise.all(
-    normalizedList.map(opt =>
-      type === 'letterhead'
-        ? buildLabReportBytes(opt)
-        : buildPlainReportDoc(opt).then(d => new Uint8Array(d.output('arraybuffer') as ArrayBuffer))
-    )
-  )
+  const sections = normalizedList.map(opt => {
+    const documentUrl = opt.attachmentUrl ?? opt.order.attachmentUrl ?? null
+    const hasValues = opt.results.some(r => !r.isSectionHeader)
+    // A document-only test with nothing entered has no report page of its own — just its document
+    const skipReport = !!opt.order.resultByDocument && !!documentUrl && !hasValues
+    return { opt, documentUrl, skipReport }
+  })
+
+  const [reportBytes, documentBytes] = await Promise.all([
+    Promise.all(sections.map(sec => sec.skipReport ? null : buildSection(sec.opt))),
+    Promise.all(sections.map(sec => sec.documentUrl ? fetchDocument(sec.documentUrl, sec.opt.order.template?.name) : null)),
+  ])
 
   const merged = await PDFDocument.create()
-  for (const bytes of pdfBytesArray) {
-    const pdf = await PDFDocument.load(bytes)
-    const pages = await merged.copyPages(pdf, pdf.getPageIndices())
-    pages.forEach(p => merged.addPage(p))
+  const reportPageIndices: number[] = []
+  for (let i = 0; i < sections.length; i++) {
+    const report = reportBytes[i]
+    if (report) {
+      const pdf = await PDFDocument.load(report)
+      const pages = await merged.copyPages(pdf, pdf.getPageIndices())
+      pages.forEach(p => { reportPageIndices.push(merged.getPageCount()); merged.addPage(p) })
+    }
+    const document = documentBytes[i]
+    if (document) await appendDocument(merged, document)
   }
 
-  const footerNote = type === 'letterhead'
-    ? 'This is a computer-generated report and does not require a physical signature.'
-    : 'This is an Electronically Authenticated Report.'
-  await restampCombinedFooters(merged, footerNote)
+  // A single report already numbers its own pages; several need one running count across them
+  const reportSections = reportBytes.filter(Boolean).length
+  if (reportSections > 1) {
+    const footerNote = type === 'letterhead'
+      ? 'This is a computer-generated report and does not require a physical signature.'
+      : 'This is an Electronically Authenticated Report.'
+    await restampCombinedFooters(merged, footerNote, reportPageIndices)
+  }
 
   return merged.save()
+}
+
+type FetchedDocument = { bytes: ArrayBuffer; contentType: string }
+
+/** Downloads an uploaded result document; fails loudly so a report never silently goes out without it. */
+async function fetchDocument(url: string, testName?: string): Promise<FetchedDocument> {
+  const label = testName ? ` for ${testName}` : ''
+  let res: Response
+  try {
+    res = await fetch(url)
+  } catch {
+    throw new Error(`Could not download the attached document${label}`)
+  }
+  if (!res.ok) throw new Error(`Could not download the attached document${label} (HTTP ${res.status})`)
+  return { bytes: await res.arrayBuffer(), contentType: res.headers.get('content-type') ?? '' }
+}
+
+/** Appends a PDF's pages, or an image scaled onto its own A4 page. */
+async function appendDocument(merged: PDFDocument, doc: FetchedDocument): Promise<void> {
+  const isPng = doc.contentType.includes('png')
+  const isJpg = doc.contentType.includes('jpeg') || doc.contentType.includes('jpg')
+  if (isPng || isJpg) {
+    const img = isPng ? await merged.embedPng(doc.bytes) : await merged.embedJpg(doc.bytes)
+    const A4_W = 595.28, A4_H = 841.89, MARGIN = 28
+    const scale = Math.min((A4_W - 2 * MARGIN) / img.width, (A4_H - 2 * MARGIN) / img.height, 1)
+    const w = img.width * scale, h = img.height * scale
+    merged.addPage([A4_W, A4_H]).drawImage(img, { x: (A4_W - w) / 2, y: (A4_H - h) / 2, width: w, height: h })
+    return
+  }
+  const pdf = await PDFDocument.load(doc.bytes, { ignoreEncryption: true })
+  const pages = await merged.copyPages(pdf, pdf.getPageIndices())
+  pages.forEach(p => merged.addPage(p))
 }
 
 /**

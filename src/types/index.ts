@@ -39,7 +39,7 @@ export interface B2bLab { id: number; name: string; contactPerson: string | null
 export interface PatientRemark { id: number; patientId: number; text: string; createdBy: string | null; createdAt: string }
 export interface PatientDocument { id: number; patientId: number; name: string; url: string; createdAt: string }
 export interface LabBranch { id: number; name: string; address: string | null; phone: string | null; active: boolean; deletedAt?: string | null }
-export interface Doctor { id: number; name: string; degreeName: string | null; active: boolean; deletedAt?: string | null }
+export interface Doctor { id: number; name: string; degreeName: string | null; phone: string | null; email: string | null; address: string | null; city: string | null; active: boolean; deletedAt?: string | null }
 
 export interface Patient {
   id: number; fullName: string; patientCode: string
@@ -52,6 +52,7 @@ export interface Patient {
   documents?: PatientDocument[]
   /** Only set on the patient list */
   remarkCount?: number
+  documentCount?: number
   createdAt?: string
 }
 
@@ -63,6 +64,8 @@ export interface Order {
   attachmentUrl: string | null
   attachmentName: string | null
   revertRemark: string | null
+  /** Result is an uploaded document: values optional, attachment mandatory */
+  resultByDocument?: boolean
 }
 
 export interface OrderFormData { order: Order; fields: TestTemplateField[] }

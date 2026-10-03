@@ -6,6 +6,7 @@ import {
   Calculator,
   CheckCircle2,
   ChevronDown,
+  Eye,
   FileText,
   Lock,
   Paperclip,
@@ -24,8 +25,12 @@ import { Header } from '../components/layout/Header'
 import { PageContent } from '../components/ui/PageContent'
 import { PageLoader } from '../components/ui/Spinner'
 import { Input, Select } from '../components/ui/Input'
-import { evalFormula, evalCalculatedFields } from '../utils/formula'
+import { evalFormula, evalCalculatedFields, formulaFieldIds } from '../utils/formula'
 import { checkValidationRules } from '../utils/validationRules'
+import { rangeStatus } from '../utils/rangeCheck'
+import { sanitizeNumberInput, toNumber } from '../utils/numberInput'
+import { genderInfo } from '../components/filters/patientFilters'
+import { DocumentPreviewModal } from '../components/patients/DocumentPreviewModal'
 import { OTHER_OPTION, isOtherOption, parseMultiValue, parseOptions, serializeMultiValue } from '../utils/selectOptions'
 import type { TestTemplateField, Order, OrderFormData } from '../types'
 
@@ -36,7 +41,8 @@ function formatBytes(bytes: number): string {
 }
 
 type SectionValues = Record<number, string | boolean>
-type Attachment = { name: string; size: number; base64: string } | null
+/** previewUrl is an object URL of the picked file, for viewing it before it's uploaded */
+type Attachment = { name: string; size: number; base64: string; previewUrl: string } | null
 
 /* ─── card wrapper ───────────────────────────────────────── */
 function FormCard({ title, icon, children, action }: { title: string; icon: React.ReactNode; children: React.ReactNode; action?: React.ReactNode }) {
@@ -180,17 +186,32 @@ function ResultField({
     )
   }
 
+  if (field.fieldType === 'number') {
+    // A text box with a decimal keypad, not <input type="number">: number inputs drop "0,5" (comma
+    // locales), report partial input like "0." as empty, and change value on mouse-wheel scroll.
+    return (
+      <Input
+        type="text"
+        inputMode="decimal"
+        autoComplete="off"
+        value={String(value ?? '')}
+        onChange={e => onChange(field.id, sanitizeNumberInput(e.target.value))}
+        placeholder="e.g. 0.5"
+      />
+    )
+  }
+
   return (
     <Input
-      type={field.fieldType === 'number' ? 'number' : field.fieldType === 'date' ? 'date' : 'text'}
+      type={field.fieldType === 'date' ? 'date' : 'text'}
       value={String(value ?? '')}
       onChange={e => onChange(field.id, e.target.value)}
-      placeholder={field.fieldType === 'number' ? '0.00' : 'Enter value'}
+      placeholder="Enter value"
     />
   )
 }
 
-/* ─── one test's fields grid (shared by single + batch rendering) ── */
+/* ─── one test's fields as a table (shared by single + batch rendering) ── */
 function FieldsGrid({
   fields, values, gender, onChange,
 }: {
@@ -200,66 +221,112 @@ function FieldsGrid({
   onChange: (fieldId: number, val: string | boolean) => void
 }) {
   const calculatedValues = evalCalculatedFields(fields, values, gender)
+  const g = genderInfo(gender)?.label
 
   if (fields.length === 0) {
     return <p className="text-center text-sm text-gray-400">No fields defined for this test template.</p>
   }
+
+  const refFor = (field: TestTemplateField) => g === 'Male'
+    ? (field.referenceRangeMale ?? field.referenceRange)
+    : g === 'Female'
+      ? (field.referenceRangeFemale ?? field.referenceRange)
+      : (field.referenceRangeMale || field.referenceRangeFemale || field.referenceRange)
+
+  const th = 'px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500'
+
   return (
-    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-      {fields.map(field => {
-        if (field.isSectionHeader) {
-          return (
-            <div key={field.id} className="sm:col-span-2 pt-2">
-              <div className="border-b-2 border-gray-200 pb-1.5 dark:border-gray-600">
-                <span className="text-sm font-bold text-gray-700 underline underline-offset-2 dark:text-gray-200">
-                  {field.fieldName}
-                </span>
-              </div>
-            </div>
-          )
-        }
-        return (
-          <div key={field.id} className={field.isLineResult || (field.fieldType === 'text' && !field.optionsJson) ? 'sm:col-span-2' : ''}>
-            <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-              {field.fieldName}
-              {!field.isLineResult && field.unit && (
-                <span className="ml-1 normal-case font-normal text-gray-400 dark:text-gray-500">({field.unit})</span>
-              )}
-              {(() => {
-                if (field.isLineResult) return null
-                const ref = gender === 'Male'
-                  ? (field.referenceRangeMale ?? field.referenceRange)
-                  : gender === 'Female'
-                    ? (field.referenceRangeFemale ?? field.referenceRange)
-                    : (field.referenceRangeMale || field.referenceRangeFemale || field.referenceRange)
-                return ref ? (
-                  <span className="ml-1 normal-case font-normal text-gray-400 dark:text-gray-500">Ref: {ref}</span>
-                ) : null
-              })()}
-              {field.required && <span className="ml-1 text-red-500">*</span>}
-            </label>
-            <ResultField field={field} values={values} calculatedValues={calculatedValues} gender={gender} onChange={onChange} />
-          </div>
-        )
-      })}
+    <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
+      <table className="w-full min-w-[640px] text-sm">
+        <thead>
+          <tr className="border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/50">
+            <th className={`${th} w-[34%]`}>Parameter</th>
+            <th className={`${th} w-[30%]`}>Result</th>
+            <th className={`${th} w-[12%]`}>Unit</th>
+            <th className={th}>Reference Range</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100 dark:divide-gray-700/60">
+          {fields.map(field => {
+            if (field.isSectionHeader) {
+              return (
+                <tr key={field.id} className={field.isMainHeader ? 'bg-blue-50/70 dark:bg-blue-900/20' : 'bg-gray-50/80 dark:bg-gray-900/30'}>
+                  <td colSpan={4} className={`px-4 py-2 font-bold ${field.isMainHeader ? 'text-sm uppercase tracking-wide text-blue-800 dark:text-blue-300' : 'text-[13px] text-gray-700 dark:text-gray-200'}`}>
+                    {field.fieldName}
+                  </td>
+                </tr>
+              )
+            }
+
+            const name = (
+              <span className="font-medium text-gray-800 dark:text-gray-100">
+                {field.fieldName}
+                {field.required && <span className="ml-0.5 text-red-500">*</span>}
+              </span>
+            )
+            const input = <ResultField field={field} values={values} calculatedValues={calculatedValues} gender={gender} onChange={onChange} />
+
+            if (field.isLineResult) {
+              return (
+                <tr key={field.id} className="align-top">
+                  <td className="px-4 py-2.5 pt-4">{name}</td>
+                  <td colSpan={3} className="px-4 py-2">{input}</td>
+                </tr>
+              )
+            }
+
+            const ref = refFor(field)
+            const shown = field.fieldType === 'calculated' ? calculatedValues[field.id] : values[field.id]
+            const numeric = field.fieldType === 'number' || field.fieldType === 'calculated'
+            const status = numeric && shown !== undefined && shown !== '' ? rangeStatus(shown as string | number, ref) : null
+            // Below range → blue, above → red, within → normal (black) text
+            const tone = status === 'high'
+              ? { row: 'bg-red-50/50 dark:bg-red-900/10', input: '[&_input]:font-semibold [&_input]:text-red-600 dark:[&_input]:text-red-400', label: 'text-red-600 dark:text-red-400', text: '↑ High' }
+              : status === 'low'
+                ? { row: 'bg-blue-50/50 dark:bg-blue-900/10', input: '[&_input]:font-semibold [&_input]:text-blue-600 dark:[&_input]:text-blue-400', label: 'text-blue-600 dark:text-blue-400', text: '↓ Low' }
+                : null
+
+            return (
+              <tr key={field.id} className={`align-top ${tone?.row ?? ''}`}>
+                <td className="px-4 py-2.5 pt-4">{name}</td>
+                <td className={`px-4 py-2 ${tone?.input ?? ''}`}>
+                  {input}
+                  {tone && <span className={`mt-1 inline-block text-[11px] font-semibold ${tone.label}`}>{tone.text}</span>}
+                </td>
+                <td className="px-4 py-2.5 pt-4 text-gray-500 dark:text-gray-400">{field.unit || <span className="text-gray-300 dark:text-gray-600">—</span>}</td>
+                <td className="px-4 py-2.5 pt-4 whitespace-pre-line text-gray-500 dark:text-gray-400">{ref || <span className="text-gray-300 dark:text-gray-600">—</span>}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 }
 
 /* ─── PDF attachment uploader (shared by single + batch rendering) ── */
 function AttachmentUploader({
-  attachment, existingName, disabled, onAttach, onRemove,
+  attachment, existingName, existingUrl, disabled, onAttach, onRemove,
 }: {
   attachment: Attachment
   existingName: string | null
+  existingUrl: string | null
   disabled: boolean
   onAttach: (file: File) => void
   onRemove: () => void
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [dragOver, setDragOver] = useState(false)
+  const [preview, setPreview] = useState<{ name: string; url: string } | null>(null)
 
   if (disabled) return null
+
+  const previewBtn = (name: string, url: string) => (
+    <button type="button" onClick={() => setPreview({ name, url })}
+      className="ml-auto flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-900/30">
+      <Eye className="h-3.5 w-3.5" /> Preview
+    </button>
+  )
 
   return (
     <div>
@@ -268,6 +335,7 @@ function AttachmentUploader({
           <Paperclip className="h-3.5 w-3.5 shrink-0 text-blue-400" />
           Existing attachment: <span className="font-semibold text-gray-700 dark:text-gray-200">{existingName}</span>
           <span className="ml-1 text-gray-400 dark:text-gray-500">(upload a new file to replace)</span>
+          {existingUrl && previewBtn(existingName, existingUrl)}
         </div>
       )}
 
@@ -282,6 +350,7 @@ function AttachmentUploader({
               <p className="text-xs text-gray-500 dark:text-gray-400">{formatBytes(attachment.size)} · PDF</p>
             </div>
           </div>
+          {previewBtn(attachment.name, attachment.previewUrl)}
           <button
             onClick={() => { onRemove(); if (fileInputRef.current) fileInputRef.current.value = '' }}
             className="ml-3 shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 dark:text-gray-500 dark:hover:bg-red-900/30 dark:hover:text-red-400"
@@ -309,6 +378,7 @@ function AttachmentUploader({
           />
         </div>
       )}
+      {preview && <DocumentPreviewModal name={preview.name} url={preview.url} onClose={() => setPreview(null)} />}
     </div>
   )
 }
@@ -322,6 +392,8 @@ export default function EnterResultsPage() {
 
   const [values, setValues] = useState<Record<number, SectionValues>>({})
   const [attachments, setAttachments] = useState<Record<number, Attachment>>({})
+  /** Per-test "result by document" switch; unset = whatever the order already has saved */
+  const [docMode, setDocMode] = useState<Record<number, boolean>>({})
   const [activeIndex, setActiveIndex] = useState(0)
 
   // Reset the active tab when navigating to a different order/receipt
@@ -388,10 +460,17 @@ export default function EnterResultsPage() {
     .map((oid, idx) => ({ orderId: oid, data: formQueries[idx]?.data }))
     .filter((s): s is { orderId: number; data: OrderFormData } => !!s.data)
 
+  const isDocMode = (oid: number) =>
+    docMode[oid] ?? sections.find(s => s.orderId === oid)?.data.order.resultByDocument ?? false
+  /** A result document is either picked now or already uploaded on the order */
+  const hasDocument = (oid: number) =>
+    !!attachments[oid] || !!sections.find(s => s.orderId === oid)?.data.order.attachmentUrl
+
   /** Tab status for one section: locked (already submitted), complete, partial, or empty. */
   function sectionStatus(s: { orderId: number; data: OrderFormData }): 'locked' | 'complete' | 'partial' | 'empty' {
     const order = s.data.order
     if (order.status === 'APPROVED' || order.status === 'AWAITING_APPROVAL') return 'locked'
+    if (isDocMode(s.orderId)) return hasDocument(s.orderId) ? 'complete' : 'partial'
     const inputFields = s.data.fields.filter(f => !f.isSectionHeader && f.fieldType !== 'calculated')
     if (inputFields.length === 0) return 'empty'
     const sectionValues = values[s.orderId] ?? {}
@@ -452,7 +531,11 @@ export default function EnterResultsPage() {
     if (file.type !== 'application/pdf') { toast.error('Only PDF files are allowed'); return }
     if (file.size > 15 * 1024 * 1024) { toast.error('PDF must be under 15 MB'); return }
     const reader = new FileReader()
-    reader.onload = () => setAttachments(prev => ({ ...prev, [oid]: { name: file.name, size: file.size, base64: reader.result as string } }))
+    reader.onload = () => setAttachments(prev => {
+      const old = prev[oid]
+      if (old) URL.revokeObjectURL(old.previewUrl)
+      return { ...prev, [oid]: { name: file.name, size: file.size, base64: reader.result as string, previewUrl: URL.createObjectURL(file) } }
+    })
     reader.readAsDataURL(file)
   }
 
@@ -461,11 +544,14 @@ export default function EnterResultsPage() {
     const sectionValues = values[oid] ?? {}
     const nonSectionFields = sectionFields.filter(f => !f.isSectionHeader)
 
-    const fieldsToSend = isDraft
+    const docModeOn = isDocMode(oid)
+    // Document mode makes values optional, so — like a draft — only send what was filled in
+    const fieldsToSend = isDraft || docModeOn
       ? nonSectionFields.filter(f => {
           if (f.fieldType === 'calculated') return true
           if (f.fieldType === 'checkbox') return sectionValues[f.id] !== undefined
           const v = sectionValues[f.id]
+          if (f.fieldType === 'number') return toNumber(v) !== undefined
           return v !== undefined && v !== ''
         })
       : nonSectionFields
@@ -474,20 +560,34 @@ export default function EnterResultsPage() {
     const gender = sections.find(s => s.orderId === oid)?.data.order.patient?.gender
     const calculatedValues = evalCalculatedFields(sectionFields, sectionValues, gender)
 
+    const isFilled = (v: string | boolean | undefined) => v !== undefined && v !== '' && (typeof v !== 'string' || /\d|[a-z]/i.test(v))
+    // A calculated field whose inputs were all left blank is saved blank (not 0), so it stays off the report
+    const calculatedValue = (field: TestTemplateField, seen = new Set<number>()): number | undefined => {
+      seen.add(field.id) // formulas can reference other calculated fields — never follow a cycle twice
+      const inputs = formulaFieldIds(field.optionsJson)
+      const anyInput = inputs.length === 0 || inputs.some(id => {
+        if (isFilled(sectionValues[id])) return true
+        const nested = sectionFields.find(f => f.id === id && f.fieldType === 'calculated')
+        return !!nested && !seen.has(nested.id) && calculatedValue(nested, seen) !== undefined
+      })
+      return anyInput ? (calculatedValues[field.id] ?? 0) : undefined
+    }
+
     return {
       values: fieldsToSend.map(field => ({
         fieldId: field.id,
         textValue: field.fieldType === 'text' || field.fieldType === 'select' || field.fieldType === 'multiselect'
           ? String(sectionValues[field.id] ?? '') : undefined,
-        numberValue: field.fieldType === 'number' && sectionValues[field.id] !== undefined
-          ? Number(sectionValues[field.id])
+        numberValue: field.fieldType === 'number'
+          ? toNumber(sectionValues[field.id])
           : field.fieldType === 'calculated'
-            ? (calculatedValues[field.id] ?? 0)
+            ? calculatedValue(field)
             : undefined,
         booleanValue: field.fieldType === 'checkbox' ? Boolean(sectionValues[field.id]) : undefined,
         dateValue: field.fieldType === 'date' ? String(sectionValues[field.id] ?? '') : undefined,
       })),
       isDraft,
+      resultByDocument: docModeOn,
       ...(attachment ? { attachmentBase64: attachment.base64, attachmentName: attachment.name } : {}),
     }
   }
@@ -540,6 +640,16 @@ export default function EnterResultsPage() {
 
   const handleSubmit = () => {
     for (const s of sections) {
+      const testName = s.data.order.template?.name
+      if (isDocMode(s.orderId)) {
+        // Values are optional in document mode — the document itself is mandatory
+        if (!hasDocument(s.orderId)) {
+          toast.error(`${testName ? `${testName}: ` : ''}upload the result document — it is required when "Result by document" is on`)
+          setActiveIndex(sections.indexOf(s))
+          return
+        }
+        continue
+      }
       const sectionValues = values[s.orderId] ?? {}
       const calculated = evalCalculatedFields(s.data.fields, sectionValues, s.data.order.patient?.gender)
       const merged: Record<number, string | boolean | number> = { ...sectionValues }
@@ -550,7 +660,6 @@ export default function EnterResultsPage() {
         merged,
       )
       if (ruleError) {
-        const testName = s.data.order.template?.name
         toast.error(testName ? `${testName}: ${ruleError}` : ruleError)
         return
       }
@@ -562,10 +671,12 @@ export default function EnterResultsPage() {
     }
     const s = sections[0]
     if (!s) return
+    if (isDocMode(s.orderId)) { submitSingleMut.mutate(); return }
     const missing = s.data.fields
       .filter(f => !f.isSectionHeader && f.required)
       .filter(f => {
         const val = values[s.orderId]?.[f.id]
+        if (f.fieldType === 'number') return toNumber(val) === undefined
         return val === undefined || val === ''
       })
     if (missing.length > 0) {
@@ -672,6 +783,8 @@ export default function EnterResultsPage() {
           const order = s.data.order
           const fields = s.data.fields
           const locked = order.status === 'APPROVED' || order.status === 'AWAITING_APPROVAL'
+          const docOn = isDocMode(s.orderId)
+          const docMissing = docOn && !hasDocument(s.orderId)
           const sectionValues = values[s.orderId] ?? {}
           const inputFields = fields.filter(f => !f.isSectionHeader && f.fieldType !== 'calculated')
           const filledCount = inputFields.filter(f => {
@@ -695,9 +808,21 @@ export default function EnterResultsPage() {
                 title={order.template?.name ?? 'Test Results'}
                 icon={<FileText className="h-4 w-4" />}
                 action={
-                  <div className="flex items-center gap-2">
-                    {inputFields.length > 0 && (
+                  <div className="flex items-center gap-3">
+                    {inputFields.length > 0 && !docOn && (
                       <span className="hidden text-xs text-gray-400 sm:block">{filledCount} / {inputFields.length} filled</span>
+                    )}
+                    {!locked && (
+                      <label className="flex cursor-pointer select-none items-center gap-2 rounded-full border border-gray-200 py-1 pl-1 pr-3 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700/50"
+                        title="Turn on when the result comes as a document (e.g. outsourced report): values become optional, the document becomes mandatory">
+                        <input type="checkbox" role="switch" className="peer sr-only" checked={docOn}
+                          onChange={e => setDocMode(prev => ({ ...prev, [s.orderId]: e.target.checked }))} />
+                        <span className="relative h-5 w-9 rounded-full bg-gray-300 transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:bg-blue-600 peer-checked:after:translate-x-4 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-500/40 dark:bg-gray-600" />
+                        Result by document
+                      </label>
+                    )}
+                    {locked && order.resultByDocument && (
+                      <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">Result by document</span>
                     )}
                     <OrderStatusBadge status={order.status} />
                   </div>
@@ -716,6 +841,20 @@ export default function EnterResultsPage() {
                   </div>
                 )}
 
+                {docOn && !locked && (
+                  <div className={`mb-4 flex items-start gap-3 rounded-xl border px-4 py-3 ${
+                    docMissing
+                      ? 'border-amber-200 bg-amber-50 dark:border-amber-800/60 dark:bg-amber-900/20'
+                      : 'border-blue-200 bg-blue-50 dark:border-blue-800/60 dark:bg-blue-900/20'
+                  }`}>
+                    <Paperclip className={`mt-0.5 h-4 w-4 shrink-0 ${docMissing ? 'text-amber-600' : 'text-blue-600'}`} />
+                    <p className={`text-xs ${docMissing ? 'text-amber-800 dark:text-amber-300' : 'text-blue-800 dark:text-blue-300'}`}>
+                      <strong>Result by document.</strong> Entering values below is optional.{' '}
+                      {docMissing ? 'Upload the result document below — it is required to send for approval.' : 'Result document attached.'}
+                    </p>
+                  </div>
+                )}
+
                 <FieldsGrid
                   fields={fields}
                   values={sectionValues}
@@ -726,14 +865,19 @@ export default function EnterResultsPage() {
                 {!locked && (
                   <div className="mt-5 border-t border-gray-100 pt-5 dark:border-gray-700">
                     <p className="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
-                      <Paperclip className="h-3.5 w-3.5" /> Attach Document (optional)
+                      <Paperclip className="h-3.5 w-3.5" /> Attach Document {docOn ? <span className="normal-case tracking-normal text-red-500">(required)</span> : '(optional)'}
                     </p>
                     <AttachmentUploader
                       attachment={attachments[s.orderId] ?? null}
                       existingName={order.attachmentName}
+                      existingUrl={order.attachmentUrl}
                       disabled={false}
                       onAttach={file => setAttachment(s.orderId, file)}
-                      onRemove={() => setAttachments(prev => ({ ...prev, [s.orderId]: null }))}
+                      onRemove={() => setAttachments(prev => {
+                        const old = prev[s.orderId]
+                        if (old) URL.revokeObjectURL(old.previewUrl)
+                        return { ...prev, [s.orderId]: null }
+                      })}
                     />
                   </div>
                 )}

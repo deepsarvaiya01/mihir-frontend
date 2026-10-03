@@ -4,7 +4,7 @@ import {
   LayoutDashboard, FlaskConical, Users, ClipboardList,
   History, LogOut, FlaskRound, ChevronRight,
   UserCog, Settings, Building2, MapPin, PanelLeft,
-  PenLine, ImageIcon, Shield, Stethoscope, Layers, ListOrdered,
+  PenLine, ImageIcon, Shield, Stethoscope, Layers, ListOrdered, Calculator, ChartColumn,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '../../store/authStore'
@@ -15,8 +15,8 @@ interface NavItem { to: string; label: string; icon: React.ReactNode }
 
 const labNavItems: NavItem[] = [
   { to: '/patients',     label: 'Patient Registration', icon: <Users className="h-4 w-4" /> },
-  { to: '/orders',       label: 'Orders & Results',   icon: <ClipboardList className="h-4 w-4" /> },
-  { to: '/templates',    label: 'Test Catalogue',     icon: <FlaskConical className="h-4 w-4" /> },
+  { to: '/orders',       label: 'Test Result',   icon: <ClipboardList className="h-4 w-4" /> },
+  { to: '/quotation',    label: 'Quotation',          icon: <Calculator className="h-4 w-4" /> },
   { to: '/history',      label: 'Result History',     icon: <History className="h-4 w-4" /> },
   { to: '/settings',     label: 'Profile',            icon: <Settings className="h-4 w-4" /> },
 ]
@@ -28,7 +28,9 @@ const dashboardItem: NavItem = {
 }
 
 const adminItems: NavItem[] = [
+  { to: '/analysis',     label: 'Analysis',           icon: <ChartColumn className="h-4 w-4" /> },
   { to: '/templates',    label: 'Test Catalogue',     icon: <FlaskConical className="h-4 w-4" /> },
+  { to: '/quotation',    label: 'Quotation',          icon: <Calculator className="h-4 w-4" /> },
   { to: '/test-categories', label: 'Test Categories',  icon: <ListOrdered className="h-4 w-4" /> },
   { to: '/profiles',     label: 'Profile Management', icon: <Layers className="h-4 w-4" /> },
   { to: '/users',        label: 'User Management',    icon: <UserCog className="h-4 w-4" /> },

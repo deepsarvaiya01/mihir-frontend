@@ -2,7 +2,7 @@ import { api } from '../lib/api'
 import type { Doctor } from '../types'
 
 export interface CreateDoctorDto {
-  name: string; degreeName?: string; active?: boolean
+  name: string; degreeName?: string; phone?: string; email?: string; address?: string; city?: string; active?: boolean
 }
 
 export const doctorService = {

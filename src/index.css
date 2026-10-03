@@ -112,3 +112,14 @@
     box-shadow: 0 1px 0 0 #1d4ed8;
   }
 }
+
+/* Number boxes: no up/down spinner arrows anywhere in the app (Chrome/Edge/Safari + Firefox) */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}

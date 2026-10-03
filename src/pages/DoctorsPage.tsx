@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Stethoscope, Pencil, Trash2, ToggleLeft, ToggleRight } from 'lucide-react'
+import { Plus, Stethoscope, Pencil, Trash2, ToggleLeft, ToggleRight, Phone, Mail, MapPin } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -17,7 +17,7 @@ import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
 import { toTitleCase } from '../lib/utils'
 
-const emptyForm: CreateDoctorDto = { name: '', degreeName: '', active: true }
+const emptyForm: CreateDoctorDto = { name: '', degreeName: '', phone: '', email: '', address: '', city: '', active: true }
 
 function DoctorForm({
   form,
@@ -40,6 +40,39 @@ function DoctorForm({
         placeholder="e.g. MD, Pathologist"
         value={form.degreeName ?? ''}
         onChange={e => setForm(p => ({ ...p, degreeName: toTitleCase(e.target.value) }))}
+      />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Input
+          label="Mobile"
+          type="tel"
+          inputMode="tel"
+          placeholder="e.g. 98765 43210"
+          maxLength={20}
+          value={form.phone ?? ''}
+          onChange={e => setForm(p => ({ ...p, phone: e.target.value.replace(/[^\d+\s-]/g, '') }))}
+        />
+        <Input
+          label="Email"
+          type="email"
+          placeholder="e.g. doctor@clinic.com"
+          maxLength={120}
+          value={form.email ?? ''}
+          onChange={e => setForm(p => ({ ...p, email: e.target.value.trim() }))}
+        />
+      </div>
+      <Input
+        label="Address"
+        placeholder="Clinic / hospital address"
+        maxLength={255}
+        value={form.address ?? ''}
+        onChange={e => setForm(p => ({ ...p, address: e.target.value }))}
+      />
+      <Input
+        label="City"
+        placeholder="e.g. Rajkot"
+        maxLength={100}
+        value={form.city ?? ''}
+        onChange={e => setForm(p => ({ ...p, city: toTitleCase(e.target.value) }))}
       />
       <label className="flex cursor-pointer items-center gap-3">
         <button
@@ -104,17 +137,24 @@ export default function DoctorsPage() {
 
   const openEdit = (doctor: Doctor) => {
     setEditDoctor(doctor)
-    setEditForm({ name: doctor.name, degreeName: doctor.degreeName ?? '', active: doctor.active })
+    setEditForm({
+      name: doctor.name, degreeName: doctor.degreeName ?? '', phone: doctor.phone ?? '', email: doctor.email ?? '',
+      address: doctor.address ?? '', city: doctor.city ?? '', active: doctor.active,
+    })
   }
+
+  const emailOk = (email?: string) => !email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 
   const handleCreate = () => {
     if (!createForm.name.trim()) { toast.error('Doctor name is required'); return }
+    if (!emailOk(createForm.email)) { toast.error('Enter a valid email address'); return }
     createMutation.mutate(createForm)
   }
 
   const handleUpdate = () => {
     if (!editDoctor) return
     if (!editForm.name.trim()) { toast.error('Doctor name is required'); return }
+    if (!emailOk(editForm.email)) { toast.error('Enter a valid email address'); return }
     updateMutation.mutate({ id: editDoctor.id, dto: editForm })
   }
 
@@ -151,10 +191,11 @@ export default function DoctorsPage() {
             action={<Button icon={<Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>Add Doctor</Button>}
           />
         ) : (
-          <DataTable title="All Doctors" count={doctors.length} minWidth="600px">
+          <DataTable title="All Doctors" count={doctors.length} minWidth="820px">
             <DataTableHead>
               <DataTableTh>Name</DataTableTh>
               <DataTableTh>Degree</DataTableTh>
+              <DataTableTh>Contact</DataTableTh>
               <DataTableTh>Status</DataTableTh>
               <DataTableTh align="right">Actions</DataTableTh>
             </DataTableHead>
@@ -166,10 +207,34 @@ export default function DoctorsPage() {
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600">
                         <Stethoscope className="h-4 w-4" />
                       </div>
-                      <p className="font-semibold text-gray-800 dark:text-gray-100">{doctor.name}</p>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-800 dark:text-gray-100">{doctor.name}</p>
+                        {(doctor.address || doctor.city) && (
+                          <p className="flex max-w-[260px] items-center gap-1 truncate text-xs text-gray-400" title={[doctor.address, doctor.city].filter(Boolean).join(', ')}>
+                            <MapPin className="h-3 w-3 shrink-0" />
+                            {[doctor.address, doctor.city].filter(Boolean).join(', ')}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </DataTableTd>
                   <DataTableTd className="text-gray-600 dark:text-gray-400">{doctor.degreeName ?? '—'}</DataTableTd>
+                  <DataTableTd>
+                    {doctor.phone || doctor.email ? (
+                      <div className="space-y-0.5 text-sm">
+                        {doctor.phone && (
+                          <a href={`tel:${doctor.phone.replace(/\s/g, '')}`} className="flex items-center gap-1.5 text-gray-700 hover:text-blue-600 dark:text-gray-300">
+                            <Phone className="h-3.5 w-3.5 text-gray-400" /> {doctor.phone}
+                          </a>
+                        )}
+                        {doctor.email && (
+                          <a href={`mailto:${doctor.email}`} className="flex max-w-[220px] items-center gap-1.5 truncate text-gray-700 hover:text-blue-600 dark:text-gray-300">
+                            <Mail className="h-3.5 w-3.5 shrink-0 text-gray-400" /> {doctor.email}
+                          </a>
+                        )}
+                      </div>
+                    ) : <span className="text-gray-300 dark:text-gray-600">—</span>}
+                  </DataTableTd>
                   <DataTableTd>
                     <Badge variant={doctor.active ? 'success' : 'default'} dot>
                       {doctor.active ? 'Active' : 'Inactive'}
@@ -196,7 +261,7 @@ export default function DoctorsPage() {
         onClose={() => setCreateOpen(false)}
         title="Add Doctor"
         subtitle="Register a new referring doctor"
-        size="sm"
+        size="md"
         footer={
           <>
             <Button variant="secondary" onClick={() => setCreateOpen(false)}>Cancel</Button>
@@ -212,7 +277,7 @@ export default function DoctorsPage() {
         onClose={() => setEditDoctor(null)}
         title="Edit Doctor"
         subtitle={`Editing ${editDoctor?.name ?? ''}`}
-        size="sm"
+        size="md"
         footer={
           <>
             <Button variant="secondary" onClick={() => setEditDoctor(null)}>Cancel</Button>

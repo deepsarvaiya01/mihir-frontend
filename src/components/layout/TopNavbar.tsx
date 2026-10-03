@@ -6,7 +6,7 @@ import { NavbarUserActions } from './NavbarUserActions'
 
 const labItems = [
   { to: '/patients',  label: 'Patient Registration', icon: <Users className="h-4 w-4" /> },
-  { to: '/orders',    label: 'Orders & Results',  icon: <ClipboardList className="h-4 w-4" /> },
+  { to: '/orders',    label: 'Test Result',  icon: <ClipboardList className="h-4 w-4" /> },
   { to: '/approvals', label: 'Approvals',         icon: <CheckSquare className="h-4 w-4" /> },
   { to: '/history',   label: 'Result History',    icon: <History className="h-4 w-4" /> },
   { to: '/settings',  label: 'Profile',           icon: <Settings className="h-4 w-4" /> },

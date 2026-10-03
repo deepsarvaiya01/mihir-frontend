@@ -17,7 +17,7 @@ import { labSettingsService } from '../services/labSettings'
 import { signatureService } from '../services/signatures'
 import { logoService } from '../services/logos'
 import { generateLabReport } from '../utils/generateReport'
-import { isOutOfRange as isValueOutOfRange } from '../utils/rangeCheck'
+import { rangeStatus } from '../utils/rangeCheck'
 import type { Order, OrderResult, HistoryResult } from '../types'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
@@ -25,8 +25,12 @@ import { formatAge } from '../lib/utils'
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 
-function isOutOfRange(result: HistoryResult): boolean {
-  return isValueOutOfRange(result.value, result.referenceRange)
+/** Below range → blue, above → red (same colours as Enter Results) */
+function rangeTone(result: HistoryResult) {
+  const status = rangeStatus(result.value, result.referenceRange)
+  if (status === 'high') return { row: 'bg-red-50/40 dark:bg-red-900/10', text: 'text-red-600 dark:text-red-400', badge: 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400', label: 'High' }
+  if (status === 'low') return { row: 'bg-blue-50/40 dark:bg-blue-900/10', text: 'text-blue-600 dark:text-blue-400', badge: 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400', label: 'Low' }
+  return null
 }
 
 function formatDateTime(iso?: string | null) {
@@ -200,20 +204,20 @@ function ReviewPanel({
                         </tr>
                       )
                     }
-                    const outOfRange = isOutOfRange(r)
+                    const tone = rangeTone(r)
                     return (
                       <tr key={i} className={`border-b border-gray-50 transition-colors dark:border-gray-800/60
-                        ${outOfRange ? 'bg-red-50/40 dark:bg-red-900/10' : 'hover:bg-gray-50/60 dark:hover:bg-gray-800/30'}`}>
+                        ${tone ? tone.row : 'hover:bg-gray-50/60 dark:hover:bg-gray-800/30'}`}>
                         <td className="px-5 py-3 font-medium text-gray-800 dark:text-gray-200">{r.fieldName}</td>
-                        <td className={`px-5 py-3 font-bold ${outOfRange ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white'}`}>
+                        <td className={`px-5 py-3 font-bold ${tone ? tone.text : 'text-gray-900 dark:text-white'}`}>
                           {r.value != null ? String(r.value) : '—'}
                         </td>
                         <td className="px-5 py-3 text-gray-500 dark:text-gray-400">{r.unit ?? '—'}</td>
                         <td className="px-5 py-3 text-gray-500 dark:text-gray-400">{r.referenceRange ?? '—'}</td>
                         <td className="px-5 py-3">
-                          {outOfRange && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-600 dark:bg-red-900/40 dark:text-red-400">
-                              <AlertTriangle className="h-3 w-3" /> Out of range
+                          {tone && (
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${tone.badge}`}>
+                              <AlertTriangle className="h-3 w-3" /> {tone.label}
                             </span>
                           )}
                         </td>
@@ -446,7 +450,7 @@ export default function ApprovalsPage() {
           isLineResult: r.isLineResult ?? false,
         })),
         labSettings, signatures: activeSignatures, activeLogo,
-      }).then(() => toast.success('Report downloaded')).catch(() => toast.error('Failed to generate report'))
+      }).then(() => toast.success('Report downloaded')).catch((e: Error) => toast.error(e?.message || 'Failed to generate report'))
     },
     onError: (err) => toastError(err, 'Failed to generate report'),
   })

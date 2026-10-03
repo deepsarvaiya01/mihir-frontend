@@ -14,6 +14,8 @@ export interface SubmitResultsDto {
   attachmentName?: string
   /** When true: save as draft (IN_PROGRESS), skip required-field validation */
   isDraft?: boolean
+  /** When true: result values are optional but an attachment is mandatory */
+  resultByDocument?: boolean
 }
 
 export const orderService = {

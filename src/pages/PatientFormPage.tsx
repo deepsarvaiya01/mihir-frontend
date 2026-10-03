@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft, Save, FlaskConical, Loader2, Upload, FileText, X,
-  Search, UserCircle2, Image, Trash2, ExternalLink,
+  Search, UserCircle2, Image, Trash2, ExternalLink, Eye,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
@@ -17,6 +17,7 @@ import { templateService } from '../services/templates'
 import { profileService } from '../services/profiles'
 import { orderService } from '../services/orders'
 import { PageLoader } from '../components/ui/Spinner'
+import { DocumentPreviewModal } from '../components/patients/DocumentPreviewModal'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
 import { toTitleCase } from '../lib/utils'
@@ -112,6 +113,20 @@ interface LocalDocEntry {
   localId: string; name: string; file: File; previewUrl: string; uploading?: boolean
 }
 
+/** The API accepts ~10 MB JSON bodies; base64 adds a third, so cap the raw file a little under 7.5 MB. */
+const MAX_DOC_BYTES = 7 * 1024 * 1024
+
+const isImageFile = (name: string) => /\.(jpe?g|png|gif|webp)$/i.test(name)
+
+/** Small square preview: the image itself for images, an icon otherwise. */
+function DocThumb({ name, url }: { name: string; url: string }) {
+  return isImageFile(name)
+    ? <img src={url} alt="" className="h-full w-full rounded-lg object-cover" />
+    : getFileIcon(name)
+}
+
+type DocPreview = { name: string; url: string; mimeType?: string; revokeOnClose?: boolean }
+
 function FormDivider({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-3 pt-2">
@@ -136,6 +151,7 @@ export default function PatientFormPage() {
   const [testSearch, setTestSearch] = useState('')
 
   const [localDocs, setLocalDocs] = useState<LocalDocEntry[]>([])
+  const [preview, setPreview] = useState<DocPreview | null>(null)
   const [pendingFile, setPendingFile] = useState<{ file: File; name: string } | null>(null)
   const [deletingDocId, setDeletingDocId] = useState<number | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -227,6 +243,11 @@ export default function PatientFormPage() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    if (file.size > MAX_DOC_BYTES) {
+      toast.error(`"${file.name}" is ${formatBytes(file.size)} — documents must be under 7 MB`)
+      e.target.value = ''
+      return
+    }
     setPendingFile({ file, name: file.name.replace(/\.[^/.]+$/, '') })
     e.target.value = ''
   }
@@ -513,15 +534,20 @@ export default function PatientFormPage() {
                     <div key={doc.id}
                       className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-gray-100 bg-white">
-                        {getFileIcon(doc.name)}
+                        <DocThumb name={doc.name} url={doc.url} />
                       </div>
-                      <a href={doc.url} target="_blank" rel="noopener noreferrer"
-                        className="group min-w-0 flex-1" title="Open document">
+                      <button type="button" onClick={() => setPreview({ name: doc.name, url: doc.url })}
+                        className="group min-w-0 flex-1 text-left" title="Preview document">
                         <p className="truncate text-sm font-medium text-gray-800 group-hover:text-blue-600">{doc.name}</p>
                         <p className="truncate text-xs text-gray-400">
                           {new Date(doc.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                         </p>
-                      </a>
+                      </button>
+                      <button type="button" onClick={() => setPreview({ name: doc.name, url: doc.url })}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-blue-50 hover:text-blue-500 transition-colors"
+                        title="Preview">
+                        <Eye className="h-3.5 w-3.5" />
+                      </button>
                       <a href={doc.url} target="_blank" rel="noopener noreferrer"
                         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-blue-50 hover:text-blue-500 transition-colors"
                         title="Open">
@@ -550,14 +576,20 @@ export default function PatientFormPage() {
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-blue-100 bg-white">
                         {doc.uploading
                           ? <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
-                          : getFileIcon(doc.file.name)}
+                          : <DocThumb name={doc.file.name} url={doc.previewUrl} />}
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-gray-800">{doc.name}</p>
+                      <button type="button" onClick={() => setPreview({ name: doc.file.name, url: doc.previewUrl, mimeType: doc.file.type })}
+                        className="group min-w-0 flex-1 text-left" title="Preview document">
+                        <p className="truncate text-sm font-medium text-gray-800 group-hover:text-blue-600">{doc.name}</p>
                         <p className="text-xs text-gray-400">
-                          {doc.uploading ? 'Uploading…' : formatBytes(doc.file.size)}
+                          {doc.uploading ? 'Uploading…' : `${formatBytes(doc.file.size)} · not uploaded yet`}
                         </p>
-                      </div>
+                      </button>
+                      <button type="button" onClick={() => setPreview({ name: doc.file.name, url: doc.previewUrl, mimeType: doc.file.type })}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-blue-50 hover:text-blue-500 transition-colors"
+                        title="Preview">
+                        <Eye className="h-4 w-4" />
+                      </button>
                       {!doc.uploading && (
                         <button onClick={() => removeLocalDoc(doc.localId)}
                           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
@@ -580,6 +612,10 @@ export default function PatientFormPage() {
                       placeholder="Document name"
                       className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
                     <div className="flex gap-2">
+                      <Button size="sm" variant="secondary" icon={<Eye className="h-3.5 w-3.5" />}
+                        onClick={() => setPreview({ name: pendingFile.file.name, url: URL.createObjectURL(pendingFile.file), mimeType: pendingFile.file.type, revokeOnClose: true })}>
+                        Preview
+                      </Button>
                       <Button size="sm" onClick={confirmAddDocument}>Add</Button>
                       <Button size="sm" variant="secondary" onClick={() => setPendingFile(null)}>Cancel</Button>
                     </div>
@@ -591,7 +627,7 @@ export default function PatientFormPage() {
                   className="flex w-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-gray-200 bg-gray-50/50 py-8 text-sm text-gray-500 transition-all hover:border-blue-300 hover:bg-blue-50/30 hover:text-blue-600">
                   <Upload className="h-5 w-5" />
                   <span className="font-medium">Click to upload a document</span>
-                  <span className="text-xs text-gray-400">PDF, JPG, PNG, or Word · Max 10 MB</span>
+                  <span className="text-xs text-gray-400">PDF, JPG, PNG, or Word · Max 7 MB</span>
                 </button>
               )}
             </Card>
@@ -721,15 +757,57 @@ export default function PatientFormPage() {
                         })}
                       </div>
 
-                      {/* Selection summary */}
+                      {/* Selected tests — always visible, whatever the search shows */}
                       {selectedTests.length > 0 ? (
-                        <div className="mt-3 flex items-center justify-between rounded-lg bg-blue-50 px-3 py-2 dark:bg-blue-900/20">
-                          <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                            {selectedTests.length} test{selectedTests.length !== 1 ? 's' : ''} selected
-                          </span>
-                          <span className="text-sm font-bold text-blue-800 dark:text-blue-200">
-                            ₹{subtotal.toLocaleString()}
-                          </span>
+                        <div className="mt-3 overflow-hidden rounded-xl border border-blue-100 dark:border-blue-900/50">
+                          <div className="flex items-center justify-between bg-blue-50 px-3 py-2 dark:bg-blue-900/20">
+                            <span className="text-xs font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300">
+                              Selected tests ({selectedTests.length})
+                            </span>
+                            <button type="button" onClick={() => setSelectedTests([])}
+                              className="text-[11px] font-medium text-blue-600 hover:text-red-600 dark:text-blue-400">
+                              Clear all
+                            </button>
+                          </div>
+                          <ul className="max-h-56 divide-y divide-gray-100 overflow-y-auto dark:divide-gray-700/60">
+                            {selectedTests.map(sel => {
+                              const item = pickableItems.find(it => it.kind === sel.kind && it.id === sel.id)
+                              if (!item) return null
+                              const members = sel.kind === 'profile'
+                                ? activeProfiles.find(p => p.id === sel.id)?.templates.map(t => t.name) ?? []
+                                : []
+                              const price = getItemPrice(sel.kind, sel.id)
+                              return (
+                                <li key={`${sel.kind}-${sel.id}`} className="flex items-start gap-2 bg-white px-3 py-2 dark:bg-gray-800">
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5">
+                                      {sel.kind === 'profile' && (
+                                        <span className="shrink-0 rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+                                          Package
+                                        </span>
+                                      )}
+                                      <p className="truncate text-sm font-medium text-gray-800 dark:text-gray-100">{item.name}</p>
+                                    </div>
+                                    <p className="truncate text-[11px] text-gray-400">
+                                      <span className="font-mono">{item.code}</span>
+                                      {members.length > 0 && <> · {members.join(', ')}</>}
+                                    </p>
+                                  </div>
+                                  <span className="shrink-0 pt-0.5 text-sm font-semibold tabular-nums text-gray-700 dark:text-gray-200">
+                                    {price > 0 ? `₹${price.toLocaleString()}` : 'Free'}
+                                  </span>
+                                  <button type="button" onClick={() => toggleTest(sel.kind, sel.id)} title="Remove"
+                                    className="shrink-0 rounded p-0.5 text-gray-300 hover:bg-red-50 hover:text-red-500 dark:text-gray-500 dark:hover:bg-red-900/30">
+                                    <X className="h-4 w-4" />
+                                  </button>
+                                </li>
+                              )
+                            })}
+                          </ul>
+                          <div className="flex items-center justify-between border-t border-blue-100 bg-blue-50/60 px-3 py-2 dark:border-blue-900/50 dark:bg-blue-900/10">
+                            <span className="text-sm font-medium text-blue-700 dark:text-blue-300">Total</span>
+                            <span className="text-sm font-bold tabular-nums text-blue-800 dark:text-blue-200">₹{subtotal.toLocaleString()}</span>
+                          </div>
                         </div>
                       ) : (
                         <p className="mt-2.5 text-center text-xs text-gray-400">
@@ -833,6 +911,10 @@ export default function PatientFormPage() {
           )}
         </div>
       </div>
+      {preview && (
+        <DocumentPreviewModal name={preview.name} url={preview.url} mimeType={preview.mimeType}
+          onClose={() => { if (preview.revokeOnClose) URL.revokeObjectURL(preview.url); setPreview(null) }} />
+      )}
     </div>
   )
 }

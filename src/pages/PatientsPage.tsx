@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Plus, Users, Search, Pencil, History, Eye, Trash2, ChevronRight, Building2,
-  CalendarDays, ChevronsUpDown, ChevronsDownUp, X,
+  ChevronsUpDown, ChevronsDownUp, X,
 } from 'lucide-react'
 import { Header } from '../components/layout/Header'
 import { Button } from '../components/ui/Button'
@@ -15,42 +15,25 @@ import { Pagination } from '../components/ui/Pagination'
 import { ConfirmModal } from '../components/ui/Modal'
 import { PatientDrawer } from '../components/patients/PatientDrawer'
 import { RemarksModal } from '../components/patients/RemarksModal'
+import { DocumentsModal, DocumentsButton } from '../components/patients/DocumentsModal'
 import { PaymentModal } from '../components/billing/PaymentModal'
 import { ReceiptCard, BillActions } from '../components/billing/ReceiptCard'
 import { formatDateTime } from '../components/billing/format'
 import { useReceiptActions, groupByReceipt } from '../components/billing/useReceiptActions'
 import { patientService } from '../services/patients'
 import { orderService } from '../services/orders'
-import { doctorService } from '../services/doctors'
-import { labBranchService } from '../services/labBranches'
-import { b2bLabService } from '../services/b2bLabs'
+import { usePatientFilterOptions } from '../components/filters/usePatientFilterOptions'
+import { PatientFilterSelects } from '../components/filters/PatientFilterSelects'
+import { DateRangeFilter } from '../components/filters/DateRangeFilter'
+import {
+  EMPTY_PATIENT_FILTERS, genderInfo, inDateRange, matchesPatientFilters, patientFiltersActive, type PatientFilterValues,
+} from '../components/filters/patientFilters'
 import { formatAge } from '../lib/utils'
 import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
 import type { Order, Patient, PaymentStatus } from '../types'
 
 type PaymentFilter = 'ALL' | PaymentStatus
-
-/** yyyy-mm-dd in local time (toISOString would shift the day for IST before 5:30 am) */
-function localDate(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-const daysAgo = (n: number) => localDate(new Date(Date.now() - n * 86_400_000))
-
-/** Quick ranges just fill in the From / To dates. */
-const DATE_SHORTCUTS: { label: string; range: () => [string, string] }[] = [
-  { label: 'Today', range: () => [daysAgo(0), daysAgo(0)] },
-  { label: '7 days', range: () => [daysAgo(6), daysAgo(0)] },
-  { label: '30 days', range: () => [daysAgo(29), daysAgo(0)] },
-  { label: 'All', range: () => ['', ''] },
-]
-
-/** B2B filter values: ALL · B2B (any lab) · INDIVIDUAL · <lab id> */
-type B2bFilter = string
-/** Doctor filter values: ALL · SELF (no doctor) · <doctor name> */
-type DoctorFilter = string
-
-const sameName = (a: string | null | undefined, b: string) => (a ?? '').trim().toLowerCase() === b.trim().toLowerCase()
 
 function TypeBadge({ patient }: { patient: Patient }) {
   return patient.isB2b ? (
@@ -59,19 +42,6 @@ function TypeBadge({ patient }: { patient: Patient }) {
       <span className="truncate">{patient.b2bLab?.name ?? 'B2B'}</span>
     </span>
   ) : null
-}
-
-const GENDER_EMOJI = {
-  male: { emoji: '👨', label: 'Male' },
-  female: { emoji: '👩', label: 'Female' },
-}
-
-/** Older records store gender as "male", "M", etc. — match any spelling. */
-function genderInfo(gender: string | null): { emoji: string; label: string } | undefined {
-  const g = gender?.trim().toLowerCase()
-  if (g === 'male' || g === 'm') return GENDER_EMOJI.male
-  if (g === 'female' || g === 'f') return GENDER_EMOJI.female
-  return undefined
 }
 
 type BillStage = 'APPROVED' | 'AWAITING' | 'RESULTS_PENDING' | 'NONE'
@@ -146,13 +116,11 @@ export default function PatientsPage() {
   const [deletePatient, setDeletePatient] = useState<Patient | null>(null)
   const [editBill, setEditBill] = useState<Order[] | null>(null)
   const [remarksPatient, setRemarksPatient] = useState<Patient | null>(null)
+  const [docsPatient, setDocsPatient] = useState<Patient | null>(null)
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
 
   const [search, setSearch] = useState('')
-  const [genderFilter, setGenderFilter] = useState('')
-  const [b2bFilter, setB2bFilter] = useState<B2bFilter>('ALL')
-  const [doctorFilter, setDoctorFilter] = useState<DoctorFilter>('ALL')
-  const [branchFilter, setBranchFilter] = useState('ALL')
+  const [pf, setPf] = useState<PatientFilterValues>(EMPTY_PATIENT_FILTERS)
   const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>('ALL')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -163,22 +131,8 @@ export default function PatientsPage() {
   const ordersQuery = useQuery({ queryKey: ['orders'], queryFn: orderService.getAll })
   const patients = useMemo(() => patientsQuery.data ?? [], [patientsQuery.data])
   const orders = useMemo(() => ordersQuery.data ?? [], [ordersQuery.data])
-  const { data: doctors = [] } = useQuery({ queryKey: ['doctors'], queryFn: doctorService.getAll })
-  /** Degree for the doctor names stored on patients (patients keep the name only) */
-  const doctorDegree = useMemo(() => new Map(doctors.map(d => [d.name, d.degreeName])), [doctors])
-  const { data: branches = [] } = useQuery({ queryKey: ['lab-branches'], queryFn: labBranchService.getAll })
-  const { data: b2bLabs = [] } = useQuery({ queryKey: ['b2b-labs'], queryFn: b2bLabService.getAll })
-
-  /** Doctors list plus any older doctor names saved on patients that aren't in it */
-  const doctorOptions = useMemo(() => {
-    const names = new Map<string, string>()
-    for (const d of doctors) names.set(d.name.trim().toLowerCase(), d.name)
-    for (const p of patients) {
-      const n = p.doctorName?.trim()
-      if (n && !names.has(n.toLowerCase())) names.set(n.toLowerCase(), n)
-    }
-    return Array.from(names.values()).sort((a, b) => a.localeCompare(b))
-  }, [doctors, patients])
+  const filterOptions = usePatientFilterOptions(patients)
+  const { doctorDegree } = filterOptions
 
   const actions = useReceiptActions(orders, () => setEditBill(null))
 
@@ -194,7 +148,7 @@ export default function PatientsPage() {
   })
 
   // Reset to page 1 whenever filters change (adjusting state during render, not in an effect)
-  const filterKey = [search, genderFilter, b2bFilter, doctorFilter, branchFilter, paymentFilter, dateFrom, dateTo, pageSize].join('|')
+  const filterKey = [search, JSON.stringify(pf), paymentFilter, dateFrom, dateTo, pageSize].join('|')
   const [prevFilterKey, setPrevFilterKey] = useState(filterKey)
   if (prevFilterKey !== filterKey) {
     setPrevFilterKey(filterKey)
@@ -217,15 +171,10 @@ export default function PatientsPage() {
   const billFilterActive = paymentFilter !== 'ALL' || !!dateFrom || !!dateTo
 
   const rows = useMemo(() => {
-    const start = dateFrom ? new Date(`${dateFrom}T00:00:00`) : null
-    const end = dateTo ? new Date(`${dateTo}T23:59:59.999`) : null
     const billMatches = (g: Order[]) => {
       const p = g[0]
       if (paymentFilter !== 'ALL' && p.paymentStatus !== paymentFilter) return false
-      const d = p.createdAt ? new Date(p.createdAt) : null
-      if (start && (!d || d < start)) return false
-      if (end && (!d || d > end)) return false
-      return true
+      return inDateRange(p.createdAt, dateFrom, dateTo)
     }
     const q = search.trim().toLowerCase()
 
@@ -237,13 +186,7 @@ export default function PatientsPage() {
         return { patient, allBills, bills, lastVisit }
       })
       .filter(({ patient: p, allBills, bills }) => {
-        if (genderFilter && genderInfo(p.gender)?.label !== genderFilter) return false
-        if (branchFilter !== 'ALL' && String(p.labBranchId ?? '') !== branchFilter) return false
-        if (b2bFilter === 'B2B' && !p.isB2b) return false
-        if (b2bFilter === 'INDIVIDUAL' && p.isB2b) return false
-        if (b2bFilter !== 'ALL' && b2bFilter !== 'B2B' && b2bFilter !== 'INDIVIDUAL' && String(p.b2bLabId ?? '') !== b2bFilter) return false
-        if (doctorFilter === 'SELF' && p.doctorName?.trim()) return false
-        if (doctorFilter !== 'ALL' && doctorFilter !== 'SELF' && !sameName(p.doctorName, doctorFilter)) return false
+        if (!matchesPatientFilters(p, pf)) return false
         if (billFilterActive && bills.length === 0) return false
         if (!q) return true
         return p.fullName.toLowerCase().includes(q) ||
@@ -254,13 +197,17 @@ export default function PatientsPage() {
           allBills.some(g => (g[0].receiptNumber ?? '').toLowerCase().includes(q) ||
             g.some(o => (o.template?.name ?? '').toLowerCase().includes(q)))
       })
-      // Most recent activity first: latest visit, else registration date
+      // Newest date first, but within one day in arrival order (earliest first) — sorted on the same
+      // date the Date column shows: the latest (filtered) bill, else the registration date.
       .sort((a, b) => {
-        const ta = new Date(a.lastVisit ?? a.patient.createdAt ?? 0).getTime()
-        const tb = new Date(b.lastVisit ?? b.patient.createdAt ?? 0).getTime()
-        return tb - ta || b.patient.id - a.patient.id
+        const ta = new Date(a.bills[0]?.[0]?.createdAt ?? a.patient.createdAt ?? 0)
+        const tb = new Date(b.bills[0]?.[0]?.createdAt ?? b.patient.createdAt ?? 0)
+        const dayA = ta.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) // yyyy-mm-dd in IST
+        const dayB = tb.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+        if (dayA !== dayB) return dayB.localeCompare(dayA)
+        return ta.getTime() - tb.getTime() || a.patient.id - b.patient.id
       })
-  }, [patients, billsByPatient, search, genderFilter, b2bFilter, doctorFilter, branchFilter, paymentFilter, dateFrom, dateTo, billFilterActive])
+  }, [patients, billsByPatient, search, pf, paymentFilter, dateFrom, dateTo, billFilterActive])
 
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize))
   const safePage = Math.min(page, totalPages)
@@ -282,9 +229,9 @@ export default function PatientsPage() {
     return next
   })
 
-  const filtersActive = !!search || !!genderFilter || b2bFilter !== 'ALL' || doctorFilter !== 'ALL' || branchFilter !== 'ALL' || billFilterActive
+  const filtersActive = !!search || patientFiltersActive(pf) || billFilterActive
   const clearFilters = () => {
-    setSearch(''); setGenderFilter(''); setB2bFilter('ALL'); setDoctorFilter('ALL'); setBranchFilter('ALL'); setPaymentFilter('ALL')
+    setSearch(''); setPf(EMPTY_PATIENT_FILTERS); setPaymentFilter('ALL')
     setDateFrom(''); setDateTo('')
   }
 
@@ -319,69 +266,11 @@ export default function PatientsPage() {
               <option value="PARTIAL">Partial</option>
               <option value="PAID">Paid</option>
             </FilterSelect>
-            <FilterSelect value={branchFilter} onChange={setBranchFilter}>
-              <option value="ALL">All Branches</option>
-              {branches.map(b => (
-                <option key={b.id} value={String(b.id)}>{b.name}{b.active ? '' : ' (inactive)'}</option>
-              ))}
-            </FilterSelect>
-            <FilterSelect value={b2bFilter} onChange={setB2bFilter} className="max-w-[200px]">
-              <option value="ALL">All B2B / Individual</option>
-              <option value="B2B">B2B only</option>
-              <option value="INDIVIDUAL">Individual only</option>
-              {b2bLabs.length > 0 && (
-                <optgroup label="B2B Partners">
-                  {b2bLabs.map(l => <option key={l.id} value={String(l.id)}>{l.name}</option>)}
-                </optgroup>
-              )}
-            </FilterSelect>
-            <FilterSelect value={doctorFilter} onChange={setDoctorFilter} className="max-w-[200px]">
-              <option value="ALL">All Doctors</option>
-              <option value="SELF">Self (no doctor)</option>
-              {doctorOptions.length > 0 && (
-                <optgroup label="Doctors">
-                  {doctorOptions.map(n => <option key={n} value={n}>{n}</option>)}
-                </optgroup>
-              )}
-            </FilterSelect>
-            <FilterSelect value={genderFilter} onChange={setGenderFilter}>
-              <option value="">All Genders</option>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-            </FilterSelect>
+            <PatientFilterSelects value={pf} onChange={setPf} options={filterOptions} />
           </FilterBar>
 
           <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3 dark:border-gray-700">
-            <CalendarDays className="h-4 w-4 text-gray-400" />
-            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Visit date</span>
-            <div className="flex items-center gap-1.5">
-              <label className="flex items-center gap-1.5 text-xs text-gray-400">
-                From
-                <input type="date" value={dateFrom} max={dateTo || undefined} onChange={e => setDateFrom(e.target.value)}
-                  className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200" />
-              </label>
-              <label className="flex items-center gap-1.5 text-xs text-gray-400">
-                To
-                <input type="date" value={dateTo} min={dateFrom || undefined} onChange={e => setDateTo(e.target.value)}
-                  className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200" />
-              </label>
-            </div>
-            <div className="flex rounded-lg bg-gray-100 p-0.5 dark:bg-gray-900/60">
-              {DATE_SHORTCUTS.map(d => {
-                const [f, t] = d.range()
-                const active = dateFrom === f && dateTo === t
-                return (
-                  <button key={d.label} type="button" onClick={() => { setDateFrom(f); setDateTo(t) }}
-                    className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                      active
-                        ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-700 dark:text-white'
-                        : 'text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200'
-                    }`}>
-                    {d.label}
-                  </button>
-                )
-              })}
-            </div>
+            <DateRangeFilter label="Visit date" from={dateFrom} to={dateTo} onChange={(f, t) => { setDateFrom(f); setDateTo(t) }} />
             <div className="ml-auto flex items-center gap-3">
               {filtersActive && (
                 <button type="button" onClick={clearFilters}
@@ -516,6 +405,7 @@ export default function PatientsPage() {
                               <span className="h-6 w-px shrink-0 bg-gray-200 dark:bg-gray-700" />
                               <div className="flex shrink-0 items-center gap-0.5">
                                 <RemarksButton count={patient.remarkCount ?? 0} onClick={() => setRemarksPatient(patient)} />
+                                <DocumentsButton count={patient.documentCount ?? 0} onClick={() => setDocsPatient(patient)} />
                                 <RowIcon title="Patient details" onClick={() => setViewPatientId(patient.id)} hover="hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/30">
                                   <Eye className="h-4 w-4" />
                                 </RowIcon>
@@ -597,6 +487,10 @@ export default function PatientsPage() {
           onClose={() => setViewPatientId(null)}
           onEdit={() => { navigate(`/patients/${viewPatientId}/edit`); setViewPatientId(null) }}
         />
+      )}
+
+      {docsPatient && (
+        <DocumentsModal patient={docsPatient} onClose={() => setDocsPatient(null)} />
       )}
 
       {remarksPatient && (

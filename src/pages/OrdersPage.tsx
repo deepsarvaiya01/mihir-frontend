@@ -2,7 +2,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Plus, ClipboardList, Search, FileText, ChevronDown,
+  Plus, ClipboardList, Search, FileText,
   Trash2, RotateCcw, ExternalLink, Paperclip, FlaskConical,
   X, CheckSquare, SendHorizonal, User, Check, Banknote, Landmark, Smartphone, Barcode,
 } from 'lucide-react'
@@ -21,6 +21,15 @@ import { toast } from 'sonner'
 import { toastError } from '../lib/errors'
 import { formatAge } from '../lib/utils'
 import { printTubeLabels } from '../utils/generateReport'
+import { DocumentsModal, DocumentsButton } from '../components/patients/DocumentsModal'
+import { DocumentPreviewModal } from '../components/patients/DocumentPreviewModal'
+import { FilterBar, FilterSelect } from '../components/ui/FilterBar'
+import { usePatientFilterOptions } from '../components/filters/usePatientFilterOptions'
+import { PatientFilterSelects } from '../components/filters/PatientFilterSelects'
+import { DateRangeFilter } from '../components/filters/DateRangeFilter'
+import {
+  EMPTY_PATIENT_FILTERS, daysAgo, inDateRange, matchesPatientFilters, patientFiltersActive, type PatientFilterValues,
+} from '../components/filters/patientFilters'
 
 /** B2B column cell — shows the referring B2B lab name, or "—" if the patient isn't a B2B referral. */
 function B2bCell({ patient }: { patient?: { isB2b?: boolean; b2bLab?: { name: string } | null } | null }) {
@@ -70,7 +79,6 @@ const EMPTY_BATCH: BatchForm = {
   paymentType: 'CASH',
 }
 
-const TODAY = new Date().toISOString().split('T')[0]
 
 export default function OrdersPage() {
   const navigate = useNavigate()
@@ -83,11 +91,14 @@ export default function OrdersPage() {
   const [reopenOrder, setReopenOrder] = useState<Order | null>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL')
-  const [dateFrom, setDateFrom] = useState(TODAY)
-  const [dateTo, setDateTo]     = useState('')
+  const [dateFrom, setDateFrom] = useState(() => daysAgo(0))
+  const [dateTo, setDateTo]     = useState(() => daysAgo(0))
+  const [pf, setPf] = useState<PatientFilterValues>(EMPTY_PATIENT_FILTERS)
   const [templateFilter, setTemplateFilter] = useState('')
   const [selectedResults, setSelectedResults] = useState<OrderResult | null>(null)
   const [testsModalOrders, setTestsModalOrders] = useState<Order[] | null>(null)
+  const [attachmentPreview, setAttachmentPreview] = useState<{ name: string; url: string } | null>(null)
+  const [docsPatient, setDocsPatient] = useState<{ id: number; fullName: string; patientCode: string } | null>(null)
 
   // Create modal state
   const [batchForm, setBatchForm] = useState<BatchForm>(EMPTY_BATCH)
@@ -98,6 +109,9 @@ export default function OrdersPage() {
   const { data: patients = [] } = useQuery({ queryKey: ['patients'], queryFn: () => patientService.getAll() })
   const { data: templates = [] } = useQuery({ queryKey: ['templates'], queryFn: templateService.getAll })
   const { data: profiles = [] } = useQuery({ queryKey: ['profiles'], queryFn: profileService.getAll })
+  const filterOptions = usePatientFilterOptions(patients)
+  /** Document counts come with the patient list, not with orders */
+  const docCountByPatient = useMemo(() => new Map(patients.map(p => [p.id, p.documentCount ?? 0])), [patients])
 
   const activeTemplates = templates.filter(t => t.active)
   const activeProfiles = profiles.filter(p => p.active)
@@ -241,18 +255,26 @@ export default function OrdersPage() {
   })
 
   const activeOrders = orders.filter(o => o.status !== 'APPROVED')
+  const q = search.trim().toLowerCase()
   const filtered = activeOrders.filter(o => {
-    const matchSearch = !search ||
-      String(o.id).includes(search) ||
-      (o.patient?.fullName ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      (o.template?.name ?? '').toLowerCase().includes(search.toLowerCase())
+    const matchSearch = !q ||
+      String(o.id).includes(q) ||
+      (o.patient?.fullName ?? '').toLowerCase().includes(q) ||
+      (o.patient?.patientCode ?? '').toLowerCase().includes(q) ||
+      (o.patient?.phoneNumber ?? '').includes(q) ||
+      (o.receiptNumber ?? '').toLowerCase().includes(q) ||
+      (o.template?.name ?? '').toLowerCase().includes(q)
     const matchStatus = statusFilter === 'ALL' || o.status === statusFilter
     const matchTemplate = !templateFilter || String(o.template?.id) === templateFilter
-    const orderDate = o.createdAt ? new Date(o.createdAt) : null
-    const matchFrom = !dateFrom || (orderDate && orderDate >= new Date(dateFrom))
-    const matchTo   = !dateTo   || (orderDate && orderDate <= new Date(dateTo + 'T23:59:59'))
-    return matchSearch && matchStatus && matchTemplate && matchFrom && matchTo
+    return matchSearch && matchStatus && matchTemplate &&
+      inDateRange(o.createdAt, dateFrom, dateTo) && matchesPatientFilters(o.patient, pf)
   })
+  const isTodayOnly = dateFrom === daysAgo(0) && dateTo === daysAgo(0)
+  const filtersActive = !!search || statusFilter !== 'ALL' || !!templateFilter || patientFiltersActive(pf) || !isTodayOnly
+  const clearFilters = () => {
+    setSearch(''); setStatusFilter('ALL'); setTemplateFilter(''); setPf(EMPTY_PATIENT_FILTERS)
+    setDateFrom(daysAgo(0)); setDateTo(daysAgo(0))
+  }
 
   // Map receipt → all active orders in that receipt (used for batch-submit eligibility)
   const receiptMap = useMemo(() => {
@@ -307,62 +329,40 @@ export default function OrdersPage() {
   return (
     <div>
       <Header
-        title="Orders & Results"
+        title="Test Result"
         subtitle="Create diagnostic orders and enter test results for approval"
         action={<Button icon={<Plus className="h-4 w-4" />} onClick={openCreate}>New Order</Button>}
       />
 
       <div className="p-6 space-y-5">
         {/* Filters */}
-        <div className="flex flex-wrap gap-3">
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <input
-              value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Search by order #, patient, or test..."
-              className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-4 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:placeholder-gray-500"
-            />
-          </div>
-          <div className="relative">
-            <select
-              value={statusFilter} onChange={e => setStatusFilter(e.target.value as StatusFilter)}
-              className="appearance-none rounded-xl border border-gray-200 bg-white py-2.5 pl-4 pr-9 text-sm text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200"
-            >
+        <div className="space-y-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <FilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Patient, code, receipt no., test...">
+            <FilterSelect value={statusFilter} onChange={v => setStatusFilter(v as StatusFilter)}>
               <option value="ALL">All Statuses</option>
               <option value="PENDING">Pending</option>
               <option value="IN_PROGRESS">In Progress</option>
               <option value="AWAITING_APPROVAL">Awaiting Approval</option>
               <option value="REJECTED">Rejected</option>
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          </div>
-          <div className="relative">
-            <select value={templateFilter} onChange={e => setTemplateFilter(e.target.value)}
-              className="appearance-none rounded-xl border border-gray-200 bg-white py-2.5 pl-4 pr-9 text-sm text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200">
+            </FilterSelect>
+            <FilterSelect value={templateFilter} onChange={setTemplateFilter} className="max-w-[200px]">
               <option value="">All Tests</option>
               {activeTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            </FilterSelect>
+            <PatientFilterSelects value={pf} onChange={setPf} options={filterOptions} />
+          </FilterBar>
+          <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3 dark:border-gray-700">
+            <DateRangeFilter label="Order date" from={dateFrom} to={dateTo} onChange={(f, t) => { setDateFrom(f); setDateTo(t) }} />
+            <div className="ml-auto flex items-center gap-3">
+              {filtersActive && (
+                <button type="button" onClick={clearFilters}
+                  className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-red-600 dark:text-gray-400">
+                  <X className="h-3.5 w-3.5" /> Clear filters
+                </button>
+              )}
+              <span className="text-xs text-gray-400">{filtered.length} test{filtered.length !== 1 ? 's' : ''}</span>
+            </div>
           </div>
-          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-            className="rounded-xl border border-gray-200 bg-white py-2.5 px-3 text-sm text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200" />
-          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-            className="rounded-xl border border-gray-200 bg-white py-2.5 px-3 text-sm text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200" />
-          {(dateFrom || dateTo) && (
-            <button onClick={() => { setDateFrom(''); setDateTo('') }}
-              className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
-              Show All
-            </button>
-          )}
-          {(search || statusFilter !== 'ALL' || templateFilter || dateFrom !== TODAY || dateTo) && (
-            <button onClick={() => { setSearch(''); setStatusFilter('ALL'); setTemplateFilter(''); setDateFrom(TODAY); setDateTo('') }}
-              className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400">
-              <X className="h-3.5 w-3.5" /> Clear
-            </button>
-          )}
-          <span className="self-center text-sm text-gray-500 ml-auto">
-            {filtered.length} order{filtered.length !== 1 ? 's' : ''}
-          </span>
         </div>
 
         {isLoading ? (
@@ -421,7 +421,10 @@ export default function OrdersPage() {
                         <td className="px-5 py-4"><B2bCell patient={primary.patient} /></td>
                         <td className="px-5 py-4"><GroupStatusSummary orders={group} /></td>
                         <td className="px-5 py-4">
-                          <div className="flex flex-wrap justify-end gap-2">
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            {primary.patient && (
+                              <DocumentsButton count={docCountByPatient.get(primary.patient.id) ?? 0} onClick={() => setDocsPatient(primary.patient!)} />
+                            )}
                             <Button size="sm" variant="ghost" icon={<FlaskConical className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />}
                               title={testNames ? `Tests on this order:\n${group.map((o, idx) => `${idx + 1}. ${o.template?.name || o.template?.code}`).join('\n')}` : 'View tests'}
                               onClick={() => setTestsModalOrders(group)}>
@@ -494,7 +497,10 @@ export default function OrdersPage() {
                       <td className="px-5 py-4"><B2bCell patient={order.patient} /></td>
                       <td className="px-5 py-4"><OrderStatusBadge status={order.status} /></td>
                       <td className="px-5 py-4">
-                        <div className="flex justify-end gap-2">
+                        <div className="flex items-center justify-end gap-2">
+                          {order.patient && (
+                            <DocumentsButton count={docCountByPatient.get(order.patient.id) ?? 0} onClick={() => setDocsPatient(order.patient!)} />
+                          )}
                           <Button size="sm" variant="ghost" icon={<FlaskConical className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />}
                             title={order.template?.name ? `Test: ${order.template.name}${order.template.code ? ` (${order.template.code})` : ''}` : 'View test'}
                             onClick={() => setTestsModalOrders([order])}>
@@ -543,6 +549,8 @@ export default function OrdersPage() {
           </div>
         )}
       </div>
+
+      {docsPatient && <DocumentsModal patient={docsPatient} onClose={() => setDocsPatient(null)} />}
 
       {/* ── Create Order Modal (multi-test batch) ────────────── */}
       <Modal
@@ -889,6 +897,11 @@ export default function OrdersPage() {
                   <p className="truncate text-sm font-semibold text-gray-800 dark:text-gray-200">{selectedResults.order.attachmentName}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">Attached PDF document</p>
                 </div>
+                <button type="button"
+                  onClick={() => setAttachmentPreview({ name: selectedResults.order.attachmentName ?? 'Document', url: selectedResults.order.attachmentUrl! })}
+                  className="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700">
+                  Preview
+                </button>
                 <a href={selectedResults.order.attachmentUrl} target="_blank" rel="noopener noreferrer"
                   className="shrink-0 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-gray-800 dark:text-blue-400 dark:hover:bg-gray-700">
                   Download
@@ -898,6 +911,10 @@ export default function OrdersPage() {
           </div>
         )}
       </Modal>
+
+      {attachmentPreview && (
+        <DocumentPreviewModal name={attachmentPreview.name} url={attachmentPreview.url} onClose={() => setAttachmentPreview(null)} />
+      )}
 
       {/* Re-open Confirm */}
       <ConfirmModal
